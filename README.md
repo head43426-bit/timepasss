@@ -10,7 +10,11 @@ headers), animated with a gentle float + flame flicker in the /app
 header and the showcase topbar. Favicons: `favicon.ico` (16/32/48),
 `favicon-16.png`, `favicon-32.png`, `favicon-48.png`,
 `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and
-`site.webmanifest`.
+`site.webmanifest`. Note: the snapshot push used for this repo accepts
+UTF-8 text only, so binary PNG/ICO files cannot be pushed directly —
+each one also has a `.b64` text twin in `assets/`, and `main.py`
+decodes that twin and serves the exact original bytes when the binary
+is missing after a pull (verified byte-identical).
 
 **No demo data in this project.** You bring your own `.log` file.
 Use only synthetic or authorised logs — never real production
