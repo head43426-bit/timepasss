@@ -250,7 +250,11 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         return self._send_json({"error": "incident not found"}, 404)
                     return self._send_json({"incident_id": inc["id"], "next_reach": inc["next_reach"],
                                             "next_stages": inc["next_stages"],
-                                            "blast_radius": inc["blast_radius"]})
+                                            "blast_radius": inc["blast_radius"],
+                                            "next_basis": inc.get("next_basis", ""),
+                                            "next_frontier_total": inc.get("next_frontier_total", 0),
+                                            "blast_basis": inc.get("blast_basis", ""),
+                                            "blast_breakdown": inc.get("blast_breakdown")})
                 # Custom 404 page for browsers, JSON only for API calls.
                 if parts and parts[0] not in ("health", "incidents", "progress", "db", "clear", "upload"):
                     _p404 = os.path.join(FRONTEND, "404.html")
@@ -379,12 +383,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     # replay, so no line is ever dropped or double-counted.
                     import os as _os
                     from engine.parallel import cpu_friendly_workers as _workers
-                    # User demand (2026-11-01): 8 workers, 4 is too few.
-                    # Explicit request, capped by cores and by RAM
-                    # (max 8 on an 8 GB machine, 2 on a 4 GB machine).
-                    # Trade-off, stated plainly: 8 workers use more
-                    # CPU/RAM and the system may lag while they run.
-                    _workers_n = _workers(8)
+                    # User demand, revised (2026-11-01): 6 workers, not
+                    # 8 — the 8-worker run jammed for 5 minutes on an
+                    # HDD + 90% RAM machine (8 concurrent disk streams
+                    # thrash a spinning disk and page memory). 6 is the
+                    # compromise the user asked to try. Explicit
+                    # request, capped by cores and by RAM.
+                    _workers_n = _workers(6)
                     if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
                         _set_progress(stage_text=(
                             f"Step 2 of 4 — Reading with {_workers_n} workers. "

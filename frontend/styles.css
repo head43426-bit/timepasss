@@ -51,18 +51,17 @@ pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#f4efe6;pad
 details{margin-top:20px}
 @media(max-width:700px){header,main,.card{padding:20px 16px}h1{font-size:26px}.pkg{min-width:260px}}
 
-/* NetworkX graph map (replaces the conveyor belt) */
-.graph-svg{width:100%;height:auto;background:#111;border:2px solid #333;border-radius:12px;display:block}
+/* NetworkX graph map — REDESIGN (2026-11-01): light, clean, like the
+inspiration image, not the old dark circle pile. Node boxes are drawn
+inline (fill/stroke set in JS by severity), so CSS here only sets text
+and the dotted-paper background. */
+.graph-svg{display:block;background-color:#f8f6f0;background-image:radial-gradient(#d8d2c2 1px,transparent 1px);background-size:18px 18px}
 .gedge{stroke:#f0a832;stroke-width:2}
-.elabel{fill:#f4efe6;font-family:ui-monospace,Menlo,monospace;font-size:13px;cursor:pointer;text-anchor:middle}
-.elabel:hover{fill:#f0a832}
-.gnode{fill:#1d1d1d;stroke:#f0a832;stroke-width:2}
-.gnode.host{fill:#2a1a1a;stroke:#e1251b}
+.elabel{fill:#333;font-family:ui-monospace,Menlo,monospace;font-size:11px;text-anchor:middle;paint-order:stroke;stroke:#f8f6f0;stroke-width:4px;stroke-linejoin:round}
 .gnode-wrap{cursor:pointer}
-.gnode-wrap:hover .gnode,.gnode-wrap.sel .gnode{stroke:#fff;stroke-width:3}
+.gnode-wrap:hover rect,.gnode-wrap.sel rect{stroke-width:5}
 .gnode-wrap:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
-.nlabel{fill:#f4efe6;font-size:13px;font-weight:700;text-anchor:middle;pointer-events:none}
-.gnode.technique{fill:#3a2a10;stroke:#f0a832}
-.elabel{paint-order:stroke;stroke:#0b0e13;stroke-width:5px;stroke-linejoin:round}
-.ntype{fill:#999;font-size:11px;text-anchor:middle;text-transform:uppercase;pointer-events:none}
+.nlabel{fill:#111;font-size:13px;font-weight:700;pointer-events:none}
+.ntype{fill:#555;font-size:11px;text-transform:uppercase;pointer-events:none}
+.nsev{font-size:11px;font-weight:800;pointer-events:none}
 .step-link{margin:6px 6px 0 0}

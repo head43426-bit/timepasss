@@ -190,18 +190,17 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         import json
         with open(topology_path, "r", encoding="utf-8") as handle:
             store.load_topology(con, json.load(handle))
-    # PROGRESS FIX (2026-11-01): previously one chunk per worker, so
-    # a 3.9M-line file on 4 workers showed "0 lines, 0 detections"
-    # for the entire first ~974k-line chunk — on an HDD + 90% RAM
-    # machine that looked frozen for a very long time. Now the file
-    # is split into 8x as many chunks as workers (32 chunks for 4
-    # workers, ~122k lines each for firex), while the pool still has
-    # only `workers` processes — pool.map preserves input order, so
-    # chunk order, aggregate replay and counts are unchanged, but
-    # progress now updates after every small chunk, within seconds.
-    # max_workers must stay `workers`, NOT len(ranges), or 32
-    # processes would spawn at once.
-    ranges = _byte_ranges(log_path, workers * 8)
+    # PROGRESS/JAM FIX (2026-11-01): previously one chunk per worker,
+    # so a 3.9M-line file showed "0 lines, 0 detections" for the
+    # entire first ~974k-line chunk. Now the file is split into 16x
+    # as many chunks as workers (96 chunks for 6 workers, ~40k lines
+    # each for firex), while the pool still has only `workers`
+    # processes — pool.map preserves input order, so chunk order,
+    # aggregate replay and counts are unchanged, but progress now
+    # updates after every small chunk, and a slow chunk blocks
+    # progress for far less long. max_workers must stay `workers`,
+    # NOT len(ranges), or dozens of processes would spawn at once.
+    ranges = _byte_ranges(log_path, workers * 16)
     total_events = 0
     chunk_results = []
     with ProcessPoolExecutor(max_workers=workers,

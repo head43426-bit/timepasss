@@ -100,11 +100,15 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
         f"with a risk score of {incident.get('risk_score', 0)} out of 100.")
     if next_list:
         nxt = "; ".join(f"{n['host']} ({n['reason']})" for n in next_list)
-        lines.append(f"What the attacker could reach next: {nxt}.")
+        _total = incident.get("next_frontier_total", len(next_list))
+        _extra = f" (and {_total - len(next_list)} more like this)" if _total > len(next_list) else ""
+        lines.append(f"What the attacker could reach next — hosts already contacted, not yet used as a stepping stone, from the {incident.get('next_basis', 'observed graph')}: {nxt}{_extra}. These are hosts to watch for outbound movement, not guessed new targets.")
     else:
         lines.append(
-            "No next system could be identified from the supplied topology, "
-            "so no next target is guessed.")
+            "No next host to watch: every destination in this incident was "
+            "already used as a stepping stone, or there are no host-to-host "
+            "edges at all, so no frontier destination exists to list. No "
+            "new target is guessed.")
     # Stage look-ahead: always available, even with no topology.
     _next_stages = incident.get("next_stages", [])
     if _next_stages:
@@ -113,9 +117,14 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
             f"Looking ahead in the kill chain, the next stages to watch "
             f"for are: {_st}. These are stages, not guessed hosts.")
     if incident.get("blast_radius") is not None:
+        _br = incident.get("blast_breakdown")
+        _br_txt = (f" (Reach {_br['reach']}, Spread {_br['spread']}, "
+                   f"Depth {_br['depth']}, Severity {_br['severity']}; "
+                   f"{_br['dst_count']} destinations, {_br['src_count']} sources, "
+                   f"{_br['stage_count']} stages)" if _br else "")
         lines.append(
-            f"Blast radius from the supplied topology: "
-            f"{incident['blast_radius']} out of 100.")
+            f"Blast radius from the {incident.get('blast_basis', 'observed graph')}: "
+            f"{incident['blast_radius']} out of 100{_br_txt}.")
     _prot = incident.get("protections", [])
     if _prot:
         _p = "; ".join(f"{p['technique_id']}: {p['action']}" for p in _prot)

@@ -33,17 +33,62 @@ LINK_WINDOW_SECONDS = 48 * 3600
 SEVERITY_WEIGHTS = {"Critical": 40, "High": 25, "Medium": 10, "Low": 3}
 
 
+def risk_tier(score: float) -> str:
+    """Tier from a risk score. Kept in one place so backend and the
+    frontend filter buttons can never disagree."""
+    if score >= 90:
+        return "Critical"
+    if score >= 70:
+        return "High"
+    if score >= 40:
+        return "Medium"
+    return "Low"
+
+
 def risk_score(detections: List[Dict]) -> float:
-    total = sum(SEVERITY_WEIGHTS.get(d.get("severity", "Medium"), 10)
-                for d in detections)
-    stages = {d.get("kill_chain_stage", "") for d in detections}
-    score = 0.3 * total + 3 * len(stages)
+    """TIERED RISK (2026-11-01, user demand: 'don't keep 100 for
+    everything'). The old formula summed severity over EVERY
+    detection, so 137 steps of even Low weight blew past the cap and
+    every incident in a flood showed 100/100, with no discrimination
+    at all. The new formula is simple and honest:
+      * Tier is set by the WORST severity present, and the score can
+        never leave its tier: Critical 90-100, High 70-89, Medium
+        40-69, Low 0-39. A Low incident can never show 100, and a
+        Critical incident can never show 40. 100 means Critical,
+        nothing else.
+      * Inside the tier: base (Critical 90, High 70, Medium 40,
+        Low 10) + 3 per distinct stage beyond the first
+        + 2 per distinct technique beyond the first
+        + scale bonus (+5 over 10 detections, +10 over 100,
+        +15 over 1,000) + 5 each for exfiltration and for
+        credential-access/privilege-escalation — then clamped to
+        the tier ceiling, which is the only cap that matters.
+    So a single Low phishing line scores 10 (Low), a single High SMB
+    scores 70 (High), a 137-step Low phishing flood scores 10+0+0+15
+    = 25 (Low, not 100), and a multi-stage Critical attack with
+    credential access and exfiltration scores 90+12+10+15, capped at
+    100 (Critical). Count adds a little, never everything."""
+    if not detections:
+        return 0.0
+    _weights = SEVERITY_WEIGHTS
+    _worst = max((_weights.get(d.get("severity", "Medium"), 10)
+                  for d in detections), default=10)
+    _base, _ceil = ((90, 100) if _worst >= 40 else
+                    (70, 89) if _worst >= 25 else
+                    (40, 69) if _worst >= 10 else
+                    (10, 39))
+    _stages = {d.get("kill_chain_stage", "") for d in detections} - {""}
+    _techs = {d.get("technique_id", "") for d in detections} - {""}
+    _n = len(detections)
+    _scale = 15 if _n >= 1000 else 10 if _n >= 100 else 5 if _n >= 10 else 0
+    score = (_base + 3 * max(0, len(_stages) - 1)
+             + 2 * max(0, len(_techs) - 1) + _scale)
     if any(d.get("kill_chain_stage") == "Exfiltration" for d in detections):
-        score += 15
+        score += 5
     if any(d.get("kill_chain_stage") in ("Privilege Escalation", "Credential Access")
            for d in detections):
-        score += 10
-    return round(min(100.0, score), 1)
+        score += 5
+    return round(min(float(_ceil), max(float(_base), float(score))), 1)
 
 
 def build_graph(detections: List[Dict]) -> nx.DiGraph:
@@ -322,6 +367,84 @@ class StreamingLinker:
             dets.sort(key=lambda d: d[0])
         out.sort(key=lambda dets: dets[0][0] if dets else 0)
         return out
+
+
+def observed_blast_radius(detections: List[Dict], edges: List[Dict]) -> Dict:
+    """BLAST RADIUS FROM THE OBSERVED GRAPH (2026-11-01 fix). The old
+    blast_radius_score only read a supplied topology, and a web upload
+    never supplies one — so every /app incident showed 0/100 even
+    when its graph touched 184 IPs/domains. That 0 was not a
+    measurement, it was a missing input. The observed version scores
+    what the logs actually show, in four transparent 0-25 parts:
+      * Reach: distinct destinations, capped at 50 (25 points)
+      * Spread: distinct sources, capped at 10 (25 points)
+      * Depth: distinct kill-chain stages out of 13 (25 points)
+      * Severity: worst severity weight out of 40 (25 points)
+    A 184-destination, single-source, Low-severity flood scores
+    roughly 25 + 3 + 4 + 2 = 34 — real, but not a full breach. A
+    multi-stage Critical chain scores far higher. Never 0 for an
+    incident that actually touched hosts, and never 100 unless all
+    four parts are near-maximum."""
+    _path_edges = [e for e in edges if e.get("kind") == "path"]
+    _dsts = {e.get("to") for e in _path_edges if e.get("to")}
+    _srcs = {e.get("from") for e in _path_edges if e.get("from")}
+    _stages = {d.get("kill_chain_stage", "") for d in detections} - {""}
+    _worst = max((SEVERITY_WEIGHTS.get(d.get("severity", "Medium"), 10)
+                  for d in detections), default=0)
+    _reach = round(25 * min(1.0, len(_dsts) / 50.0), 1)
+    _spread = round(25 * min(1.0, len(_srcs) / 10.0), 1)
+    _depth = round(25 * (len(_stages) / len(KILL_CHAIN_ORDER)), 1)
+    _sev = round(25 * (_worst / 40.0), 1)
+    return {"score": int(round(_reach + _spread + _depth + _sev)),
+            "reach": _reach, "spread": _spread, "depth": _depth,
+            "severity": _sev, "dst_count": len(_dsts),
+            "src_count": len(_srcs), "stage_count": len(_stages),
+            "worst_severity": ("Critical" if _worst >= 40 else
+                                "High" if _worst >= 25 else
+                                "Medium" if _worst >= 10 else "Low")}
+
+
+def observed_next_reach(edges: List[Dict], technique_severity: Dict) -> List[Dict]:
+    """WHAT TO WATCH NEXT, FROM THE OBSERVED GRAPH (2026-11-01 fix).
+    The old next_reach only read a supplied topology, so a web upload
+    always got an empty list and the page said 'no next system' for
+    every incident. The observed version does NOT guess new hosts:
+    it lists destinations the attacker has already contacted but has
+    NOT yet used as a stepping stone (a destination that never
+    appears as a source). Those are the next hosts to watch for
+    outbound movement — if one starts connecting onward, that is the
+    next hop. Capped at 10, worst severity first, with the total
+    frontier count kept by the caller so the page can say 'and N
+    more like this' instead of dumping 184 names."""
+    _path_edges = [e for e in edges if e.get("kind") == "path"]
+    _srcs = {e.get("from") for e in _path_edges if e.get("from")}
+    _frontier = {}
+    for e in _path_edges:
+        _dst = e.get("to", "")
+        if not _dst or _dst in _srcs:
+            continue
+        _tid = e.get("technique_id", "")
+        _sev = technique_severity.get(_tid, "Medium")
+        _w = SEVERITY_WEIGHTS.get(_sev, 10)
+        _cur = _frontier.get(_dst)
+        if _cur is None or _w > _cur["_w"]:
+            _frontier[_dst] = {"host": _dst, "_w": _w, "technique_id": _tid,
+                               "from": e.get("from", "")}
+    out = []
+    for _f in sorted(_frontier.values(),
+                     key=lambda f: (-f["_w"], f["host"])):
+        _sev = ("Critical" if _f["_w"] >= 40 else "High" if _f["_w"] >= 25
+                else "Medium" if _f["_w"] >= 10 else "Low")
+        out.append({"host": _f["host"],
+                    "confidence": (90 if _sev == "Critical" else
+                                   70 if _sev == "High" else
+                                   40 if _sev == "Medium" else 20),
+                    "reason": (f"Already contacted from {_f['from']} via "
+                               f"{_f['technique_id'] or 'unknown technique'}; "
+                               f"not yet used as a stepping stone"),
+                    "block": (f"Watch {_f['host']} for outbound connections; "
+                              f"isolate it if it starts connecting onward")})
+    return out
 
 
 def next_reach(compromised_hosts: List[str], compromised_users: List[str],

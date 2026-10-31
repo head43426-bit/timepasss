@@ -34,11 +34,30 @@ async function loadIncidents() {
       } catch (e) { /* server down: keep the page, stop spamming */ }
     }, 5000);
   }
-  document.getElementById("incidents").innerHTML = list.length ? list.map(function(inc) {
-    return "<button class=inc data-id=" + inc.id + "><b>Incident " + inc.id + " — risk " + inc.risk_score + "/100</b> &middot; " +
+  // TIER FILTER (2026-11-01, user demand: 'keep it simple, don't
+  // display so many'). Incidents are grouped by tier — Critical
+  // (>=90), High (70-89), Medium (40-69), Low (<40) — with a button
+  // per tier showing its count, plus All. List is sorted by risk
+  // descending, then steps descending, so the worst incidents are
+  // first instead of a flat 700-card wall in id order.
+  function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : s >= 40 ? "Medium" : "Low"; }
+  var sorted = list.slice().sort(function(a, b) {
+    return (b.risk_score - a.risk_score) || (b.detection_count - a.detection_count) || (a.id - b.id);
+  });
+  var counts = { All: sorted.length, Critical: 0, High: 0, Medium: 0, Low: 0 };
+  sorted.forEach(function(i) { counts[tierOf(i.risk_score)] += 1; });
+  if (!state.tierFilter) state.tierFilter = "All";
+  window.setTierFilter = function(t) { state.tierFilter = t; loadIncidents(); };
+  var shown = state.tierFilter === "All" ? sorted : sorted.filter(function(i) { return tierOf(i.risk_score) === state.tierFilter; });
+  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Medium", "Low"].map(function(t) {
+    var sel = state.tierFilter === t ? " style='background:#f0a832;color:#000;font-weight:bold'" : "";
+    return "<button class=btn onclick=\"setTierFilter('" + t + "')\"" + sel + ">" + t + " (" + counts[t] + ")</button> ";
+  }).join("") + "</div>";
+  document.getElementById("incidents").innerHTML = (filterHtml + (shown.length ? shown.map(function(inc) {
+    return "<button class=inc data-id=" + inc.id + "><b>Incident " + inc.id + " — " + tierOf(inc.risk_score) + " · risk " + inc.risk_score + "/100</b> &middot; " +
       inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged<br><small>" +
       esc(inc.title) + " &middot; " + esc(inc.hosts.join(", ")) + "</small></button>";
-  }).join("") : "<p>No incidents found in this file. That may mean the log is clean, or its wording does not match the rules in rules/.</p>";
+  }).join("") : "<p>No " + esc(state.tierFilter) + " incidents in this file. Try All.</p>"));
   document.querySelectorAll(".inc").forEach(function(el) {
     el.addEventListener("click", function() { selectIncident(parseInt(el.getAttribute("data-id"), 10)); });
   });
@@ -62,29 +81,31 @@ async function selectIncident(id) {
   // backend with NetworkX, not drawn by hand). Nodes are placed on a
   // circle in first-seen order so every edge is visible at once.
   renderGraph(path);
-  // Attack path uses the GRAPH's host/IP nodes, not the incident's
-  // hosts column — that column is the firewall name for Fortinet
-  // logs, which is why the path used to say "single host" even when
-  // the logs show real src -> dst movement.
-  var graphHosts = ((path.graph && path.graph.nodes) || []).filter(function(n) { return n.type === "host"; }).map(function(n) { return n.id; });
-  var pathHosts = graphHosts.length ? graphHosts.slice(0, 12) : (path.hosts || []).filter(function(h) { return h; });
-  document.getElementById("path").innerHTML = pathHosts.length > 1
-    ? pathHosts.map(function(h) { return "<span class=node>" + esc(h) + "</span>"; }).join("<span class=arrow>&rarr;</span>") + (graphHosts.length > 12 ? "<p class='hint'>First 12 of " + fmtNum(graphHosts.length) + " IPs/domains in this incident.</p>" : "")
-    : pathHosts.length === 1
-      ? "<span class=node>" + esc(pathHosts[0]) + "</span><p class='hint'>Single source — no src -> dst movement in this incident. All steps came from this one source, so there is no chain to draw; see the graph map and step list for what actually happened.</p>"
-      : "<p>Unknown host path.</p>";
+  // Attack path canvas: see renderAttackPathCanvas — the old
+  // flat arrow list invented a chain between unrelated nodes.
+  renderAttackPathCanvas(path);
+  // NEXT + BLAST (2026-11-01 fix): the old text said 'no topology was
+  // supplied' and 'blast radius from the supplied topology: 0/100'
+  // for every web upload, because both numbers only read a topology
+  // that a web upload never supplies. Now the backend falls back to
+  // the observed graph: next = destinations already contacted but
+  // not yet used as a stepping stone (hosts to watch, not guessed
+  // targets), blast = Reach + Spread + Depth + Severity from the
+  // observed graph, with its basis stated plainly.
   var nextHtml = (next.next_reach && next.next_reach.length)
-    ? "<ul>" + next.next_reach.map(function(n) {
-        return "<li><b>" + esc(n.host) + "</b> (score " + n.confidence + "/100 — admin rights 50 + same subnet 25, capped at 100) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
-      }).join("") + "</ul>"
-    : "<p>No next system is guessed here: no topology was supplied with this upload, so there is no list of other hosts or admin rights to check against. The attacker is not assumed to reach anything beyond what the logs actually show.</p>";
+    ? "<p>Hosts to watch next, from the " + esc(next.next_basis || "observed graph") + " — already contacted, not yet used as a stepping stone (watch them for outbound movement; these are not guessed new targets):</p><ul>" + next.next_reach.map(function(n) {
+        return "<li><b>" + esc(n.host) + "</b> (watch score " + n.confidence + "/100) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
+      }).join("") + "</ul>" + ((next.next_frontier_total || 0) > next.next_reach.length ? "<p>And " + fmtNum(next.next_frontier_total - next.next_reach.length) + " more frontier destinations like this — see the graph map, Destinations column.</p>" : "")
+    : "<p>No frontier host to watch: every destination in this incident was already used as a stepping stone, or there are no host-to-host edges at all. No new target is guessed.</p>";
   if (next.next_stages && next.next_stages.length) {
     nextHtml += "<p><b>Looking ahead in the kill chain</b> (stages, not guessed hosts): " +
       next.next_stages.map(function(s) { return esc(s.stage); }).join(" → ") +
       ". Watch for these stages next on the compromised host(s).</p>";
   }
   if (next.blast_radius !== undefined && next.blast_radius !== null) {
-    nextHtml += "<p>Blast radius from the supplied topology: <b>" + next.blast_radius + "/100</b>.</p>";
+    var br = next.blast_breakdown;
+    nextHtml += "<p>Blast radius, from the " + esc(next.blast_basis || "observed graph") + ": <b>" + next.blast_radius + "/100</b>" +
+      (br ? " — Reach " + br.reach + " (destinations: " + fmtNum(br.dst_count) + ") + Spread " + br.spread + " (sources: " + fmtNum(br.src_count) + ") + Depth " + br.depth + " (stages: " + br.stage_count + ") + Severity " + br.severity + " (worst: " + esc(br.worst_severity) + ")." : ".") + "</p>";
   }
   document.getElementById("next").innerHTML = nextHtml;
   document.getElementById("protect").innerHTML = (rep.protections && rep.protections.length)
@@ -102,95 +123,338 @@ async function selectIncident(id) {
 function renderGraph(path) {
   var box = document.getElementById("graphMap");
   var graph = path.graph || { nodes: [], edges: [] };
-  var nodes = graph.nodes || [], edges = graph.edges || [];
-  if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
-  // HANG FIX: the old posCheck did nodes.some() for BOTH ends of
-  // EVERY edge — O(edges x nodes) in JS. With thousands of dstip
-  // nodes/edges that alone hung the tab (RESULT_CODE_HUNG). A Set
-  // lookup is O(1) per edge, so the whole filter is O(edges).
-  var nodeSet = {};
-  nodes.forEach(function(n) { nodeSet[n.id] = true; });
-  var realEdges = edges.filter(function(e) { return nodeSet[e.from] && nodeSet[e.to]; });
-  // CAP: a circle layout with thousands of nodes still hangs the
-  // renderer (thousands of SVG groups + listeners, on a 90% RAM
-  // machine). Keep the 250 most-connected nodes and their edges,
-  // and say so plainly instead of silently drawing a wall of dots.
-  var totalNodes = nodes.length, totalEdges = realEdges.length;
-  if (nodes.length > 250) {
-    var deg = {};
-    realEdges.forEach(function(e) { deg[e.from] = (deg[e.from] || 0) + 1; deg[e.to] = (deg[e.to] || 0) + 1; });
-    var keep = nodes.slice().sort(function(a, b) { return (deg[b.id] || 0) - (deg[a.id] || 0); }).slice(0, 250);
-    var keepSet = {};
-    keep.forEach(function(n) { keepSet[n.id] = true; });
-    nodes = keep;
-    nodeSet = keepSet;
-    realEdges = realEdges.filter(function(e) { return keepSet[e.from] && keepSet[e.to]; });
+  var allNodes = graph.nodes || [], allEdges = graph.edges || [];
+  if (!allNodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
+  // GRAPH REDESIGN (2026-11-01, user demand: 'not so cluttered, colour
+  // by importance, filters, use the clean inspiration image'). The old
+  // circle layout put 250 nodes on one ring with every label on top of
+  // every other label — unreadable. The new layout is left-to-right
+  // by role, like the inspiration: users, then sources, then pivots
+  // (hosts that are both a destination and a source, in kill-chain
+  // stage order), then destinations. Colour = worst severity on that
+  // node (backend-enriched): Critical red, High orange, Medium amber,
+  // Low grey, user blue, technique purple. Edge colour = destination
+  // severity. Default shows the top 60 most-connected nodes, not 250.
+  if (!state.graphFilter || state.graphIncident !== path.id) {
+    state.graphFilter = { technique: "All", severity: "All", search: "", showAll: false, zoom: 1 };
+    state.graphIncident = path.id;
   }
+  var gf = state.graphFilter;
+  window.setGraphFilter = function(field, val) { gf[field] = val; renderGraph(path); };
+  window.setGraphZoom = function(d) {
+    gf.zoom = Math.min(2, Math.max(0.6, Math.round((gf.zoom + d) * 10) / 10));
+    renderGraph(path);
+  };
+  var nodeSet = {};
+  allNodes.forEach(function(n) { nodeSet[n.id] = true; });
+  var realEdges = allEdges.filter(function(e) { return nodeSet[e.from] && nodeSet[e.to]; });
   // Old DBs (built before the technique fallback) have a single host
-  // and no edges: build the host -> technique graph here from the
-  // timeline summary, so those incidents get a real graph too without
-  // re-running the whole log. New runs already store these edges.
+  // and no edges: build host -> technique here from the summary.
   if (!realEdges.length && path.timeline_summary && path.timeline_summary.length) {
-    var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]);
+    var hostId = (allNodes[0] && allNodes[0].id) || (path.hosts && path.hosts[0]);
     if (hostId) {
       path.timeline_summary.forEach(function(s) {
-        nodes.push({ id: s.technique_id, type: "technique", name: s.technique_name, count: s.count });
-        edges.push({ from: hostId, to: s.technique_id, kind: "technique", technique_id: s.technique_id, time: "" });
+        allNodes.push({ id: s.technique_id, type: "technique", name: s.technique_name, count: s.count, severity: "Medium", stage: s.kill_chain_stage });
+        realEdges.push({ from: hostId, to: s.technique_id, kind: "technique", technique_id: s.technique_id, time: "" });
       });
-      realEdges = edges;
     }
   }
-  if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
   if (!realEdges.length) {
-    var only = nodes[0];
+    var only = allNodes[0];
     box.innerHTML = "<p><span class=node>" + esc(only.id) + "</span> <small>(" + esc(only.type) + ")</small></p>" +
       "<p class='hint'>No connections to draw: this incident has only this one host and no host-to-host or user-to-host move in the logs. " +
       "All " + fmtNum(path.detection_count) + " steps happened on the host above — see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
     return;
   }
-  var W = 1100, H = 440, cx = W / 2, cy = H / 2, R = 170;
-  var pos = {};
-  nodes.forEach(function(n, i) {
-    var a = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-    pos[n.id] = { x: Math.round(cx + R * Math.cos(a)), y: Math.round(cy + R * Math.sin(a)) };
+  var sevColor = { Critical: "#e1251b", High: "#f97316", Medium: "#f0a832", Low: "#6b7280" };
+  var sevFill = { Critical: "#fde8e8", High: "#fef3e2", Medium: "#fef9e0", Low: "#f3f4f6" };
+  var sevOf = function(n) { return n.type === "user" ? "user" : n.type === "technique" ? "technique" : (n.severity || "Low"); };
+  // Filters: technique (edges), severity (nodes), search (nodes).
+  var fEdges = realEdges.filter(function(e) { return gf.technique === "All" || e.technique_id === gf.technique; });
+  var fNodeIds = {};
+  fEdges.forEach(function(e) { fNodeIds[e.from] = true; fNodeIds[e.to] = true; });
+  var fNodes = allNodes.filter(function(n) {
+    if (gf.technique !== "All" && !fNodeIds[n.id] && n.id !== gf.technique) return false;
+    if (gf.severity !== "All" && sevOf(n) !== gf.severity) return false;
+    if (gf.search && n.id.toLowerCase().indexOf(gf.search.toLowerCase()) < 0) return false;
+    return true;
   });
-  var svg = "<svg viewBox='0 0 " + W + " " + H + "' class='graph-svg' role='img' aria-label='NetworkX attack graph'>" +
-    "<defs><marker id='arr' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#f0a832'/></marker></defs>";
-  edges.forEach(function(e) {
+  var fSet = {};
+  fNodes.forEach(function(n) { fSet[n.id] = true; });
+  fEdges = fEdges.filter(function(e) { return fSet[e.from] && fSet[e.to]; });
+  // Cap: top 60 most-connected by default (was 250, still unreadable).
+  var totalNodes = fNodes.length, totalEdges = fEdges.length;
+  if (!gf.showAll && fNodes.length > 60) {
+    var deg = {};
+    fEdges.forEach(function(e) { deg[e.from] = (deg[e.from] || 0) + 1; deg[e.to] = (deg[e.to] || 0) + 1; });
+    var keep = fNodes.slice().sort(function(a, b) { return (deg[b.id] || 0) - (deg[a.id] || 0); }).slice(0, 60);
+    var keepSet = {};
+    keep.forEach(function(n) { keepSet[n.id] = true; });
+    fNodes = keep; fSet = keepSet;
+    fEdges = fEdges.filter(function(e) { return keepSet[e.from] && keepSet[e.to]; });
+  }
+  // Columns by role: users | sources | pivots (stage order) |
+  // destinations (severity, then id). Dedupe edges by pair+technique.
+  var srcs = {}, dsts = {};
+  fEdges.forEach(function(e) { srcs[e.from] = true; dsts[e.to] = true; });
+  var stageOrder = ["Reconnaissance", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"];
+  var stageIdx = function(n) { var i = stageOrder.indexOf(n.stage || ""); return i < 0 ? 99 : i; };
+  var bySev = function(a, b) { var w = { Critical: 0, High: 1, Medium: 2, Low: 3, user: 4, technique: 5 }; return (w[sevOf(a)] - w[sevOf(b)]) || (a.id < b.id ? -1 : 1); };
+  var cols = [[], [], [], []];
+  fNodes.forEach(function(n) {
+    if (n.type === "user") cols[0].push(n);
+    else if (srcs[n.id] && dsts[n.id]) cols[2].push(n);
+    else if (srcs[n.id]) cols[1].push(n);
+    else cols[3].push(n);
+  });
+  cols[2].sort(function(a, b) { return stageIdx(a) - stageIdx(b) || bySev(a, b); });
+  cols[1].sort(bySev); cols[3].sort(bySev); cols[0].sort(bySev);
+  var colNames = ["Users", "Sources", "Pivots (moved through)", "Destinations"];
+  var usedCols = [];
+  cols.forEach(function(c, i) { if (c.length) usedCols.push(i); });
+  var BW = 170, BH = 64, CW = 210, RH = 84;
+  var maxRows = Math.max.apply(null, usedCols.map(function(i) { return cols[i].length; }));
+  var W = usedCols.length * CW + 20, H = maxRows * RH + 20;
+  var pos = {};
+  usedCols.forEach(function(ci, colPos) {
+    cols[ci].forEach(function(n, r) {
+      pos[n.id] = { x: 10 + colPos * CW, y: 10 + r * RH };
+    });
+  });
+  var nodeById = {};
+  fNodes.forEach(function(n) { nodeById[n.id] = n; });
+  var seenEdge = {};
+  var svg = "<svg width='" + Math.round(W * gf.zoom) + "' height='" + Math.round(H * gf.zoom) + "' viewBox='0 0 " + W + " " + H + "' class='graph-svg' role='img' aria-label='Attack graph, left to right by role'>" +
+    "<defs><marker id='arr2' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#6b7280'/></marker></defs>";
+  fEdges.forEach(function(e) {
+    var key = e.from + ">" + e.to + "|" + (e.technique_id || "");
+    if (seenEdge[key]) return; seenEdge[key] = true;
     var a = pos[e.from], b = pos[e.to];
     if (!a || !b) return;
-    var mx = Math.round((a.x + b.x) / 2), my = Math.round((a.y + b.y) / 2) - 12;
-    svg += "<line x1='" + a.x + "' y1='" + a.y + "' x2='" + b.x + "' y2='" + b.y + "' class='gedge' marker-end='url(#arr)'/>" +
-      "<text x='" + mx + "' y='" + my + "' class='elabel' data-edge='" + esc(e.technique_id) + "|" + esc(e.time) + "'>" + esc(e.technique_id) + "</text>";
+    var col = sevColor[sevOf(nodeById[e.to])] || "#6b7280";
+    if (nodeById[e.to] && nodeById[e.to].type === "user") col = "#2563eb";
+    if (nodeById[e.to] && nodeById[e.to].type === "technique") col = "#7c3aed";
+    svg += "<line x1='" + (a.x + BW) + "' y1='" + (a.y + BH / 2) + "' x2='" + b.x + "' y2='" + (b.y + BH / 2) + "' stroke='" + col + "' stroke-width='2' marker-end='url(#arr2)'/>";
+    if (fEdges.length <= 60 && e.technique_id) {
+      svg += "<text x='" + Math.round((a.x + BW + b.x) / 2) + "' y='" + Math.round((a.y + b.y) / 2 + BH / 2 - 4) + "' class='elabel'>" + esc(e.technique_id) + "</text>";
+    }
   });
-  nodes.forEach(function(n) {
+  fNodes.forEach(function(n) {
     var p = pos[n.id];
-    var shape = n.type === "host"
-      ? "<rect x='" + (p.x - 34) + "' y='" + (p.y - 26) + "' width='68' height='52' rx='8' class='gnode host'/>"
-      : n.type === "technique"
-        ? "<polygon points='" + p.x + "," + (p.y - 30) + " " + (p.x + 34) + "," + p.y + " " + p.x + "," + (p.y + 30) + " " + (p.x - 34) + "," + p.y + "' class='gnode technique'/>"
-        : "<circle cx='" + p.x + "' cy='" + p.y + "' r='30' class='gnode user'/>";
-    // Labels go BELOW the shape, not inside it: a long hostname
-    // (e.g. FGT60FTK00000000) is wider than a 68px square, so inside
-    // labels overflowed and looked detached from the node.
-    var nLabel = n.type === "technique" && n.name ? n.name + " (" + n.id + ")" : n.id;
-    var nSub = n.type === "technique" && n.count ? n.type + " · ×" + fmtNum(n.count) : n.type;
+    var sev = sevOf(n);
+    var stroke = n.type === "user" ? "#2563eb" : n.type === "technique" ? "#7c3aed" : (sevColor[sev] || "#6b7280");
+    var fill = n.type === "user" ? "#e0efff" : n.type === "technique" ? "#f3e8ff" : (sevFill[sev] || "#fff");
+    var label = n.id.length > 22 ? n.id.slice(0, 21) + "…" : n.id;
+    var sub = n.type === "technique" && n.name ? n.name : (n.stage || n.type);
     svg += "<g class='gnode-wrap' data-node='" + esc(n.id) + "' tabindex='0' role='button' aria-label='Show steps for " + esc(n.id) + "'>" +
-      shape + "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='nlabel'>" + esc(nLabel) + "</text>" +
-      "<text x='" + p.x + "' y='" + (p.y + 66) + "' class='ntype'>" + esc(nSub) + "</text></g>";
+      "<title>" + esc(n.id) + " — " + esc(sub) + " — " + esc(sev) + "</title>" +
+      "<rect x='" + p.x + "' y='" + p.y + "' width='" + BW + "' height='" + BH + "' rx='10' fill='" + fill + "' stroke='" + stroke + "' stroke-width='3'/>" +
+      "<text x='" + (p.x + 10) + "' y='" + (p.y + 22) + "' class='nlabel'>" + esc(label) + "</text>" +
+      "<text x='" + (p.x + 10) + "' y='" + (p.y + 40) + "' class='ntype'>" + esc(sub.length > 24 ? sub.slice(0, 23) + "…" : sub) + "</text>" +
+      "<text x='" + (p.x + 10) + "' y='" + (p.y + 57) + "' class='nsev' fill='" + stroke + "'>" + esc(sev.toUpperCase()) + "</text></g>";
   });
-  var capNote = (totalNodes > 250) ? "<p class='hint'>Showing the 250 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(realEdges.length) + " of " + fmtNum(totalEdges) + " edges) — the rest are the same IPs/domains repeated. The full step list and grouped report below still cover everything.</p>" : "";
-  svg += "</svg>" + capNote + "<p class='hint'>■ host/IP/domain &nbsp; ● user &nbsp; — arrow = NetworkX edge, label = MITRE technique. Nodes are real IPs/domains (src → dst), never the firewall name alone. Click a node or an edge label.</p>";
-  box.innerHTML = svg;
+  svg += "</svg>";
+  var techOpts = ["All"];
+  realEdges.forEach(function(e) { if (e.technique_id && techOpts.indexOf(e.technique_id) < 0) techOpts.push(e.technique_id); });
+  var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest — the full step list and grouped report still cover everything.</p>" : "";
+  var colNote = "<p class='hint'>Left to right: " + usedCols.map(function(i) { return colNames[i] + " (" + cols[i].length + ")"; }).join(" → ") + ".</p>";
+  box.innerHTML =
+    "<div style='background:#f4efe6;border:2px solid #333;border-radius:12px;padding:10px'>" +
+    "<div style='margin-bottom:8px'>" +
+    "<label>Technique: <select onchange=\"setGraphFilter('technique', this.value)\">" + techOpts.map(function(t) { return "<option" + (gf.technique === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") + "</select></label> " +
+    "<label>Severity: <select onchange=\"setGraphFilter('severity', this.value)\">" + ["All", "Critical", "High", "Medium", "Low", "user", "technique"].map(function(t) { return "<option" + (gf.severity === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") + "</select></label> " +
+    "<label>Find host/domain: <input value='" + esc(gf.search) + "' placeholder='e.g. 10.10.' oninput=\"setGraphFilter('search', this.value)\" style='width:140px'></label> " +
+    "<button class=btn onclick=\"setGraphFilter('showAll', " + (gf.showAll ? "false" : "true") + ")\">" + (gf.showAll ? "Show top 60" : "Show all") + "</button> " +
+    "<button class=btn onclick=\"setGraphZoom(0.2)\">Zoom +</button> " +
+    "<button class=btn onclick=\"setGraphZoom(-0.2)\">Zoom −</button> " +
+    "<button class=btn onclick=\"setGraphFilter('zoom', 1)\">Reset zoom</button>" +
+    "</div>" +
+    "<p class='hint' style='margin:0 0 8px'>Colour = worst severity on that node — <span style='color:#e1251b'><b>Critical</b></span> · <span style='color:#f97316'><b>High</b></span> · <span style='color:#f0a832'><b>Medium</b></span> · <span style='color:#6b7280'><b>Low</b></span> · <span style='color:#2563eb'><b>user</b></span> · <span style='color:#7c3aed'><b>technique</b></span>. Edge label = MITRE technique (hidden when over 60 edges, to stay readable). Click a node to see its steps. Scroll inside the box to pan.</p>" +
+    "<div style='overflow:auto;max-height:640px'>" + svg + "</div>" +
+    capNote + colNote + "</div>";
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
     el.addEventListener("click", function() { showNodeSteps(path, el.getAttribute("data-node")); });
     el.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showNodeSteps(path, el.getAttribute("data-node")); } });
   });
-  box.querySelectorAll(".elabel").forEach(function(el) {
-    el.addEventListener("click", function() {
-      var parts = el.getAttribute("data-edge").split("|");
-      var idx = path.timeline.findIndex(function(s) { return s.technique_id === parts[0] && s.time === parts[1]; });
-      if (idx >= 0) showStep(path, idx);
+}
+
+function renderAttackPathCanvas(path) {
+  // ATTACK PATH CANVAS (2026-11-01, user demand: 'make this in canvas,
+  // use the reference'). The old version listed the first 12 graph
+  // nodes with arrows between them, which INVENTED a chain: for a star
+  // incident those destinations are parallel, not sequential hops.
+  // This canvas draws only real edges: sources on the left, pivots
+  // (both a destination and a source, in stage order) in the middle,
+  // destinations on the right as a fan-out, grouped by technique when
+  // there are more than 8 of them. Annotation boxes on the right are
+  // the real techniques/stages found in this incident (from the
+  // timeline summary) — never invented CVEs, Kubernetes objects, or
+  // hosts. Click a box to see its steps.
+  var box = document.getElementById("path");
+  var graph = path.graph || { nodes: [], edges: [] };
+  var nodes = graph.nodes || [], edges = graph.edges || [];
+  var nodeById = {};
+  nodes.forEach(function(n) { nodeById[n.id] = n; });
+  var pathEdges = edges.filter(function(e) { return e.kind === "path"; });
+  var sevColor = { Critical: "#e1251b", High: "#f97316", Medium: "#f0a832", Low: "#6b7280" };
+  var sevFill = { Critical: "#fde8e8", High: "#fef3e2", Medium: "#fef9e0", Low: "#f3f4f6" };
+  var sevOf = function(n) { return n && n.type === "user" ? "user" : n && n.type === "technique" ? "technique" : (n && n.severity) || "Low"; };
+  var techName = {};
+  (path.timeline_summary || []).forEach(function(s) { techName[s.technique_id] = s.technique_name; });
+  var stageOfTech = {};
+  (path.timeline_summary || []).forEach(function(s) { stageOfTech[s.technique_id] = s.kill_chain_stage; });
+  var srcs = {}, dsts = {};
+  pathEdges.forEach(function(e) { srcs[e.from] = true; dsts[e.to] = true; });
+  var sources = nodes.filter(function(n) { return n.type === "host" && srcs[n.id] && !dsts[n.id]; });
+  var pivots = nodes.filter(function(n) { return n.type === "host" && srcs[n.id] && dsts[n.id]; });
+  var dests = nodes.filter(function(n) { return n.type === "host" && dsts[n.id] && !srcs[n.id]; });
+  var stageOrder = ["Reconnaissance", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"];
+  pivots.sort(function(a, b) { var ia = stageOrder.indexOf(a.stage || ""), ib = stageOrder.indexOf(b.stage || ""); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  if (!pathEdges.length) {
+    // No host-to-host edges (e.g. the sample): the honest path is the
+    // STAGE PROGRESSION in time order, labelled as such — not host
+    // hops. Draw one box per distinct stage, in kill-chain order.
+    var stages = [];
+    (path.timeline_summary || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
+    if (!stages.length) (path.timeline || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
+    var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]) || "Unknown host";
+    box.innerHTML = "<canvas id='attackCanvas' width='1080' height='170' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
+      "<p class='hint'>No host-to-host movement in this incident — all steps happened on " + esc(hostId) + ". The canvas below shows the stage progression in time order, not host hops. Click a stage box to see its steps.</p>";
+    var cv0 = document.getElementById("attackCanvas");
+    var ctx0 = cv0.getContext("2d");
+    drawAttackStageRow(ctx0, stages, path);
+    return;
+  }
+  // Destination boxes: individual if few, grouped by technique if many.
+  var destBoxes = [];
+  if (dests.length <= 8) {
+    dests.forEach(function(d) {
+      var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {};
+      destBoxes.push({ id: d.id, label: d.id, sub: (stageOfTech[e.technique_id] || d.stage || "Destination"), sev: sevOf(d), tech: e.technique_id || "", count: 1 });
+    });
+  } else {
+    var groups = {};
+    dests.forEach(function(d) {
+      var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {};
+      var key = e.technique_id || "unknown";
+      if (!groups[key]) groups[key] = { tech: key, name: techName[key] || key, stage: stageOfTech[key] || d.stage || "", sev: "Low", count: 0, examples: [] };
+      groups[key].count += 1;
+      if (groups[key].examples.length < 3) groups[key].examples.push(d.id);
+      var w = { Critical: 40, High: 25, Medium: 10, Low: 3 };
+      if (w[sevOf(d)] > w[groups[key].sev]) groups[key].sev = sevOf(d);
+    });
+    Object.keys(groups).forEach(function(k) {
+      var g = groups[k];
+      destBoxes.push({ id: g.tech, label: g.name, sub: g.stage + " · " + g.count + " destinations", sev: g.sev, tech: g.tech, count: g.count, examples: g.examples });
+    });
+  }
+  var srcBoxes = sources.slice(0, 5).map(function(n) { return { id: n.id, label: n.id, sub: n.stage || "Source", sev: sevOf(n), tech: "", count: 1 }; });
+  var pivBoxes = pivots.slice(0, 5).map(function(n) { return { id: n.id, label: n.id, sub: n.stage || "Pivot", sev: sevOf(n), tech: "", count: 1 }; });
+  var dstBoxes = destBoxes.slice(0, 6);
+  var rows = Math.max(srcBoxes.length, pivBoxes.length, dstBoxes.length, 1);
+  var H = rows * 92 + 30, W = 1080;
+  box.innerHTML = "<canvas id='attackCanvas' width='" + W + "' height='" + H + "' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
+    "<p class='hint'>Arrows are real log edges only — destinations fan out in parallel from their source, they are NOT sequential hops unless a pivot connects them. " +
+    (sources.length > 5 ? "Showing 5 of " + sources.length + " sources. " : "") +
+    (pivots.length > 5 ? "Showing 5 of " + pivots.length + " pivots. " : "") +
+    (destBoxes.length > 6 ? "Showing 6 of " + destBoxes.length + " destination groups. " : "") +
+    "Full list: see the graph map and step list below. Click a box to see its steps.</p>";
+  var cv = document.getElementById("attackCanvas");
+  var dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
+  var ctx = cv.getContext("2d");
+  ctx.scale(dpr, dpr);
+  // Dotted-paper background, like the reference canvas.
+  ctx.fillStyle = "#f8f6f0"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#d8d2c2";
+  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
+  var BW = 230, BH = 68, cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 320, boxes: pivBoxes, name: "PIVOT" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
+  if (!pivBoxes.length) cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
+  var rects = [];
+  var drawBox = function(x, y, b) {
+    var stroke = b.sev === "user" ? "#2563eb" : b.sev === "technique" ? "#7c3aed" : (sevColor[b.sev] || "#6b7280");
+    var fill = sevFill[b.sev] || "#fff";
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
+    ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.font = "bold 13px system-ui, sans-serif";
+    var lab = b.label.length > 26 ? b.label.slice(0, 25) + "…" : b.label;
+    ctx.fillText(lab, x + 12, y + 24);
+    ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
+    var sub = (b.sub || "").length > 30 ? b.sub.slice(0, 29) + "…" : (b.sub || "");
+    ctx.fillText(sub, x + 12, y + 42);
+    ctx.fillStyle = stroke; ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillText((b.sev || "").toUpperCase() + (b.count > 1 ? " · ×" + b.count : ""), x + 12, y + 58);
+    rects.push({ x: x, y: y, w: BW, h: BH, id: b.id });
+    if (b.examples) {
+      ctx.fillStyle = "#555"; ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText(b.examples.join(", "), x + 12, y + BH + 14);
+    }
+  };
+  var drawArrow = function(x1, y1, x2, y2, col) {
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 10, y2 - 4); ctx.lineTo(x2 - 10, y2 + 4); ctx.closePath(); ctx.fill();
+  };
+  cols.forEach(function(c) {
+    ctx.fillStyle = "#888"; ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillText(c.name, c.x, 18);
+    c.boxes.forEach(function(b, i) { drawBox(c.x, 26 + i * 92, b); });
+  });
+  // Arrows: source -> pivot (if any) -> destinations, and source ->
+  // destinations directly. One arrow per box pair, not per detection.
+  var srcY = function(i) { return 26 + i * 92 + BH / 2; };
+  var pivY = function(i) { return 26 + i * 92 + BH / 2; };
+  var dstY = function(i) { return 26 + i * 92 + BH / 2; };
+  if (pivBoxes.length) {
+    srcBoxes.forEach(function(s, i) { drawArrow(20 + BW, srcY(i), 320, pivY(0), "#6b7280"); });
+    pivBoxes.forEach(function(p, i) { dstBoxes.forEach(function(d, j) { drawArrow(320 + BW, pivY(i), 620, dstY(j), "#6b7280"); }); });
+  } else {
+    srcBoxes.forEach(function(s, i) { dstBoxes.forEach(function(d, j) { drawArrow(20 + BW, srcY(i), 620, dstY(j), "#6b7280"); }); });
+  }
+  state.attackRects = rects;
+  cv.addEventListener("click", function(ev) {
+    var r = cv.getBoundingClientRect();
+    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (H / r.height);
+    var hit = null;
+    rects.forEach(function(rc) { if (x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h) hit = rc; });
+    if (hit) showNodeSteps(path, hit.id);
+  });
+}
+
+function drawAttackStageRow(ctx, stages, path) {
+  var W = 1080, BH = 64, gap = 30;
+  var BW = Math.min(200, Math.floor((W - 40 - (stages.length - 1) * gap) / Math.max(1, stages.length)));
+  ctx.fillStyle = "#f8f6f0"; ctx.fillRect(0, 0, W, 170);
+  ctx.fillStyle = "#d8d2c2";
+  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < 170; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
+  var total = stages.length * (BW + gap) - gap;
+  var x0 = Math.max(20, (W - total) / 2);
+  var rects = [];
+  stages.forEach(function(s, i) {
+    var x = x0 + i * (BW + gap), y = 50;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
+    ctx.fillStyle = "#fff"; ctx.fill(); ctx.strokeStyle = "#e1251b"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillText(s.length > 24 ? s.slice(0, 23) + "…" : s, x + 12, y + 28);
+    ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
+    ctx.fillText("Stage " + (i + 1) + " of " + stages.length, x + 12, y + 48);
+    rects.push({ x: x, y: y, w: BW, h: BH, id: s });
+    if (i < stages.length - 1) {
+      ctx.strokeStyle = "#f0a832"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + BW, y + BH / 2); ctx.lineTo(x + BW + gap, y + BH / 2); ctx.stroke();
+      ctx.fillStyle = "#f0a832"; ctx.beginPath(); ctx.moveTo(x + BW + gap, y + BH / 2); ctx.lineTo(x + BW + gap - 10, y + BH / 2 - 4); ctx.lineTo(x + BW + gap - 10, y + BH / 2 + 4); ctx.closePath(); ctx.fill();
+    }
+  });
+  var cv = document.getElementById("attackCanvas");
+  state.attackRects = rects;
+  cv.addEventListener("click", function(ev) {
+    var r = cv.getBoundingClientRect();
+    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (170 / r.height);
+    rects.forEach(function(rc) {
+      if (x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h) {
+        var idx = (path.timeline || []).findIndex(function(s) { return s.kill_chain_stage === rc.id; });
+        if (idx >= 0) showStep(path, idx);
+      }
     });
   });
 }

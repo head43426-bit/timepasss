@@ -44,7 +44,35 @@ def _incident_with_extras(con, incident_id):
         return None
     topology = store.get_topology(con)
     nxt = graph_mod.next_reach(inc["hosts"], inc["users"], topology)
-    inc["next_reach"] = nxt
+    # OBSERVED FALLBACK (2026-11-01 fix): a web upload never supplies
+    # a topology, so the topology-only path always returned [] and
+    # the page said 'no next system' for every incident. When no
+    # topology is present, use what the logs actually show: the
+    # frontier destinations (contacted, not yet a stepping stone).
+    # When a topology IS supplied (CLI --topology), it still wins.
+    _edges = (inc.get("graph") or {}).get("edges", [])
+    _tech_sev = {}
+    try:
+        for _tid, _sev in con.execute(
+                "SELECT d.technique_id, d.severity FROM detections d "
+                "JOIN incident_detections idt ON idt.detection_id = d.id "
+                "WHERE idt.incident_id = ? AND d.technique_id <> ''",
+                [incident_id]).fetchall():
+            _w = graph_mod.SEVERITY_WEIGHTS.get(_sev, 10)
+            _cur = _tech_sev.get(_tid)
+            if _cur is None or _w > graph_mod.SEVERITY_WEIGHTS.get(_cur, 10):
+                _tech_sev[_tid] = _sev
+    except Exception:
+        _tech_sev = {}
+    if nxt:
+        inc["next_reach"] = nxt
+        inc["next_basis"] = "supplied topology"
+        inc["next_frontier_total"] = len(nxt)
+    else:
+        _obs = graph_mod.observed_next_reach(_edges, _tech_sev)
+        inc["next_reach"] = _obs[:10]
+        inc["next_basis"] = "observed graph"
+        inc["next_frontier_total"] = len(_obs)
     # Stage look-ahead works even without topology (firex case).
     _stages = []
     for _s in inc.get("timeline_summary", []):
@@ -53,7 +81,22 @@ def _incident_with_extras(con, incident_id):
     if not _stages:
         _stages = [d.get("kill_chain_stage", "") for d in inc.get("timeline", [])]
     inc["next_stages"] = graph_mod.next_stages(_stages)
-    inc["blast_radius"] = graph_mod.blast_radius_score(inc["hosts"], topology)
+    # BLAST RADIUS (2026-11-01 fix): topology score is 0 whenever no
+    # topology was supplied, which is every web upload. Use the
+    # observed-graph score then, and say which basis it is, so the
+    # page never again shows a meaningless 0/100 for a 184-node
+    # incident. Detections for the score come from the timeline
+    # (sampled for huge incidents — the score is an estimate then,
+    # and the breakdown says so in the frontend).
+    if topology.get("host_subnet"):
+        inc["blast_radius"] = graph_mod.blast_radius_score(inc["hosts"], topology)
+        inc["blast_basis"] = "supplied topology"
+        inc["blast_breakdown"] = None
+    else:
+        _br = graph_mod.observed_blast_radius(inc.get("timeline", []), _edges)
+        inc["blast_radius"] = _br["score"]
+        inc["blast_basis"] = "observed graph"
+        inc["blast_breakdown"] = _br
     from engine import protect as protect_mod
     inc["protections"] = protect_mod.protections_for(inc)
     return inc

@@ -288,6 +288,62 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
                                    "type": "user" if endpoint in _users
                                    else "technique" if endpoint in tech_ids
                                    else "host"}
+    # NODE COLOUR DATA (2026-11-01, graph redesign): the frontend
+    # colours each node by its worst severity and labels it with its
+    # earliest kill-chain stage, so the map can be read at a glance
+    # instead of a wall of identical red boxes. Severity comes from
+    # DuckDB aggregates over the whole incident (not the 400-row
+    # timeline sample), grouped by technique, by user and by src IP;
+    # a host node's severity is the worst severity of any edge
+    # touching it, via that edge's technique. Stage comes from the
+    # technique -> stage mapping in the summary/timeline.
+    _sev_w = {"Critical": 40, "High": 25, "Medium": 10, "Low": 3}
+    _tech_sev, _tech_stage, _user_sev, _ip_sev = {}, {}, {}, {}
+    try:
+        _base_q = (" FROM detections d JOIN incident_detections idt"
+                   " ON idt.detection_id = d.id WHERE idt.incident_id = ?")
+        for _tid, _sev in con.execute(
+                "SELECT d.technique_id, d.severity" + _base_q + " AND d.technique_id <> ''",
+                [incident_id]).fetchall():
+            if _tid not in _tech_sev or _sev_w.get(_sev, 10) > _sev_w.get(_tech_sev[_tid], 10):
+                _tech_sev[_tid] = _sev
+        for _u, _sev in con.execute(
+                "SELECT d.user, d.severity" + _base_q + " AND d.user <> ''",
+                [incident_id]).fetchall():
+            if _u not in _user_sev or _sev_w.get(_sev, 10) > _sev_w.get(_user_sev[_u], 10):
+                _user_sev[_u] = _sev
+        for _ip, _sev in con.execute(
+                "SELECT d.ip, d.severity" + _base_q + " AND d.ip <> ''",
+                [incident_id]).fetchall():
+            if _ip not in _ip_sev or _sev_w.get(_sev, 10) > _sev_w.get(_ip_sev[_ip], 10):
+                _ip_sev[_ip] = _sev
+    except Exception:
+        pass
+    for _s in _summary:
+        if _s[0] and _s[2]:
+            _tech_stage[_s[0]] = _s[2]
+    for _d in timeline:
+        if _d[8] and _d[11]:
+            _tech_stage.setdefault(_d[8], _d[11])
+    _order = ["Reconnaissance", "Initial Access", "Execution", "Persistence",
+              "Privilege Escalation", "Defense Evasion", "Credential Access",
+              "Discovery", "Lateral Movement", "Collection",
+              "Command and Control", "Exfiltration", "Impact"]
+    for _nid, _node in nodes.items():
+        if _node["type"] == "user":
+            _node["severity"] = _user_sev.get(_nid, "Low")
+            _node["stage"] = ""
+        elif _node["type"] == "technique":
+            _node["severity"] = _tech_sev.get(_nid, "Medium")
+            _node["stage"] = _tech_stage.get(_nid, "")
+        else:
+            _touch = [e[3] for e in edges if e[0] == _nid or e[1] == _nid]
+            _sev_list = [_tech_sev[t] for t in _touch if t in _tech_sev]
+            _node["severity"] = (max(_sev_list, key=lambda s: _sev_w.get(s, 10))
+                                 if _sev_list else _ip_sev.get(_nid, "Low"))
+            _stages = [_tech_stage[t] for t in _touch if t in _tech_stage]
+            _node["stage"] = (min(_stages, key=lambda s: _order.index(s) if s in _order else 99)
+                              if _stages else "")
     return {
         "id": row[0], "title": row[1], "start_time": row[2], "end_time": row[3],
         "hosts": json.loads(row[4] or "[]"), "users": json.loads(row[5] or "[]"),
