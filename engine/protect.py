@@ -59,15 +59,36 @@ WHY_BY_STAGE = {
 }
 
 
+def technique_meaning(technique_id: str, technique_name: str) -> str:
+    """What the technique IS, in one sentence — from the slim MITRE
+    index (first sentence of the MITRE description), not the stage
+    rhetoric ('the attacker got in') that used to fill this slot.
+    Falls back to the technique name itself if the index has no
+    entry, so no slab entry is ever left blank."""
+    try:
+        from . import mitre as mitre_mod
+        _t = mitre_mod.lookup(technique_id)
+        if _t and _t.get("description"):
+            _first = _t["description"].split(". ")[0].strip().rstrip(".")
+            if _first:
+                return _first
+    except Exception:
+        pass
+    return (technique_name or technique_id or "attack technique")
+
+
 def live_tell(technique_id: str, technique_name: str, stage: str,
               count: int, tell: str) -> Dict:
     """One live slab entry: what was found, what gave it away (the
-    tell), why it matters, and how it helps you. All plain words —
-    this is the panel a non-expert reads while the upload runs."""
+    tell), what the technique means, why it matters, and how it
+    helps you. All plain words — this is the panel a non-expert
+    reads while the upload runs. The frontend now renders meaning +
+    how-to-prevent as one flowing paragraph, not the why text."""
     return {
         "technique_id": technique_id, "technique_name": technique_name,
         "kill_chain_stage": stage, "count": count,
         "tell": tell or "a log line matching this attack's signature",
+        "meaning": technique_meaning(technique_id, technique_name),
         "why": WHY_BY_STAGE.get(stage, "This is a step in the attack chain — earlier stages are warnings, later stages are damage."),
         "help": MITIGATIONS.get(technique_id, GENERIC),
     }
