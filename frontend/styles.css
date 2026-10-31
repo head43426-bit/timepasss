@@ -96,7 +96,18 @@ code { background: var(--surface-2); color: var(--accent); border: 1px solid var
   transition: background-color .25s ease, color .25s ease;
 }
 .mode-btn.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.mode-btn:disabled { cursor: default; opacity: 1; }
 .mode-spacer { flex: 1; }
+/* Pan + zoom pill (2026-11-01, matching the uploaded crop):
+   "< Pan >" | magnifier-minus | percentage | magnifier-plus, in
+   one pill. Pan turns green while it is on, so the state is
+   visible at a glance. */
+.view-track { display: inline-flex; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
+.view-btn { border: 0; background: transparent; color: var(--text); border-radius: 7px; padding: 6px 10px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.view-btn svg { width: 16px; height: 16px; flex: none; }
+.view-btn:hover { background: var(--surface); }
+.view-btn.active { background: var(--accent); color: #fff; }
+.view-icon { padding: 6px 8px; }
 .zoom-btn {
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
   border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 13px;
@@ -214,7 +225,12 @@ details { margin-top: 16px; }
 .flow-table th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--surface-2)}
 #flowFilter{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;margin-top:10px}
 #graphMap.panning{cursor:grab}
+#graphMap.panning.dragging{cursor:grabbing}
 #graphMap.panning:active{cursor:grabbing}
+/* The graph viewport must not scroll on its own: #graphMap is the
+   only scroller, so dragging it actually moves the canvas, even
+   when the SVG is larger than the box at 200% zoom. */
+.graph-viewport{overflow:visible}
 
 /* Reference dashboard: flat queue, segmented tier track, search icon */
 .queue-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}

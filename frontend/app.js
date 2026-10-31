@@ -1,5 +1,5 @@
 "use strict";
-var state = { incidents: [], selected: null, report: "", hindi: null, graphMode: "kill" };
+var state = { incidents: [], selected: null, report: "", hindi: null };
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
@@ -224,18 +224,10 @@ function renderGraph(path) {
     gf.zoom = Math.min(2, Math.max(0.6, Math.round((gf.zoom + d) * 10) / 10));
     renderGraph(path);
   };
-  // Quantum Walk mode: show only the frontier subgraph - frontier
-  // hosts from /next plus the hosts that reached them. Nothing here
-  // is a guessed target or a simulated probability.
-  if (state.graphMode === "quantum" && path.next_reach && path.next_reach.length) {
-    var frontier = {};
-    path.next_reach.forEach(function(n) { frontier[n.host] = true; });
-    var keepEdge = allEdges.filter(function(e) { return frontier[e.to]; });
-    var keepNode = {};
-    keepEdge.forEach(function(e) { keepNode[e.from] = true; keepNode[e.to] = true; });
-    allNodes = allNodes.filter(function(n) { return keepNode[n.id]; });
-    allEdges = keepEdge;
-  }
+  // Kill Chain is the only graph mode (2026-11-01): the old Quantum
+  // Walk frontier subgraph is gone, so the full graph is always
+  // shown, filtered only by the technique / severity / search
+  // controls below and capped at the 60 most-connected nodes.
   var nodeSet = {};
   allNodes.forEach(function(n) { nodeSet[n.id] = true; });
   var realEdges = allEdges.filter(function(e) { return nodeSet[e.from] && nodeSet[e.to]; });
@@ -328,7 +320,7 @@ function renderGraph(path) {
     if (nodeById[e.to] && nodeById[e.to].type === "user") col = userStroke;
     if (nodeById[e.to] && nodeById[e.to].type === "technique") col = techStroke;
     svg += "<line x1='" + (a.x + BW) + "' y1='" + (a.y + BH / 2) + "' x2='" + b.x + "' y2='" + (b.y + BH / 2) + "' stroke='" + col + "' stroke-width='2' marker-end='url(#arr2)'/>";
-    if (state.graphMode !== "quantum" && fEdges.length <= 60 && e.technique_id) {
+    if (fEdges.length <= 60 && e.technique_id) {
       svg += "<text x='" + Math.round((a.x + BW + b.x) / 2) + "' y='" + Math.round((a.y + b.y) / 2 + BH / 2 - 4) + "' class='elabel'>" + esc(e.technique_id) + "</text>";
     }
   });
@@ -354,6 +346,10 @@ function renderGraph(path) {
   var colNote = "";
   var zl = document.getElementById("zoomLabel");
   if (zl) zl.textContent = Math.round(gf.zoom * 100) + "%";
+  // Keep the viewport where the user was across re-renders (zoom /
+  // filter changes replace the whole innerHTML, which used to snap
+  // the canvas back to the top-left every time).
+  var keepSl = box.scrollLeft, keepSt = box.scrollTop;
   box.innerHTML =
     "<div style='background:var(--canvas-bg);border:1px solid var(--border);border-radius:12px;padding:10px'>" +
     "<div style='margin-bottom:8px'>" +
@@ -365,8 +361,10 @@ function renderGraph(path) {
     "<button class=btn onclick=\"setGraphZoom(-0.2)\">Zoom −</button> " +
     "<button class=btn onclick=\"setGraphFilter('zoom', 1)\">Reset zoom</button>" +
     "</div>" +
-    "<div style='overflow:auto;max-height:640px'>" + svg + "</div>" +
+    "<div class='graph-viewport'>" + svg + "</div>" +
     capNote + colNote + "</div>";
+  box.scrollLeft = keepSl;
+  box.scrollTop = keepSt;
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
     el.addEventListener("click", function() { showNodeSteps(path, el.getAttribute("data-node")); });
     el.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showNodeSteps(path, el.getAttribute("data-node")); } });
@@ -857,22 +855,10 @@ if (incidentSearch) {
   });
 }
 
-// Mode toggle: Kill Chain (full graph) vs Quantum Walk (frontier
-// subgraph only - see renderGraph). No invented probabilities.
-document.querySelectorAll(".mode-btn").forEach(function(btn) {
-  btn.addEventListener("click", function() {
-    document.querySelectorAll(".mode-btn").forEach(function(b) { b.classList.remove("active"); });
-    btn.classList.add("active");
-    state.graphMode = btn.getAttribute("data-mode");
-    var banner = document.getElementById("modeBanner");
-    if (state.graphMode === "quantum") {
-      if (banner) banner.textContent = "QUANTUM WALK: Classical look-ahead from the observed graph - frontier hosts, not a Qiskit simulation";
-    } else {
-      if (banner) banner.textContent = "KILL CHAIN ANALYSIS: Tracking MITRE ATT&CK progression & lateral traversal";
-    }
-    if (state.selected) renderGraph(state.selected);
-  });
-});
+// Graph mode (2026-11-01): Kill Chain only. There is no mode
+// toggle any more - the mode button in the header is disabled and
+// the banner always reads Kill Chain, so nothing here switches the
+// graph to a frontier subgraph.
 
 // Center zoom controls (graph zoom lives in renderGraph's state).
 function zoomStep(d) { if (window.setGraphZoom) window.setGraphZoom(d); }
@@ -883,30 +869,59 @@ if (zOut) zOut.addEventListener("click", function() { zoomStep(-0.2); });
 var zReset = document.getElementById("zoomReset");
 if (zReset) zReset.addEventListener("click", function() { if (window.setGraphFilter) window.setGraphFilter("zoom", 1); });
 
-// Pan button + drag-to-pan on the graph box (reference header:
-// "< Pan >" - dragging the canvas background scrolls it).
+// Pan + zoom header (2026-11-01, matching the uploaded crop):
+// one pill holding "< Pan >", a magnifier-minus button, the
+// percentage, and a magnifier-plus button. Pan is a toggle: click
+// "< Pan >" (it turns green) and dragging the canvas moves it, at
+// any zoom level. The canvas itself is the only scroller - the old
+// inner overflow box inside the graph is gone, because it swallowed
+// the drag and the outer box never scrolled, which is why panning
+// felt broken when zoomed in. A plain click on a node still selects
+// it while Pan is on; only an actual drag (over 5 px) suppresses
+// the click, so dragging never opens a node's steps by accident.
+// Dragging never starts on a filter control (button, select, input).
 var panBtn = document.getElementById("panBtn");
 var graphBox = document.getElementById("graphMap");
 var panState = null;
+function setPan(on) {
+  state.panMode = !!on;
+  if (panBtn) {
+    panBtn.classList.toggle("active", !!on);
+    panBtn.setAttribute("aria-pressed", !!on ? "true" : "false");
+  }
+  if (graphBox) graphBox.classList.toggle("panning", !!on);
+}
 if (panBtn) {
-  panBtn.addEventListener("click", function() {
-    state.panMode = !state.panMode;
-    panBtn.classList.toggle("active", !!state.panMode);
-    if (graphBox) graphBox.classList.toggle("panning", !!state.panMode);
-    panBtn.textContent = state.panMode ? "Panning" : "< Pan >";
-  });
+  panBtn.addEventListener("click", function() { setPan(!state.panMode); });
 }
 if (graphBox) {
   graphBox.addEventListener("mousedown", function(e) {
     if (!state.panMode) return;
-    panState = { x: e.clientX, y: e.clientY, sl: graphBox.scrollLeft, st: graphBox.scrollTop };
+    if (e.target.closest && e.target.closest("button,select,input,textarea,a,label")) return;
+    panState = { x: e.clientX, y: e.clientY, sl: graphBox.scrollLeft, st: graphBox.scrollTop, moved: false };
+    graphBox.classList.add("dragging");
+    e.preventDefault();
   });
   graphBox.addEventListener("mousemove", function(e) {
     if (!panState) return;
-    graphBox.scrollLeft = panState.sl - (e.clientX - panState.x);
-    graphBox.scrollTop = panState.st - (e.clientY - panState.y);
+    var dx = e.clientX - panState.x, dy = e.clientY - panState.y;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) panState.moved = true;
+    graphBox.scrollLeft = panState.sl - dx;
+    graphBox.scrollTop = panState.st - dy;
   });
-  window.addEventListener("mouseup", function() { panState = null; });
+  window.addEventListener("mouseup", function() {
+    if (panState && panState.moved) {
+      // The click that follows a drag must not select a node.
+      state.suppressClick = true;
+      setTimeout(function() { state.suppressClick = false; }, 0);
+    }
+    panState = null;
+    if (graphBox) graphBox.classList.remove("dragging");
+  });
+  // Capture phase: stop a drag's click before it reaches a node.
+  graphBox.addEventListener("click", function(e) {
+    if (state.suppressClick) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
 }
 var refreshBtn = document.getElementById("refreshBtn");
 if (refreshBtn) refreshBtn.addEventListener("click", function() { loadIncidents(); });

@@ -48,17 +48,18 @@
 
   <!-- CENTER: Attack graph canvas + detail -->
   <section class="col col-center" id="detailSection">
-    <div class="modebar" role="group" aria-label="Graph mode">
+    <div class="modebar" role="group" aria-label="Graph mode and view">
       <span class="mode-label">MODE:</span>
       <span class="mode-track">
-        <button type="button" class="mode-btn active" data-mode="kill">Kill Chain</button>
-        <button type="button" class="mode-btn" data-mode="quantum">Quantum Walk</button>
+        <button type="button" class="mode-btn active" disabled title="Kill Chain is the only graph mode">Kill Chain</button>
       </span>
       <span class="mode-spacer"></span>
-      <button type="button" class="zoom-btn" id="panBtn" aria-label="Toggle drag to pan">&lt; Pan &gt;</button>
-      <button type="button" class="zoom-btn" id="zoomOut" aria-label="Zoom out">−</button>
-      <span class="zoom-label" id="zoomLabel">100%</span>
-      <button type="button" class="zoom-btn" id="zoomIn" aria-label="Zoom in">+</button>
+      <span class="view-track" role="group" aria-label="Pan and zoom">
+        <button type="button" class="view-btn" id="panBtn" aria-label="Toggle drag to pan" aria-pressed="false">&lt; Pan &gt;</button>
+        <button type="button" class="view-btn view-icon" id="zoomOut" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button type="button" class="view-btn view-icon" id="zoomIn" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+      </span>
       <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
       <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
     </div>
