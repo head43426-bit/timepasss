@@ -1,53 +1,55 @@
-/* ASK dashboard — spacious, not cramped. No external fonts. Logo is the only image. */
+/* ASK dashboard — CLEAN LIGHT UI (2026-11-01, user demand: use the
+   clean inspiration image, light-blue side panels). Spacious, not
+   cramped. No external fonts. Logo is the only image. */
 .brand{display:flex;align-items:center;gap:16px}
 .ask-logo{height:72px;width:auto;animation:askFloat 5s ease-in-out infinite,askFlicker 3.2s ease-in-out infinite}
 @keyframes askFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
-@keyframes askFlicker{0%,100%{filter:drop-shadow(0 0 0 rgba(240,168,50,0)) brightness(1)}50%{filter:drop-shadow(0 0 14px rgba(240,168,50,.45)) brightness(1.08) saturate(1.12)}}
+@keyframes askFlicker{0%,100%{filter:drop-shadow(0 0 0 rgba(240,168,50,0)) brightness(1)}50%{filter:drop-shadow(0 0 14px rgba(37,99,235,.35)) brightness(1.08) saturate(1.12)}}
 @media(prefers-reduced-motion:reduce){.ask-logo{animation:none}}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0e13;color:#f4efe6;line-height:1.5}
-header{padding:28px 32px;border-bottom:4px solid #e1251b;display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background-color:#f8f6f0;background-image:radial-gradient(#d8d2c2 1px,transparent 1px);background-size:18px 18px;color:#111;line-height:1.5}
+header{padding:28px 32px;background:#fff;border-bottom:4px solid #bfdbfe;display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
 h1{margin:0;font-size:34px;letter-spacing:-.02em;text-transform:uppercase}
-h1 span{color:#f0a832}
+h1 span{color:#2563eb}
 h2{margin:0 0 16px;font-size:22px;text-transform:uppercase}
 h3{margin:32px 0 12px;font-size:17px}
-.tag{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#f0a832}
+.tag{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#2563eb}
 main{max-width:1180px;margin:0 auto;padding:32px 24px 48px;display:flex;flex-direction:column;gap:32px}
-.card{background:#f4efe6;color:#111;border-radius:14px;padding:32px}
-.card.dark{background:#141a24;color:#f4efe6}
+.card{background:#fff;color:#111;border:1px solid #dbeafe;border-radius:14px;padding:32px;box-shadow:0 2px 12px rgba(37,99,235,.08)}
+.card.dark{background:#dbeafe;color:#111}
 p{font-size:15px}
-code{background:#111;color:#f0a832;padding:2px 6px;border-radius:4px;font-size:13px}
-.drop{border:3px dashed #e1251b;border-radius:14px;padding:40px 24px;text-align:center;cursor:pointer;background:#fff;color:#111;font-size:17px}
-.drop:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
-.progress{height:12px;background:#222;border-radius:6px;overflow:hidden;margin:20px 0}
-#bar{height:100%;width:0;background:#f0a832;transition:width .2s}
-.warn{background:#fff3cd;color:#111;border-radius:10px;padding:14px 16px;font-size:14px}
+code{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;padding:2px 6px;border-radius:4px;font-size:13px}
+.drop{border:3px dashed #2563eb;border-radius:14px;padding:40px 24px;text-align:center;cursor:pointer;background:#eff6ff;color:#111;font-size:17px}
+.drop:focus-visible{outline:4px solid #2563eb;outline-offset:3px}
+.progress{height:12px;background:#dbeafe;border-radius:6px;overflow:hidden;margin:20px 0}
+#bar{height:100%;width:0;background:#2563eb;transition:width .2s}
+.warn{background:#eff6ff;color:#111;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;font-size:14px}
 .stats{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 24px}
-.stat{background:#111;color:#f4efe6;border-radius:10px;padding:16px 20px;min-width:150px}
-.stat b{display:block;font-size:28px;color:#f0a832}
+.stat{background:#dbeafe;color:#111;border-radius:10px;padding:16px 20px;min-width:150px}
+.stat b{display:block;font-size:28px;color:#2563eb}
 .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.1em}
-.inc{width:100%;text-align:left;background:#fff;color:#111;border:1px solid #ccc;border-left:8px solid #e1251b;border-radius:10px;padding:18px 20px;margin:12px 0;cursor:pointer;font-size:15px}
-.inc:hover,.inc.sel{outline:3px solid #e1251b}
+.inc{width:100%;text-align:left;background:#fff;color:#111;border:1px solid #bfdbfe;border-left:8px solid #2563eb;border-radius:10px;padding:18px 20px;margin:12px 0;cursor:pointer;font-size:15px}
+.inc:hover,.inc.sel{outline:3px solid #2563eb}
 .inc small{color:#555}
-.hint{color:#c9c2b2}
+.hint{color:#555}
 /* Conveyor belt — roomy packages, each one a real pressable button */
-.belt{display:flex;gap:20px;overflow-x:auto;padding:28px 8px;border-top:6px repeating-linear-gradient(45deg,#f0a832 0 16px,#111 16px 32px);border-bottom:6px repeating-linear-gradient(45deg,#f0a832 0 16px,#111 16px 32px);scroll-padding:20px}
-.pkg{min-width:290px;max-width:320px;background:#111;color:#f4efe6;border:3px solid #333;border-radius:12px;padding:22px;text-align:left;cursor:pointer;font-size:15px}
-.pkg:hover{border-color:#f0a832}
-.pkg:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
-.pkg.sel{border-color:#e1251b;box-shadow:0 0 0 3px #e1251b inset}
-.pkg b{display:block;color:#f0a832;font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
-.pkg .press{display:inline-block;margin-top:16px;background:#e1251b;color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px}
-.pkg.sel .press{background:#f0a832;color:#111}
-.step-detail{border:1px solid #333;border-radius:12px;padding:24px;font-size:16px;background:#0f141d}
-.step-detail b{color:#f0a832}
+.belt{display:flex;gap:20px;overflow-x:auto;padding:28px 8px;border-top:6px repeating-linear-gradient(45deg,#93c5fd 0 16px,#fff 16px 32px);border-bottom:6px repeating-linear-gradient(45deg,#93c5fd 0 16px,#fff 16px 32px);scroll-padding:20px}
+.pkg{min-width:290px;max-width:320px;background:#fff;color:#111;border:3px solid #bfdbfe;border-radius:12px;padding:22px;text-align:left;cursor:pointer;font-size:15px}
+.pkg:hover{border-color:#2563eb}
+.pkg:focus-visible{outline:4px solid #2563eb;outline-offset:3px}
+.pkg.sel{border-color:#2563eb;box-shadow:0 0 0 3px #2563eb inset}
+.pkg b{display:block;color:#2563eb;font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.pkg .press{display:inline-block;margin-top:16px;background:#2563eb;color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px}
+.pkg.sel .press{background:#93c5fd;color:#111}
+.step-detail{border:1px solid #bfdbfe;border-radius:12px;padding:24px;font-size:16px;background:#eff6ff}
+.step-detail b{color:#2563eb}
 .path{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.path .node{background:#111;border:1px solid #333;border-radius:8px;padding:10px 16px}
-.path .arrow{color:#f0a832;font-size:20px}
-.btn{background:#e1251b;color:#fff;border:0;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}
-.btn.ghost{background:#111;color:#f4efe6}
+.path .node{background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px}
+.path .arrow{color:#2563eb;font-size:20px}
+.btn{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}
+.btn.ghost{background:#fff;color:#111;border:1px solid #bfdbfe}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#f4efe6;padding:20px;border-radius:10px;font-size:14px;line-height:1.6}
+pre{white-space:pre-wrap;word-break:break-word;background:#fff;color:#111;border:1px solid #bfdbfe;padding:20px;border-radius:10px;font-size:14px;line-height:1.6}
 details{margin-top:20px}
 @media(max-width:700px){header,main,.card{padding:20px 16px}h1{font-size:26px}.pkg{min-width:260px}}
 
