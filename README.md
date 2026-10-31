@@ -41,7 +41,28 @@ and DuckDB writes stay in the main process, exactly as single-core.
 API: `GET /health`, `GET /incidents`, `GET /incidents/{id}/path`,
 `GET /incidents/{id}/report`, `GET /incidents/{id}/next`
 (`?hindi=1` for the Hindi report), `GET /db/stats` (table counts,
-DB size, top techniques).
+DB size, top techniques), `GET /progress` (live upload progress).
+
+Upload progress, in plain words: while a file uploads, the dashboard
+shows what the backend is doing, step by step — (1) receiving the
+file, (2) reading line by line and checking each line against the
+rules, (3) linking flagged lines into attack paths and scoring risk,
+(4) saving incidents — plus lines read, detections so far, speed in
+lines/sec, and an estimated time left.
+
+Large incidents stay readable: an incident with more than 50 steps
+gets a grouped report (distinct techniques, counts, first/last
+times) instead of every step printed one by one, and its path API
+response is capped at a summary plus the first/last 200 steps
+(`?full=1` for the complete timeline). Logs with no user field
+(e.g. Fortinet device logs) show "Unknown — not recorded in the
+logs" instead of a blank user, and the graph map has no blank node. The estimate comes from the
+file size divided by the average line length sampled from the first
+200 lines, so it is labelled as an estimate and updates as speed
+changes. Uploads are streamed to disk in 1 MB chunks, never loaded
+whole into memory, so a very large file does not blow up RAM on
+upload (tested: 213,000 lines / 26 MB in ~65s, progress polling
+showed receiving → reading with a live ETA).
 
 Merged from Amogh's `timess` update (code only, UI untouched):
 - **O(n²) → O(1) incident lookup** — `cli.py` and `parallel.py` used

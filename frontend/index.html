@@ -25,6 +25,7 @@
     </div>
     <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
     <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs — never real production logs or credentials.</p>
+    <p id="backendStatus" class="warn" hidden></p>
     <details>
       <summary>What formats does it accept?</summary>
       <ul>
@@ -44,11 +45,11 @@
 
   <section class="card dark" id="detailSection">
     <h2>Incident detail</h2>
-    <div id="detail"><p>Pick an incident above, then press a package on the conveyor belt to inspect that step.</p></div>
+    <div id="detail"><p>Pick an incident above, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
 
-    <h3>Conveyor — press a package to inspect its step</h3>
-    <p class="hint">Every package is a real button. Press it (or Tab to it and hit Enter) and the step detail below updates.</p>
-    <div class="belt" id="belt" role="group" aria-label="Attack steps as packages on a conveyor belt"></div>
+    <h3>Attack graph map — built by NetworkX</h3>
+    <p class="hint">Nodes are the real hosts and users from the backend NetworkX graph, connected by its edges. Click a node to see its steps, or click an edge label to open that step. Hosts are squares, users are circles.</p>
+    <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"></div>
 
     <h3>Step detail</h3>
     <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>

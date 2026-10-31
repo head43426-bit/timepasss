@@ -45,3 +45,17 @@ code{background:#111;color:#f0a832;padding:2px 6px;border-radius:4px;font-size:1
 pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#f4efe6;padding:20px;border-radius:10px;font-size:14px;line-height:1.6}
 details{margin-top:20px}
 @media(max-width:700px){header,main,.card{padding:20px 16px}h1{font-size:26px}.pkg{min-width:260px}}
+
+/* NetworkX graph map (replaces the conveyor belt) */
+.graph-svg{width:100%;height:auto;background:#111;border:2px solid #333;border-radius:12px;display:block}
+.gedge{stroke:#f0a832;stroke-width:2}
+.elabel{fill:#f4efe6;font-family:ui-monospace,Menlo,monospace;font-size:13px;cursor:pointer;text-anchor:middle}
+.elabel:hover{fill:#f0a832}
+.gnode{fill:#1d1d1d;stroke:#f0a832;stroke-width:2}
+.gnode.host{fill:#2a1a1a;stroke:#e1251b}
+.gnode-wrap{cursor:pointer}
+.gnode-wrap:hover .gnode,.gnode-wrap.sel .gnode{stroke:#fff;stroke-width:3}
+.gnode-wrap:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
+.nlabel{fill:#f4efe6;font-size:13px;font-weight:700;text-anchor:middle;pointer-events:none}
+.ntype{fill:#999;font-size:11px;text-anchor:middle;text-transform:uppercase;pointer-events:none}
+.step-link{margin:6px 6px 0 0}

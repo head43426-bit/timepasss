@@ -73,7 +73,11 @@ def peak_rss_mb() -> float:
 
 
 def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
-        chunk_size: int = 5000, ground_truth_path: str = None) -> dict:
+        chunk_size: int = 5000, ground_truth_path: str = None,
+        on_progress=None) -> dict:
+    """on_progress(events, detections, stage) is called after each batch
+    (stage "reading") and again for "linking" / "storing", so a caller
+    (e.g. the dashboard) can show plain-words progress and an ETA."""
     started = time.time()
     rules = load_rules(rules_dir)
     detector = Detector(rules)
@@ -96,10 +100,14 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
             con.execute("COMMIT")
             all_detections.extend(batch_detections)
             detection_count += len(batch_detections)
+        if on_progress:
+            on_progress(total_lines, detection_count, "reading")
         if total_lines % 100000 < chunk_size:
             print(f"  ... {total_lines} events, {detection_count} detections, "
                   f"peak RSS {peak_rss_mb()} MB", flush=True)
     # Link + score + store incidents.
+    if on_progress:
+        on_progress(total_lines, detection_count, "linking")
     det_id_map = {id(d): idx for idx, d in enumerate(all_detections, 1)}
     incidents = graph_mod.link_detections(all_detections)
     stored = []
@@ -124,6 +132,8 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
             "edges": graph_mod.graph_edges(dets),
         }
         stored.append(record)
+    if on_progress:
+        on_progress(total_lines, detection_count, "storing")
     con.execute("BEGIN TRANSACTION")
     for record in stored:
         store.insert_incident(con, record)

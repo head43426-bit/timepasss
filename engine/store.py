@@ -148,8 +148,12 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
         " WHERE incident_id = ?", [incident_id]).fetchall()
     nodes = {}
     for det in timeline:
-        nodes.setdefault(det[2], {"id": det[2], "type": "host"})
-        nodes.setdefault(det[3], {"id": det[3], "type": "user"})
+        # Skip blank ids: Fortinet-style logs carry no user, and a node
+        # labelled "" is worse than no user node at all.
+        if det[2]:
+            nodes.setdefault(det[2], {"id": det[2], "type": "host"})
+        if det[3]:
+            nodes.setdefault(det[3], {"id": det[3], "type": "user"})
     return {
         "id": row[0], "title": row[1], "start_time": row[2], "end_time": row[3],
         "hosts": json.loads(row[4] or "[]"), "users": json.loads(row[5] or "[]"),

@@ -24,23 +24,56 @@ SARVAM_URL = "https://api.sarvam.ai/translate"
 
 def english_report(incident: Dict, next_list: List[Dict]) -> str:
     timeline = incident.get("timeline", [])
-    hosts = ", ".join(incident.get("hosts", [])) or "unknown hosts"
-    users = ", ".join(incident.get("users", [])) or "unknown accounts"
+    hosts = [h for h in incident.get("hosts", []) if h]
+    users = [u for u in incident.get("users", []) if u]
+    host_text = ", ".join(hosts) if hosts else "unknown hosts"
+    user_text = (f"with user accounts {', '.join(users)}" if users
+                 else "with no user account recorded in the logs")
     lines = [
         f"This incident began on {incident.get('start_time', 'an unknown time')} "
-        f"and involved {hosts} and accounts {users}.",
+        f"and ended on {incident.get('end_time', 'an unknown time')}. "
+        f"It involved {host_text}, {user_text}.",
     ]
     if timeline:
-        steps = "; ".join(
-            f"{d.get('time', '')}: {d.get('technique_name', d.get('technique_id', ''))} "
-            f"({d.get('kill_chain_stage', '')}) on {d.get('host', '')}"
-            for d in timeline)
-        lines.append(f"What the attacker did, in order: {steps}.")
+        # Group repeated steps: a 118,043-step flood of the same two
+        # techniques must never be printed step by step. Summarise by
+        # technique, in first-seen order, with counts and time ranges.
+        # Small incidents (50 steps or fewer) still list every step.
+        if len(timeline) <= 50:
+            steps = "; ".join(
+                f"{d.get('time', '')}: {d.get('technique_name', d.get('technique_id', ''))} "
+                f"({d.get('kill_chain_stage', '')}) on {d.get('host', '')}"
+                for d in timeline)
+            lines.append(f"What the attacker did, in order: {steps}.")
+        else:
+            groups = {}
+            order = []
+            for d in timeline:
+                key = (d.get("kill_chain_stage", ""), d.get("technique_id", ""),
+                       d.get("technique_name", ""))
+                if key not in groups:
+                    groups[key] = {"count": 0, "first": d.get("time", ""),
+                                   "last": d.get("time", "")}
+                    order.append(key)
+                groups[key]["count"] += 1
+                groups[key]["last"] = d.get("time", "")
+            summary = "; ".join(
+                f"{name} ({stage}, {tid}) — {groups[k]['count']:,} times, "
+                f"first {groups[k]['first']}, last {groups[k]['last']}"
+                for (stage, tid, name) in order
+                for k in [(stage, tid, name)])
+            lines.append(
+                f"What the attacker did, in order (distinct techniques, "
+                f"first-seen order): {summary}.")
+            lines.append(
+                f"The remaining steps repeat these same techniques — "
+                f"{len(timeline):,} steps in total are not listed one by one, "
+                f"because that list is unreadable and adds no new information.")
     else:
         lines.append("No detections were recorded for this incident.")
     lines.append(
-        f"The incident merged {incident.get('merged_alerts', 0)} raw alerts "
-        f"into {incident.get('detection_count', 0)} detections, "
+        f"The incident merged {incident.get('merged_alerts', 0):,} raw alerts "
+        f"into {incident.get('detection_count', 0):,} detections, "
         f"with a risk score of {incident.get('risk_score', 0)} out of 100.")
     if next_list:
         nxt = "; ".join(f"{n['host']} ({n['reason']})" for n in next_list)

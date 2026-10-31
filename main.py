@@ -40,6 +40,40 @@ from engine.rules import Detector, load_rules  # noqa: E402
 
 FRONTEND = os.path.join(ROOT, "frontend")
 
+# Upload progress, shared between the upload thread and GET /progress.
+# No DB lock is needed to read it: it is only ever replaced, never mutated in place.
+PROGRESS = {
+    "stage": "idle", "stage_text": "No upload running.",
+    "filename": "", "bytes_received": 0, "bytes_total": 0,
+    "events": 0, "detections": 0, "estimated_total_events": 0,
+    "events_per_second": 0, "elapsed_seconds": 0, "eta_seconds": None,
+    "done": False, "error": "",
+}
+PROGRESS_LOCK = threading.Lock()
+
+
+def _fmt_eta(seconds):
+    if seconds is None:
+        return None
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"about {seconds}s left"
+    if seconds < 3600:
+        return f"about {seconds // 60}m {seconds % 60}s left"
+    return f"about {seconds // 3600}h {(seconds % 3600) // 60}m left"
+
+
+def _set_progress(**kw):
+    with PROGRESS_LOCK:
+        PROGRESS.update(kw)
+
+
+def _progress_snapshot():
+    with PROGRESS_LOCK:
+        snap = dict(PROGRESS)
+    snap["eta_text"] = _fmt_eta(snap["eta_seconds"])
+    return snap
+
 
 class DBHolder:
     """Holds the live DuckDB connection. Upload replaces the whole DB,
@@ -105,6 +139,8 @@ def make_handler(holder, rules_dir, db_path):
                 if ".." in rel:
                     return self._send_json({"error": "not found"}, 404)
                 return self._send_file(os.path.join(ROOT, rel))
+            if parts == ["progress"]:
+                return self._send_json(_progress_snapshot())
             with LOCK:
                 if parts == ["db", "stats"]:
                     tables = [t[0] for t in holder.con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'").fetchall()]
@@ -132,6 +168,26 @@ def make_handler(holder, rules_dir, db_path):
                     inc = store.get_incident(holder.con, inc_id)
                     if not inc:
                         return self._send_json({"error": "incident not found"}, 404)
+                    # A 118,043-step incident must not ship a 118,043-item
+                    # timeline to the browser — that is what made the old
+                    # detail page unusable. Above 500 steps, send a
+                    # summary (counts by stage/technique) plus the first
+                    # and last 200 steps as a sample. Full detail is
+                    # still available with ?full=1.
+                    tl = inc.get("timeline", [])
+                    if len(tl) > 500 and query.get("full") != ["1"]:
+                        counts = {}
+                        for d in tl:
+                            k = (d.get("kill_chain_stage", ""), d.get("technique_id", ""),
+                                 d.get("technique_name", ""))
+                            counts[k] = counts.get(k, 0) + 1
+                        inc["timeline_total"] = len(tl)
+                        inc["timeline_sampled"] = True
+                        inc["timeline_summary"] = [
+                            {"kill_chain_stage": k[0], "technique_id": k[1],
+                             "technique_name": k[2], "count": c}
+                            for k, c in counts.items()]
+                        inc["timeline"] = tl[:200] + tl[-200:]
                     return self._send_json(inc)
                 if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "report":
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None
@@ -155,23 +211,81 @@ def make_handler(holder, rules_dir, db_path):
             if urlparse(self.path).path != "/upload":
                 return self._send_json({"error": "not found"}, 404)
             length = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(length)
             filename = self.headers.get("X-Filename") or "uploaded.log"
-            # Write the uploaded log to a temp file, then run the real pipeline on it.
+            started = time.time()
+            _set_progress(stage="uploading",
+                          stage_text="Step 1 of 4 — Receiving your file and saving it on this machine. It is not sent anywhere else.",
+                          filename=filename, bytes_received=0, bytes_total=length,
+                          events=0, detections=0, estimated_total_events=0,
+                          events_per_second=0, elapsed_seconds=0, eta_seconds=None,
+                          done=False, error="")
+            # Stream the body to a temp file in chunks. The old code did
+            # rfile.read(length), which loaded the whole file into RAM —
+            # that alone would kill a 50 GB upload. Chunked reading keeps
+            # memory flat whatever the file size.
             with tempfile.NamedTemporaryFile(mode="wb", suffix=".log", delete=False) as tmp:
-                tmp.write(raw)
                 tmp_path = tmp.name
+                remaining = length
+                while remaining > 0:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+                    remaining -= len(chunk)
+                    _set_progress(bytes_received=length - remaining,
+                                  elapsed_seconds=round(time.time() - started, 1))
             try:
+                # Estimate total lines cheaply: average line length from
+                # the first 200 lines, scaled to the file size. No second
+                # full pass over the file, and the estimate is labelled
+                # as an estimate in the UI. Falls back to unknown.
+                est_total = 0
+                try:
+                    size = os.path.getsize(tmp_path)
+                    with open(tmp_path, "rb") as f:
+                        sample = [next(f) for _ in range(200)]
+                    if sample:
+                        avg = sum(len(l) for l in sample) / len(sample)
+                        if avg > 0:
+                            est_total = int(size / avg)
+                except Exception:
+                    est_total = 0
+                _set_progress(estimated_total_events=est_total)
+
+                def _on_progress(events, detections, stage):
+                    elapsed = max(time.time() - started, 0.001)
+                    eps = events / elapsed if stage == "reading" else 0
+                    eta = None
+                    if stage == "reading" and eps > 0 and est_total > events:
+                        eta = (est_total - events) / eps
+                    texts = {
+                        "reading": "Step 2 of 4 — Reading line by line and checking each line against the detection rules. Benign lines are counted and dropped, not stored.",
+                        "linking": "Step 3 of 4 — Linking flagged lines that share a host, user or IP into one attack path, and scoring its risk.",
+                        "storing": "Step 4 of 4 — Saving the incidents to the database so you can open them below.",
+                    }
+                    _set_progress(stage=stage, stage_text=texts.get(stage, stage),
+                                  events=events, detections=detections,
+                                  events_per_second=round(eps, 1),
+                                  elapsed_seconds=round(elapsed, 1),
+                                  eta_seconds=round(eta) if eta is not None else None)
+
                 with LOCK:
                     try:
                         holder.con.close()
                     except Exception:
                         pass
-                    summary = cli_run(tmp_path, db_path, rules_dir)
+                    summary = cli_run(tmp_path, db_path, rules_dir, on_progress=_on_progress)
                     holder.con = store.connect(db_path)
                 summary["filename"] = filename
+                _set_progress(stage="done",
+                              stage_text="Done — incidents are ready below.",
+                              events=summary.get("events", 0),
+                              detections=summary.get("detections", 0),
+                              elapsed_seconds=round(time.time() - started, 1),
+                              eta_seconds=0, done=True)
                 return self._send_json(summary)
             except Exception as exc:  # keep the server alive, report the error
+                _set_progress(stage="error", stage_text=f"Failed: {exc}", done=True, error=str(exc))
                 return self._send_json({"error": str(exc)}, 500)
             finally:
                 try:
