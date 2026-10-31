@@ -1,4 +1,4 @@
-"""System stats for the /app progress line — stdlib only, no psutil.
+"""System stats for the /app progress line - stdlib only, no psutil.
 
 Why no psutil: the server must run on a user's Windows machine with
 only the documented dependencies (DuckDB, NetworkX, PyYAML). Adding a
@@ -6,19 +6,19 @@ new native dependency just for a progress number would complicate
 installs and break the one-command run.sh/run.bat start.
 
 What is measured, honestly:
-  * System CPU % — sampled twice (Windows GetSystemTimes, Linux
+  * System CPU % - sampled twice (Windows GetSystemTimes, Linux
     /proc/stat). The first call returns None (no previous sample yet);
     every later call is the % busy since the previous call. This is
-    the WHOLE machine's CPU, not just ASK's — on a parallel run the
+    the WHOLE machine's CPU, not just ASK's - on a parallel run the
     workers are separate processes, so ASK-only CPU would undercount
     on Windows and mislead.
-  * System RAM — total and available (Windows GlobalMemoryStatusEx,
+  * System RAM - total and available (Windows GlobalMemoryStatusEx,
     Linux /proc/meminfo). This is the number the user already watches
     in Task Manager (7.0/7.8 GB, 90%).
-  * ASK process RSS — the main server process only (Windows
+  * ASK process RSS - the main server process only (Windows
     WorkingSetSize, Linux /proc/self/status VmRSS). Workers are
     separate processes, so on a parallel run this is a lower bound
-    for total ASK memory, and the UI says so nowhere — it is labelled
+    for total ASK memory, and the UI says so nowhere - it is labelled
     'ASK (main)' for exactly that reason. Peak RSS (cli.py) is the
     end-of-run number; this is the live number.
 All functions fail soft (return None/0) so a stats failure can never
@@ -36,7 +36,7 @@ _last_cpu = None  # (wall_time, busy, total)
 
 
 def fmt_duration(seconds) -> str:
-    """12s, 3m 12s, 1h 2m — the total/elapsed time the UI shows."""
+    """12s, 3m 12s, 1h 2m - the total/elapsed time the UI shows."""
     try:
         s = int(seconds)
     except Exception:

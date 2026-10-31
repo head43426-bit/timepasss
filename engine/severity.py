@@ -7,7 +7,7 @@ Three bugs lived here, in different files, with the same effect:
    Medium (base 40), so nothing ever qualified for Low (0-39).
 2. Lowercase severity ("critical", "high") missed every dictionary
    lookup (keys are Title Case) and fell back to the Medium weight
-   (10) — a Critical line was demoted to Medium.
+   (10) - a Critical line was demoted to Medium.
 3. A firewall syslog tag decided severity, even for techniques that
    are Critical by nature. A Mimikatz LSASS dump on a "notice" line
    scored Low, because the tag said so.
@@ -21,7 +21,7 @@ Fixes, in one place so they cannot drift apart again:
   a value whose title-cased form is a known severity is accepted.
 * detection_severity(): the severity of one detection. It is the
   HIGHER of (a) the log line's own (normalised) severity and (b) the
-  technique's intrinsic severity — except when the action was
+  technique's intrinsic severity - except when the action was
   blocked/denied/dropped, in which case the attack did not succeed
   and the log line's severity stands (so a blocked notice event
   stays Low). When neither is known, the answer is Low, not Medium:
@@ -49,7 +49,7 @@ _SYNONYMS = {
 }
 
 # Intrinsic priority by MITRE technique prefix. Only techniques that
-# are serious by nature are listed — recon / scanning techniques are
+# are serious by nature are listed - recon / scanning techniques are
 # deliberately NOT here, so a single probe stays Low. A technique in
 # this map upgrades a detection, it never downgrades one: the final
 # severity is max(event severity, intrinsic severity), unless the

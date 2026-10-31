@@ -1,10 +1,10 @@
-// Kill Chain — Refinement Pass 4 (shared by simulation and full builds).
+// Kill Chain - Refinement Pass 4 (shared by simulation and full builds).
 // Atlo's 3 steps, made visible: (1) Detect and label, (2) Connect the steps,
-// (3) Explain and look ahead — plus a large-volume concealed-attack demo.
+// (3) Explain and look ahead - plus a large-volume concealed-attack demo.
 // No new data source, no network call, no real logs/keys, no binary images.
 // Memory design: events are processed in batches; only linked path nodes and
 // per-key aggregates are kept. Raw benign events are counted, then dropped.
-// A 50 GB file is NEVER loaded into memory here — that claim would be false
+// A 50 GB file is NEVER loaded into memory here - that claim would be false
 // in a browser. The large-log test generates synthetic events in batches and
 // the full version reads an uploaded file in slices, line by line.
 (function () {
@@ -29,28 +29,28 @@
   // counts as "flagged". Anything below threshold is benign/skipped, never
   // labelled as an attack. Benign examples are listed separately in the UI.
   var RULES = [
-    { id: "R01", keys: ["phishing", "spearphish", "lookalike domain", "fake invoice"], mitre: "T1566.001 — Spearphishing Attachment", stage: "Initial Access", conf: 85, why: "A trick email from a lookalike sender — the classic way in." },
-    { id: "R02", keys: ["macro"], mitre: "T1204.002 — Malicious File", stage: "Execution", conf: 90, why: "A document macro ran code on the computer." },
-    { id: "R03", keys: ["lsass", "credential dump"], mitre: "T1003.001 — LSASS Memory", stage: "Privilege Escalation", conf: 95, why: "Something tried to read stored login credentials from memory." },
-    { id: "R04", keys: ["scheduled task"], mitre: "T1053.005 — Scheduled Task", stage: "Persistence", conf: 85, why: "A task was planted to run the attack again at logon." },
-    { id: "R05", keys: ["c2 beacon", "beaconing"], mitre: "T1071.001 — Web Protocols", stage: "Defense Evasion", conf: 80, why: "Regular hidden check-ins to an outside controller." },
-    { id: "R06", keys: ["kerberoasting"], mitre: "T1558.003 — Kerberoasting", stage: "Privilege Escalation", conf: 90, why: "Service tickets were harvested to crack a high-privilege account." },
-    { id: "R07", keys: ["lateral movement via smb", "lateral movement"], mitre: "T1021.002 — SMB/Windows Admin Shares", stage: "Lateral Movement", conf: 90, why: "The attacker moved to another computer over a shared drive." },
-    { id: "R09", keys: ["large outbound transfer", "exfiltrated", "data exfiltrated"], mitre: "T1048.003 — Exfiltration Over Unencrypted Protocol", stage: "Exfiltration", conf: 90, why: "A large amount of data left the company to an outside host." },
-    { id: "R08", keys: ["files staged", "archive", "compressed archive"], mitre: "T1560.001 — Archive Collected Data", stage: "Collection", conf: 80, why: "Files were gathered and packed up ready to take." },
-    { id: "R10", keys: ["logs cleared", "event logs were cleared"], mitre: "T1070.001 — Clear Logs", stage: "Defense Evasion", conf: 85, why: "Logs were wiped — itself a sign someone hid their tracks." },
-    { id: "R21", keys: ["web shell command"], mitre: "T1059.004 — Unix Shell", stage: "Execution", conf: 90, why: "Commands were run through a hidden web shell." },
-    { id: "R11", keys: ["web shell"], mitre: "T1505.003 — Web Shell", stage: "Persistence", conf: 90, why: "A hidden web backdoor was left behind on the server." },
-    { id: "R12", keys: ["scanner probing", "vulnerability scanning", "probing plugin"], mitre: "T1595.002 — Vulnerability Scanning", stage: "Reconnaissance", conf: 70, why: "Repeated probes looking for a weak spot." },
-    { id: "R13", keys: ["exploit public-facing", "malicious file upload"], mitre: "T1190 — Exploit Public-Facing Application", stage: "Initial Access", conf: 90, why: "A public website flaw was used to get in." },
-    { id: "R14", keys: ["vpn login from unusual", "unusual location"], mitre: "T1078 — Valid Accounts", stage: "Initial Access", conf: 75, why: "A real login, but from a place and device outside the normal pattern." },
-    { id: "R15", keys: ["new api key created", "additional cloud credentials"], mitre: "T1098.001 — Additional Cloud Credentials", stage: "Persistence", conf: 85, why: "A new cloud key was created — a second way back in." },
-    { id: "R16", keys: ["bulk download", "bulk select"], mitre: "T1530 — Data from Cloud Storage", stage: "Collection", conf: 90, why: "A huge amount of stored data was pulled down at once." },
-    { id: "R17", keys: ["bucket shared externally", "shared externally"], mitre: "T1567.002 — Exfiltration to Cloud Storage", stage: "Exfiltration", conf: 90, why: "Sharing was opened to the outside, creating a way out for the data." },
-    { id: "R18", keys: ["database credentials read", "credentials in files"], mitre: "T1552.001 — Credentials In Files", stage: "Privilege Escalation", conf: 85, why: "A password file was read by an account that should not need it." },
-    { id: "R19", keys: ["remote session to internal", "remote desktop"], mitre: "T1021.001 — Remote Desktop Protocol", stage: "Lateral Movement", conf: 80, why: "A remote login jumped from one internal computer to another." },
-    { id: "R20", keys: ["enumerated cloud buckets", "cloud infrastructure discovery", "script enumerated"], mitre: "T1580 — Cloud Infrastructure Discovery", stage: "Execution", conf: 70, why: "A script mapped out what cloud storage exists before taking anything." },
-    { id: "R22", keys: ["brute force", "password spraying"], mitre: "T1110.001 — Password Guessing", stage: "Initial Access", conf: 85, why: "Many password guesses in a short window — not one mistyped login." }
+    { id: "R01", keys: ["phishing", "spearphish", "lookalike domain", "fake invoice"], mitre: "T1566.001 - Spearphishing Attachment", stage: "Initial Access", conf: 85, why: "A trick email from a lookalike sender - the classic way in." },
+    { id: "R02", keys: ["macro"], mitre: "T1204.002 - Malicious File", stage: "Execution", conf: 90, why: "A document macro ran code on the computer." },
+    { id: "R03", keys: ["lsass", "credential dump"], mitre: "T1003.001 - LSASS Memory", stage: "Privilege Escalation", conf: 95, why: "Something tried to read stored login credentials from memory." },
+    { id: "R04", keys: ["scheduled task"], mitre: "T1053.005 - Scheduled Task", stage: "Persistence", conf: 85, why: "A task was planted to run the attack again at logon." },
+    { id: "R05", keys: ["c2 beacon", "beaconing"], mitre: "T1071.001 - Web Protocols", stage: "Defense Evasion", conf: 80, why: "Regular hidden check-ins to an outside controller." },
+    { id: "R06", keys: ["kerberoasting"], mitre: "T1558.003 - Kerberoasting", stage: "Privilege Escalation", conf: 90, why: "Service tickets were harvested to crack a high-privilege account." },
+    { id: "R07", keys: ["lateral movement via smb", "lateral movement"], mitre: "T1021.002 - SMB/Windows Admin Shares", stage: "Lateral Movement", conf: 90, why: "The attacker moved to another computer over a shared drive." },
+    { id: "R09", keys: ["large outbound transfer", "exfiltrated", "data exfiltrated"], mitre: "T1048.003 - Exfiltration Over Unencrypted Protocol", stage: "Exfiltration", conf: 90, why: "A large amount of data left the company to an outside host." },
+    { id: "R08", keys: ["files staged", "archive", "compressed archive"], mitre: "T1560.001 - Archive Collected Data", stage: "Collection", conf: 80, why: "Files were gathered and packed up ready to take." },
+    { id: "R10", keys: ["logs cleared", "event logs were cleared"], mitre: "T1070.001 - Clear Logs", stage: "Defense Evasion", conf: 85, why: "Logs were wiped - itself a sign someone hid their tracks." },
+    { id: "R21", keys: ["web shell command"], mitre: "T1059.004 - Unix Shell", stage: "Execution", conf: 90, why: "Commands were run through a hidden web shell." },
+    { id: "R11", keys: ["web shell"], mitre: "T1505.003 - Web Shell", stage: "Persistence", conf: 90, why: "A hidden web backdoor was left behind on the server." },
+    { id: "R12", keys: ["scanner probing", "vulnerability scanning", "probing plugin"], mitre: "T1595.002 - Vulnerability Scanning", stage: "Reconnaissance", conf: 70, why: "Repeated probes looking for a weak spot." },
+    { id: "R13", keys: ["exploit public-facing", "malicious file upload"], mitre: "T1190 - Exploit Public-Facing Application", stage: "Initial Access", conf: 90, why: "A public website flaw was used to get in." },
+    { id: "R14", keys: ["vpn login from unusual", "unusual location"], mitre: "T1078 - Valid Accounts", stage: "Initial Access", conf: 75, why: "A real login, but from a place and device outside the normal pattern." },
+    { id: "R15", keys: ["new api key created", "additional cloud credentials"], mitre: "T1098.001 - Additional Cloud Credentials", stage: "Persistence", conf: 85, why: "A new cloud key was created - a second way back in." },
+    { id: "R16", keys: ["bulk download", "bulk select"], mitre: "T1530 - Data from Cloud Storage", stage: "Collection", conf: 90, why: "A huge amount of stored data was pulled down at once." },
+    { id: "R17", keys: ["bucket shared externally", "shared externally"], mitre: "T1567.002 - Exfiltration to Cloud Storage", stage: "Exfiltration", conf: 90, why: "Sharing was opened to the outside, creating a way out for the data." },
+    { id: "R18", keys: ["database credentials read", "credentials in files"], mitre: "T1552.001 - Credentials In Files", stage: "Privilege Escalation", conf: 85, why: "A password file was read by an account that should not need it." },
+    { id: "R19", keys: ["remote session to internal", "remote desktop"], mitre: "T1021.001 - Remote Desktop Protocol", stage: "Lateral Movement", conf: 80, why: "A remote login jumped from one internal computer to another." },
+    { id: "R20", keys: ["enumerated cloud buckets", "cloud infrastructure discovery", "script enumerated"], mitre: "T1580 - Cloud Infrastructure Discovery", stage: "Execution", conf: 70, why: "A script mapped out what cloud storage exists before taking anything." },
+    { id: "R22", keys: ["brute force", "password spraying"], mitre: "T1110.001 - Password Guessing", stage: "Initial Access", conf: 85, why: "Many password guesses in a short window - not one mistyped login." }
   ];
 
   var BENIGN_EXAMPLES = [
@@ -100,7 +100,7 @@
       // rule's technique (used for events with no technique of their own).
       var label = rule.mitre;
       if (mappingOverrides && mappingOverrides[rule.stage]) label = mappingOverrides[rule.stage];
-      else if (ev.mitre && ev.mitre !== "—") label = ev.mitre;
+      else if (ev.mitre && ev.mitre !== "-") label = ev.mitre;
       var matched = rule.keys.filter(function (kk) { return hay.indexOf(kk) >= 0; })[0] || "";
       return { ruleId: rule.id, mitre: label, stage: rule.stage, conf: rule.conf, why: rule.why + (matched ? " Matched word(s): '" + matched + "'." : ""), matched: matched };
     }
@@ -111,7 +111,7 @@
       var c = SEV_CONF[ev.sev] || 75;
       if (c < threshold) return null;
       var lab2 = (mappingOverrides && mappingOverrides[ev.stage]) ? mappingOverrides[ev.stage] : ev.mitre;
-      return { ruleId: "FALLBACK", mitre: lab2, stage: ev.stage, conf: c, why: "No catalogue rule matched by keyword, but this event already carries a technique and a " + ev.sev + " severity, so it is kept as evidence — not invented, just carried over.", matched: "" };
+      return { ruleId: "FALLBACK", mitre: lab2, stage: ev.stage, conf: c, why: "No catalogue rule matched by keyword, but this event already carries a technique and a " + ev.sev + " severity, so it is kept as evidence - not invented, just carried over.", matched: "" };
     }
     return null;
   }
@@ -119,11 +119,11 @@
   // ---------- Step 2: linking ----------
   // Direct link: shared host or IP, gap <= windowMins (default 60).
   // Credential link: shared user/account, gap <= credWindowMins (default
-  // 2880 = 48h) — this is what catches a low-and-slow attack: the same
+  // 2880 = 48h) - this is what catches a low-and-slow attack: the same
   // account reused days later is still one chain, but it is labelled as a
   // credential hop, not a direct hop, so a judge can see the difference.
   // Host-continuity link: same host, gap <= credWindowMins, labelled as its
-  // own kind — the attack stayed on one computer across a long quiet gap
+  // own kind - the attack stayed on one computer across a long quiet gap
   // (e.g. a workstation compromise at 09:14, then a credential dump on the
   // same workstation at 23:40). It does NOT prove the same person: two
   // separate incidents on one busy host could be joined this way, which is
@@ -148,15 +148,15 @@
         if (direct || cred || hostCont) {
           var rs = reasons.slice();
           if (cred) rs.push("same account " + ev.user + " reused " + gap + " min later");
-          if (!direct && !cred && hostCont) rs.push("same computer " + ev.host + " " + gap + " min later (host continuity — long quiet gap on one machine)");
+          if (!direct && !cred && hostCont) rs.push("same computer " + ev.host + " " + gap + " min later (host continuity - long quiet gap on one machine)");
           best = { from: prev, to: ev, reasons: rs, gap: gap, kind: direct ? "direct" : (cred ? "credential" : "host-continuity") };
-          break; // latest sharing event wins — the chain stays in time order
+          break; // latest sharing event wins - the chain stays in time order
         }
       }
       // Credential-chain bridge: an earlier path event obtained credentials
       // (read a credential file, dumped credentials, kerberoasting, created
       // an API key) and this event uses a host/user that shares nothing with
-      // the previous event — e.g. web-shell → database hop. Labelled as its
+      // the previous event - e.g. web-shell → database hop. Labelled as its
       // own kind so a judge can question it; it is a documented heuristic,
       // not a proven identity match.
       if (!best) {
@@ -211,7 +211,7 @@
         g.count++;
         st.failedLogins[fk] = g;
         if (g.count >= 5) {
-          det = { ruleId: "R22-AGG", mitre: "T1110.001 — Password Guessing", stage: "Initial Access", conf: 85, why: "5+ failed logins for the same account on the same host within 60 minutes — an aggregate pattern, not one mistyped login.", matched: "failed login x" + g.count };
+          det = { ruleId: "R22-AGG", mitre: "T1110.001 - Password Guessing", stage: "Initial Access", conf: 85, why: "5+ failed logins for the same account on the same host within 60 minutes - an aggregate pattern, not one mistyped login.", matched: "failed login x" + g.count };
           st.bruteGroups++;
           delete st.failedLogins[fk];
         }
@@ -221,7 +221,7 @@
       var fev = Object.assign({}, ev, { _det: det, _mins: mins });
       // Link against the current path only (not the whole history).
       var linked = linkEvents(st.path.concat([fev]), st.window, st.credWindow);
-      // linkEvents rebuilds from scratch over the kept path (small) — the
+      // linkEvents rebuilds from scratch over the kept path (small) - the
       // raw history is never re-scanned. Accept the new event only if it
       // linked, or it starts the path.
       if (st.path.length === 0 || linked.path.length > st.path.length) {
@@ -285,7 +285,7 @@
         if (other === h) return;
         var ot = TOPOLOGY[other];
         if (ot.subnet === topo.subnet) {
-          add(other, h, "Same subnet as compromised " + h + " (" + topo.subnet + ") — a computer on the same network segment is one hop away.", 75, "Isolate " + other + " from " + h + " and block SMB/RDP between them.");
+          add(other, h, "Same subnet as compromised " + h + " (" + topo.subnet + ") - a computer on the same network segment is one hop away.", 75, "Isolate " + other + " from " + h + " and block SMB/RDP between them.");
         }
       });
     });
@@ -303,7 +303,7 @@
     if (path.some(function (e) { return e.stage === "Exfiltration"; })) {
       // Exfiltration already happened: the next move is usually persistence
       // elsewhere, not a second exfiltration from the same host.
-      out.push({ target: "(no new system guessed)", via: "—", reason: "Data already left in this path. The next risk is the attacker returning through a planted way back in, not a new system — so the block is persistence-hunting, not a new host.", conf: 60, block: "Hunt for persistence (scheduled tasks, new keys, web shells) on every compromised host before reconnecting it." });
+      out.push({ target: "(no new system guessed)", via: "-", reason: "Data already left in this path. The next risk is the attacker returning through a planted way back in, not a new system - so the block is persistence-hunting, not a new host.", conf: 60, block: "Hunt for persistence (scheduled tasks, new keys, web shells) on every compromised host before reconnecting it." });
     }
     return out;
   }
@@ -321,9 +321,9 @@
   function narrative(path, next) {
     if (!path.length) return { began: "No linked attack path yet.", did: [], next: next };
     var first = path[0];
-    var began = "It began at " + fmtMins(parseMins(first.t)) + " on " + first.host + " as user " + first.user + ": " + first.action + " (" + (first._det ? first._det.mitre : first.mitre) + "). In plain words: " + (STAGE_PLAIN[first.stage] || first.stage) + " — " + (first._det ? first._det.why : first.detail) + "";
+    var began = "It began at " + fmtMins(parseMins(first.t)) + " on " + first.host + " as user " + first.user + ": " + first.action + " (" + (first._det ? first._det.mitre : first.mitre) + "). In plain words: " + (STAGE_PLAIN[first.stage] || first.stage) + " - " + (first._det ? first._det.why : first.detail) + "";
     var did = path.map(function (e, i) {
-      return (i + 1) + ". " + fmtMins(parseMins(e.t)) + " — " + (STAGE_PLAIN[e.stage] || e.stage) + ": " + e.action + " on " + e.host + " (" + e.user + ").";
+      return (i + 1) + ". " + fmtMins(parseMins(e.t)) + " - " + (STAGE_PLAIN[e.stage] || e.stage) + ": " + e.action + " on " + e.host + " (" + e.user + ").";
     });
     return { began: began, did: did, next: next };
   }
@@ -349,18 +349,18 @@
   var BENIGN_HOSTS = ["WS-010", "WS-011", "WS-012", "WS-020", "LAP-030", "LAP-031"];
   var BENIGN_USERS = ["ana.kumar", "ben.lee", "cara.patel", "dan.singh", "eva.jones", "farah.ali"];
   // The concealed attack: 9 events, same service account chain, spread over
-  // 3 days, gaps of 6–14 hours — invisible at a glance, linked only by the
+  // 3 days, gaps of 6–14 hours - invisible at a glance, linked only by the
   // shared account (credential hops) plus two direct host hops.
   var CONCEALED = [
-    { day: 1, h: 9, m: 12, host: "WS-041", user: "priya.sharma", src: "mail-gateway", action: "Phishing email delivered", detail: "Synthetic lookalike invoice email, buried in normal mail.", stage: "Initial Access", mitre: "T1566.001 — Spearphishing Attachment", sev: "high" },
-    { day: 1, h: 9, m: 14, host: "WS-041", user: "priya.sharma", src: "endpoint", action: "Macro-enabled document opened", detail: "Macro ran quietly; no alert fired on its own.", stage: "Execution", mitre: "T1204.002 — Malicious File", sev: "critical" },
-    { day: 1, h: 23, m: 40, host: "WS-041", user: "svc-backup", src: "endpoint", action: "Credential dump attempt", detail: "Late-night LSASS access using the harvested session.", stage: "Privilege Escalation", mitre: "T1003.001 — LSASS Memory", sev: "critical" },
-    { day: 2, h: 8, m: 5, host: "WS-041", user: "svc-backup", src: "endpoint", action: "Scheduled task created", detail: "A task named 'UpdateSvc' planted for the next logon.", stage: "Persistence", mitre: "T1053.005 — Scheduled Task", sev: "high" },
-    { day: 2, h: 22, m: 30, host: "WS-041", user: "svc-backup", src: "proxy", action: "C2 beacon over HTTPS", detail: "One quiet beacon hidden in normal HTTPS traffic.", stage: "Defense Evasion", mitre: "T1071.001 — Web Protocols", sev: "high" },
-    { day: 3, h: 6, m: 10, host: "SRV-FILE-02", user: "svc-backup", src: "ad-log", action: "Lateral movement via SMB", detail: "Same service account appears on the file server hours later.", stage: "Lateral Movement", mitre: "T1021.002 — SMB/Windows Admin Shares", sev: "critical" },
-    { day: 3, h: 6, m: 25, host: "SRV-FILE-02", user: "svc-backup", src: "dlp", action: "Sensitive files staged", detail: "Finance folders copied to a staging folder.", stage: "Collection", mitre: "T1560.001 — Archive Collected Data", sev: "high" },
-    { day: 3, h: 20, m: 45, host: "SRV-DB-03", user: "svc-backup", src: "db-audit", action: "Large outbound transfer", detail: "Compressed archive left via HTTPS — the only loud event in the chain.", stage: "Exfiltration", mitre: "T1048.003 — Exfiltration Over Unencrypted Protocol", sev: "critical" },
-    { day: 3, h: 21, m: 5, host: "SRV-DB-03", user: "svc-backup", src: "endpoint", action: "Logs cleared on workstation", detail: "Logs wiped after the transfer to hide the trail.", stage: "Defense Evasion", mitre: "T1070.001 — Clear Logs", sev: "medium" }
+    { day: 1, h: 9, m: 12, host: "WS-041", user: "priya.sharma", src: "mail-gateway", action: "Phishing email delivered", detail: "Synthetic lookalike invoice email, buried in normal mail.", stage: "Initial Access", mitre: "T1566.001 - Spearphishing Attachment", sev: "high" },
+    { day: 1, h: 9, m: 14, host: "WS-041", user: "priya.sharma", src: "endpoint", action: "Macro-enabled document opened", detail: "Macro ran quietly; no alert fired on its own.", stage: "Execution", mitre: "T1204.002 - Malicious File", sev: "critical" },
+    { day: 1, h: 23, m: 40, host: "WS-041", user: "svc-backup", src: "endpoint", action: "Credential dump attempt", detail: "Late-night LSASS access using the harvested session.", stage: "Privilege Escalation", mitre: "T1003.001 - LSASS Memory", sev: "critical" },
+    { day: 2, h: 8, m: 5, host: "WS-041", user: "svc-backup", src: "endpoint", action: "Scheduled task created", detail: "A task named 'UpdateSvc' planted for the next logon.", stage: "Persistence", mitre: "T1053.005 - Scheduled Task", sev: "high" },
+    { day: 2, h: 22, m: 30, host: "WS-041", user: "svc-backup", src: "proxy", action: "C2 beacon over HTTPS", detail: "One quiet beacon hidden in normal HTTPS traffic.", stage: "Defense Evasion", mitre: "T1071.001 - Web Protocols", sev: "high" },
+    { day: 3, h: 6, m: 10, host: "SRV-FILE-02", user: "svc-backup", src: "ad-log", action: "Lateral movement via SMB", detail: "Same service account appears on the file server hours later.", stage: "Lateral Movement", mitre: "T1021.002 - SMB/Windows Admin Shares", sev: "critical" },
+    { day: 3, h: 6, m: 25, host: "SRV-FILE-02", user: "svc-backup", src: "dlp", action: "Sensitive files staged", detail: "Finance folders copied to a staging folder.", stage: "Collection", mitre: "T1560.001 - Archive Collected Data", sev: "high" },
+    { day: 3, h: 20, m: 45, host: "SRV-DB-03", user: "svc-backup", src: "db-audit", action: "Large outbound transfer", detail: "Compressed archive left via HTTPS - the only loud event in the chain.", stage: "Exfiltration", mitre: "T1048.003 - Exfiltration Over Unencrypted Protocol", sev: "critical" },
+    { day: 3, h: 21, m: 5, host: "SRV-DB-03", user: "svc-backup", src: "endpoint", action: "Logs cleared on workstation", detail: "Logs wiped after the transfer to hide the trail.", stage: "Defense Evasion", mitre: "T1070.001 - Clear Logs", sev: "medium" }
   ];
   function generateLargeLog(totalBenign, seed) {
     var rnd = mulberry32(seed == null ? 42 : seed);
@@ -372,7 +372,7 @@
       events.push({
         t: fmtMins(mins), host: BENIGN_HOSTS[Math.floor(rnd() * BENIGN_HOSTS.length)],
         user: BENIGN_USERS[Math.floor(rnd() * BENIGN_USERS.length)], src: a.src,
-        action: a.action, detail: "Synthetic everyday activity — benign noise.", stage: "—", mitre: "—", sev: a.sev, _mins: mins
+        action: a.action, detail: "Synthetic everyday activity - benign noise.", stage: "-", mitre: "-", sev: a.sev, _mins: mins
       });
     }
     CONCEALED.forEach(function (c) {
@@ -432,11 +432,11 @@
       else benign++;
     });
     var note = cs.logs.length
-      ? "<p><b>" + rows.length + " flagged, " + benign + " skipped as benign</b> at threshold " + c.threshold + "% (direct window " + c.window + " min, credential window " + c.cred + " min). Skipped means: no catalogue rule matched at or above threshold — it is NOT labelled an attack.</p>"
+      ? "<p><b>" + rows.length + " flagged, " + benign + " skipped as benign</b> at threshold " + c.threshold + "% (direct window " + c.window + " min, credential window " + c.cred + " min). Skipped means: no catalogue rule matched at or above threshold - it is NOT labelled an attack.</p>"
       : "<p>No case loaded yet.</p>";
     var benignNote = benign === 0 && cs.logs.length
-      ? "<p class=\"p3-note\">This built-in case has no benign events in it — every event here is suspicious. Run the Large log test below to see thousands of benign events being counted and dropped, with examples shown.</p>" : "";
-    out.innerHTML = note + benignNote + (rows.length ? "<table><thead><tr><th>#</th><th>Event</th><th>MITRE technique</th><th>Kill-chain stage</th><th>Confidence</th><th>Why flagged, in plain words</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>" : "<p>No events flagged at this threshold. Lower the threshold or widen a window — but a lower threshold also flags more noise, which is why the default is 70%.</p>");
+      ? "<p class=\"p3-note\">This built-in case has no benign events in it - every event here is suspicious. Run the Large log test below to see thousands of benign events being counted and dropped, with examples shown.</p>" : "";
+    out.innerHTML = note + benignNote + (rows.length ? "<table><thead><tr><th>#</th><th>Event</th><th>MITRE technique</th><th>Kill-chain stage</th><th>Confidence</th><th>Why flagged, in plain words</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>" : "<p>No events flagged at this threshold. Lower the threshold or widen a window - but a lower threshold also flags more noise, which is why the default is 70%.</p>");
   }
   function renderLinking() {
     var out = $("p4Linking"); if (!out) return;
@@ -449,14 +449,14 @@
     }).join("");
     out.innerHTML =
       "<p><b>One linked path, " + proc.state.path.length + " nodes, " + proc.state.edges.length + " links.</b> " + proc.state.unlinked + " flagged event(s) had no link to the path and were left out, not invented into it.</p>" +
-      "<p class=\"p3-note\">Memory counters (this case): seen " + st.seen + " · flagged " + st.flagged + " · benign skipped " + st.benign + " · kept path nodes " + st.kept + " · raw buffer capped at " + st.bufferCap + " events · estimated kept memory ~" + st.estKB + " KB (kept records × average size — not a browser heap reading). Raw benign events are counted, then dropped.</p>" +
-      (edges ? "<table><thead><tr><th>From</th><th></th><th>To</th><th>Link reason</th><th>Gap</th></tr></thead><tbody>" + edges + "</tbody></table>" : "<p>No links yet — widen a window, or check that events share a host, IP, or account.</p>");
+      "<p class=\"p3-note\">Memory counters (this case): seen " + st.seen + " · flagged " + st.flagged + " · benign skipped " + st.benign + " · kept path nodes " + st.kept + " · raw buffer capped at " + st.bufferCap + " events · estimated kept memory ~" + st.estKB + " KB (kept records × average size - not a browser heap reading). Raw benign events are counted, then dropped.</p>" +
+      (edges ? "<table><thead><tr><th>From</th><th></th><th>To</th><th>Link reason</th><th>Gap</th></tr></thead><tbody>" + edges + "</tbody></table>" : "<p>No links yet - widen a window, or check that events share a host, IP, or account.</p>");
     renderGraphAndNext(proc.state.path, proc.state.edges);
   }
   function renderGraphAndNext(path, edges) {
     var gEl = $("p4Graph"); if (gEl) {
       var g = hostUserGraph(path, edges);
-      if (!path.length) { gEl.innerHTML = "<p>No linked path yet — run detection and linking above, or the Large log test below.</p>"; }
+      if (!path.length) { gEl.innerHTML = "<p>No linked path yet - run detection and linking above, or the Large log test below.</p>"; }
       else {
         var W = 900, H = 210, hx = g.hosts.length > 1 ? (W - 120) / (g.hosts.length - 1) : 0, ux = g.users.length > 1 ? (W - 120) / (g.users.length - 1) : 0;
         var svg = "<svg viewBox=\"0 0 " + W + " " + H + "\" role=\"img\" aria-label=\"Host and user graph\">";
@@ -480,7 +480,7 @@
             var kind = n.dataset.kind, name = n.dataset.name;
             var evs = path.filter(function (e) { return kind === "host" ? e.host === name : e.user === name; });
             var d = $("p4GraphDetail");
-            if (d) d.innerHTML = "<p><b>" + p4Esc(kind) + " " + p4Esc(name) + ":</b> " + evs.length + " linked event(s) — " + evs.map(function (e) { return p4Esc(e.t) + " " + p4Esc(e.action); }).join("; ") + ".</p>";
+            if (d) d.innerHTML = "<p><b>" + p4Esc(kind) + " " + p4Esc(name) + ":</b> " + evs.length + " linked event(s) - " + evs.map(function (e) { return p4Esc(e.t) + " " + p4Esc(e.action); }).join("; ") + ".</p>";
           };
           n.addEventListener("click", show);
           n.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(); } });
@@ -490,8 +490,8 @@
     var nEl = $("p4Next"); if (nEl) {
       var nx = nextReach(path);
       nEl.innerHTML = nx.length
-        ? nx.map(function (n) { return "<div class=\"p3-step\"><h4>" + p4Esc(n.target) + " — " + n.conf + "% confidence</h4><p>Via: " + p4Esc(n.via) + ". Why: " + p4Esc(n.reason) + "</p><p><b>Block it by:</b> " + p4Esc(n.block) + "</p></div>"; }).join("")
-        : "<p>No further system is guessed from this path — either no synthetic topology covers these hosts, or the path is already contained to one system. Guessing a target would be worse than saying so.</p>";
+        ? nx.map(function (n) { return "<div class=\"p3-step\"><h4>" + p4Esc(n.target) + " - " + n.conf + "% confidence</h4><p>Via: " + p4Esc(n.via) + ". Why: " + p4Esc(n.reason) + "</p><p><b>Block it by:</b> " + p4Esc(n.block) + "</p></div>"; }).join("")
+        : "<p>No further system is guessed from this path - either no synthetic topology covers these hosts, or the path is already contained to one system. Guessing a target would be worse than saying so.</p>";
     }
   }
   function renderNarrative(path, next, extraNote) {
@@ -501,14 +501,14 @@
       "<h3>Where it began</h3><p>" + p4Esc(n.began) + "</p>" +
       "<h3>What the attacker did, in order</h3><ol>" + n.did.map(function (s) { return "<li>" + p4Esc(s) + "</li>"; }).join("") + "</ol>" +
       "<h3>Which systems they can reach next</h3>" + (n.next.length
-        ? "<ul>" + n.next.map(function (x) { return "<li><b>" + p4Esc(x.target) + "</b> (" + x.conf + "%) — " + p4Esc(x.reason) + " Block it by: " + p4Esc(x.block) + "</li>"; }).join("") + "</ul>"
+        ? "<ul>" + n.next.map(function (x) { return "<li><b>" + p4Esc(x.target) + "</b> (" + x.conf + "%) - " + p4Esc(x.reason) + " Block it by: " + p4Esc(x.block) + "</li>"; }).join("") + "</ul>"
         : "<p>No further system is guessed from this path.</p>");
   }
   function renderRules() {
     var el = $("p4Rules"); if (!el) return;
     el.innerHTML = "<table><thead><tr><th>Rule</th><th>Looks for (keywords)</th><th>MITRE technique</th><th>Stage</th><th>Confidence</th></tr></thead><tbody>" +
       RULES.map(function (r) { return "<tr><td>" + r.id + "</td><td>" + p4Esc(r.keys.join(", ")) + "</td><td>" + p4Esc(r.mitre) + "</td><td>" + p4Esc(r.stage) + "</td><td>" + r.conf + "%</td></tr>"; }).join("") + "</tbody></table>" +
-      "<p class=\"p3-note\">Threshold: only rules at or above the threshold count as flagged. A single failed login, a normal login, or an ordinary file open matches no rule and is skipped — see the benign examples below.</p>";
+      "<p class=\"p3-note\">Threshold: only rules at or above the threshold count as flagged. A single failed login, a normal login, or an ordinary file open matches no rule and is skipped - see the benign examples below.</p>";
   }
   function runLargeLog() {
     var sizeEl = $("p4LargeSize"), status = $("p4LargeStatus"), bar = $("p4LargeBar"), wrap = $("p4LargeBarWrap");
@@ -532,7 +532,7 @@
       if (idx < events.length) { setTimeout(step, 0); return; }
       var nx = nextReach(proc.state.path);
       renderGraphAndNext(proc.state.path, proc.state.edges);
-      renderNarrative(proc.state.path, nx, "Simulated scale test — NOT a real 50 GB file. " + events.length + " synthetic events were generated in batches and processed in batches of 500; only " + proc.state.path.length + " linked path nodes and per-key aggregates were kept. Raw benign events were counted, then dropped, so memory does not grow with the log size. The concealed attack was 9 events spread over 3 days, linked by the reused service account (credential hops), not by a 60-minute direct window alone.");
+      renderNarrative(proc.state.path, nx, "Simulated scale test - NOT a real 50 GB file. " + events.length + " synthetic events were generated in batches and processed in batches of 500; only " + proc.state.path.length + " linked path nodes and per-key aggregates were kept. Raw benign events were counted, then dropped, so memory does not grow with the log size. The concealed attack was 9 events spread over 3 days, linked by the reused service account (credential hops), not by a 60-minute direct window alone.");
       var det = $("p4Detection");
       if (det) det.innerHTML = "<p><b>Large-log result:</b> the concealed path has " + proc.state.path.length + " linked events. See the narrative below and the host-and-user graph above.</p>";
       var link = $("p4Linking");
@@ -548,14 +548,14 @@
     var c = p4Controls();
     var proc = createProcessor(c.window, c.cred, 200);
     var SLICE = 65536, offset = 0, leftover = "", chunks = 0, lines = 0, started = Date.now();
-    status.textContent = "Reading '" + file.name + "' in 64 KB slices — the whole file is never held as one string. Demo/synthetic files only: do not upload real production logs.";
+    status.textContent = "Reading '" + file.name + "' in 64 KB slices - the whole file is never held as one string. Demo/synthetic files only: do not upload real production logs.";
     function readNext() {
       if (offset >= file.size) {
         if (leftover.trim()) { var last = parseChunkLine(leftover); if (last) { proc.processOne(last, c.threshold, getOverrides()); lines++; } }
         var st = proc.stats(), nx = nextReach(proc.state.path);
         status.textContent = "Done: " + chunks + " chunk(s), " + lines + " line(s) parsed, " + st.seen + " seen, " + st.flagged + " flagged, " + st.benign + " benign skipped, " + st.kept + " kept path nodes, ~" + st.estKB + " KB estimated kept memory, in " + Math.round((Date.now() - started) / 1000) + " sec.";
         renderGraphAndNext(proc.state.path, proc.state.edges);
-        renderNarrative(proc.state.path, nx, "Chunked file result — processed slice by slice in this browser only. Nothing was stored or sent anywhere. This is for synthetic/demo log files, not real production logs.");
+        renderNarrative(proc.state.path, nx, "Chunked file result - processed slice by slice in this browser only. Nothing was stored or sent anywhere. This is for synthetic/demo log files, not real production logs.");
         return;
       }
       var slice = file.slice(offset, offset + SLICE);
@@ -585,7 +585,7 @@
     renderRules(); renderDetection(); renderLinking();
     var d = $("p4DetectBtn"); if (d) d.addEventListener("click", function () { renderDetection(); renderLinking(); });
     var b = $("p4BenignBtn"); if (b) b.addEventListener("click", function () {
-      var el = $("p4Benign"); if (el) el.innerHTML = "<ul>" + BENIGN_EXAMPLES.map(function (x) { return "<li><b>" + p4Esc(x.action) + "</b> — " + p4Esc(x.why) + "</li>"; }).join("") + "</ul>";
+      var el = $("p4Benign"); if (el) el.innerHTML = "<ul>" + BENIGN_EXAMPLES.map(function (x) { return "<li><b>" + p4Esc(x.action) + "</b> - " + p4Esc(x.why) + "</li>"; }).join("") + "</ul>";
     });
     var w = $("p4Window"), cw = $("p4CredWindow"), th = $("p4Threshold");
     [w, cw, th].forEach(function (el) { if (el) el.addEventListener("change", function () { renderDetection(); renderLinking(); }); });
@@ -594,7 +594,7 @@
     var l = $("p4LargeBtn"); if (l) l.addEventListener("click", runLargeLog);
     var cf = $("p4ChunkBtn"); if (cf) cf.addEventListener("click", runChunkedFile);
     // Keep Pass 4 in sync when the host case changes (scenario switch,
-    // ingest, builder) — the host renderAll is already wrapped by Pass 3,
+    // ingest, builder) - the host renderAll is already wrapped by Pass 3,
     // so wrap it once more here, guarded against double-wrapping.
     if (typeof renderAll === "function" && !renderAll._p4Wrapped) {
       var orig = renderAll;

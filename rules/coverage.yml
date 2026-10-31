@@ -1,4 +1,4 @@
-# Coverage rules: fill the MITRE gaps found in the audit — Discovery,
+# Coverage rules: fill the MITRE gaps found in the audit - Discovery,
 # Impact, a second Defense Evasion technique, and DNS command-and-control.
 # Same Sigma-style format as the other files: edit this file to add a
 # rule, no code change needed.

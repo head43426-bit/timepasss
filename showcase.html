@@ -7,13 +7,13 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<title>ASK — Analyse Secure Kill</title>
+<title>ASK - Analyse Secure Kill</title>
 <!--
   MINIMAL HOME (2026-11-01): design taken from Atlo's reference image
   (clean light nav + hero + stats + 3-card stack). The reference's
   claims were NOT copied: ASK has no 0.65 ms vector query, no Qiskit
   5-qubit circuit (its look-ahead is classical NetworkX), and no
-  99.4% Sarvam attribution — every number below is a measured ASK
+  99.4% Sarvam attribution - every number below is a measured ASK
   result, and Sarvam is Hindi translation only, with a key set locally.
   The old devinthehood showcase (1,525 lines) is in git history if
   it is ever wanted back; it was removed here on purpose, minimal only.
@@ -26,18 +26,23 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-ser
 body,nav,.card,.gh,.btn{transition:background-color .35s ease,color .35s ease,border-color .35s ease}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 a{color:inherit}
-nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
-.nav-in{max-width:1020px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:10;display:flex;align-items:center;gap:28px;padding:14px 24px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em;text-decoration:none}
 .brand img{height:28px;width:auto}
-.nav-links{display:flex;gap:24px;margin:0 auto 0 0}
-.nav-links a{text-decoration:none;font-size:14px;color:#57534e}
-.nav-links a.active{color:var(--text);border-bottom:2px solid #00a66a;padding-bottom:2px}
-.gh{border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:8px;padding:6px 12px;font-size:13px;text-decoration:none}
+.nav-links{display:flex;gap:24px;margin-right:auto}
+.nav-links a{text-decoration:none;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;padding-bottom:2px}
+.nav-links a.active{color:var(--text);border-bottom-color:#00a66a}
+.nav-actions{display:flex;gap:10px;align-items:center}
+.gh{border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:8px;padding:6px 12px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.gh svg{width:16px;height:16px;flex:none}
 .wrap{max-width:1020px;margin:0 auto;padding:64px 24px 32px}
 .eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#00a66a}
 h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:32px;align-items:center}
 .hero-p{max-width:620px;font-size:17px;color:var(--muted);margin:0}
+#brainAnim{width:280px;height:280px;margin:0 auto}
+#brainAnim svg{width:100%!important;height:100%!important}
+.brain-fallback{width:280px;height:280px;object-fit:contain;display:block;margin:0 auto}
 .btn{display:inline-block;margin-top:28px;background:#00a66a;color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px}
 .btn:hover{background:#008f5b}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;border-top:1px solid var(--border);margin-top:56px;padding-top:28px}
@@ -58,10 +63,10 @@ h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
 .note{margin-top:48px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:14px}
 footer{border-top:1px solid var(--border);margin-top:64px;padding:24px;max-width:1020px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#78716c}
 footer{color:var(--muted)}footer a{text-decoration:none}
-@media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}}
+@media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}.hero{grid-template-columns:1fr}#brainAnim,.brain-fallback{width:200px;height:200px}}
 
 /* Theme icon button: sun / moon SVGs (not emojis) cross-fade and
-   rotate when the theme changes — the animation is the data-theme
+   rotate when the theme changes - the animation is the data-theme
    swap itself, so it runs on every toggle, both directions. */
 .theme-btn{position:relative;width:38px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
 .theme-icon{position:absolute;width:20px;height:20px;transition:transform .5s ease,opacity .5s ease}
@@ -73,27 +78,37 @@ footer{color:var(--muted)}footer a{text-decoration:none}
 </head>
 <body>
 <nav>
-  <div class="nav-in">
-    <a class="brand" href="/"><img src="/assets/ask-icon.png" alt="ASK logo">ASK</a>
-    <div class="nav-links">
-      <a class="active" href="/">Overview</a>
-      <a href="/app">Incident Workspace</a>
-    </div>
-    <a class="gh" href="https://github.com/head43426-bit/mitigata-ask">GitHub</a>
+  <a class="brand" href="/"><img src="/assets/ask-icon.png" alt="ASK logo">ASK</a>
+  <div class="nav-links">
+    <a class="active" href="/">Overview</a>
+    <a href="/app">Incident Workspace</a>
+  </div>
+  <div class="nav-actions">
+    <a class="gh" href="https://github.com/head43426-bit/mitigata-ask"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</a>
     <button id="themeBtn" type="button" class="gh theme-btn" aria-label="Switch to dark mode"><svg class="theme-icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></g></svg><svg class="theme-icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" fill="currentColor"/></svg></button>
   </div>
 </nav>
 
 <main class="wrap">
-  <p class="eyebrow">Cybersecurity hackathon architecture &nbsp;/&nbsp; Deterministic kill chain containment</p>
-  <h1>Analyze, Secure, and Kill</h1>
-  <p class="hero-p">ASK reads your log files — Python, DuckDB and NetworkX — detects attacks, labels them with MITRE and kill-chain stages, links them into incidents, and shows what the attacker can reach next. No demo data. Upload your own .log and see your own incidents.</p>
-  <a class="btn" href="/app">Launch Incident Workspace →</a>
+  <div class="hero">
+    <div>
+      <h1>Analyze, Secure, and Kill</h1>
+      <p class="hero-p">ASK reads your log files - Python, DuckDB and NetworkX - detects attacks, labels them with MITRE and kill-chain stages, links them into incidents, and shows what the attacker can reach next. No demo data. Upload your own .log and see your own incidents.</p>
+      <a class="btn" href="/app">Launch Incident Workspace →</a>
+    </div>
+    <div>
+      <div id="brainAnim" aria-label="Brain network animation"></div>
+      <img id="brainFallback" class="brain-fallback" src="/assets/ask-icon.png" alt="ASK logo" hidden>
+    </div>
+  </div>
 
   <div class="stats">
-    <div class="stat"><b>&lt; 13,288 / sec</b><span>60,000-line Fortinet flood processed locally, in 4.52 s</span></div>
+    <div class="stat"><b>30,223 / sec</b><span>60,011-line synthetic log processed in 1.99 s in a local test run (11 detections, 1 incident)</span></div>
+    <div class="stat"><b class="green">25 rules</b><span>Sigma-style rules in rules/*.yml, covering 23 MITRE techniques</span></div>
+    <div class="stat"><b class="amber">706 techniques</b><span>MITRE ATT&CK techniques indexed for lookups, revoked/deprecated excluded</span></div>
+  </div>
     <div class="stat"><b class="green">25 rules</b><span>Sigma-style rules · 23 MITRE techniques detected</span></div>
-    <div class="stat"><b class="amber">706 techniques</b><span>MITRE techniques indexed for lookups — ASK detects 23 of them</span></div>
+    <div class="stat"><b class="amber">706 techniques</b><span>MITRE techniques indexed for lookups - ASK detects 23 of them</span></div>
   </div>
 
   <section class="section">
@@ -103,19 +118,19 @@ footer{color:var(--muted)}footer a{text-decoration:none}
       <div class="card">
         <div class="ico">▦</div>
         <h3>DuckDB Analytics</h3>
-        <p>Streaming log ingestion and incident queries from a local database on your machine — nothing is sent anywhere else. 60,000 detections stored in 0.37 s in local tests.</p>
+        <p>Streaming log ingestion and incident queries from a local database on your machine - nothing is sent anywhere else. 60,000 detections stored in 0.37 s in local tests.</p>
         <div class="tags"><span>Streaming parser</span><span>Local database</span></div>
       </div>
       <div class="card">
         <div class="ico">◉</div>
         <h3>NetworkX Graph Look-Ahead</h3>
-        <p>Detections become a host-to-host graph, linked by host, user, IP and time. Look-ahead is read from the graph you actually uploaded — frontier hosts already contacted, never guessed hosts.</p>
+        <p>Detections become a host-to-host graph, linked by host, user, IP and time. Look-ahead is read from the graph you actually uploaded - frontier hosts already contacted, never guessed hosts.</p>
         <div class="tags"><span>Host-to-host graph</span><span>Observed look-ahead</span></div>
       </div>
       <div class="card">
         <div class="ico">✎</div>
         <h3>Plain-English Reports + Hindi</h3>
-        <p>Every incident gets a plain-English report and per-technique protection steps. Hindi is a real Sarvam translation only when you set SARVAM_API_KEY locally — otherwise it is clearly labelled a template.</p>
+        <p>Every incident gets a plain-English report and per-technique protection steps. Hindi is a real Sarvam translation only when you set SARVAM_API_KEY locally - otherwise it is clearly labelled a template.</p>
         <div class="tags"><span>Plain-English report</span><span>Hindi with Sarvam key</span></div>
       </div>
     </div>
@@ -123,13 +138,6 @@ footer{color:var(--muted)}footer a{text-decoration:none}
 
 </main>
 
-<footer>
-  <a href="/app">Incident Workspace</a>
-  <a href="/demo/">Browser demo</a>
-  <a href="/dashboard.html">Single-file dashboard</a>
-  <a href="https://github.com/head43426-bit/mitigata-ask">GitHub — mitigata-ask</a>
-  <span style="margin-left:auto">ASK — Analyse · Secure · Kill</span>
-</footer>
 <script>
   (function () {
     function applyTheme(theme) {
@@ -145,6 +153,20 @@ footer{color:var(--muted)}footer a{text-decoration:none}
     if (btn) btn.addEventListener("click", function () {
       applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
+  })();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  (function () {
+    var box = document.getElementById("brainAnim");
+    var fb = document.getElementById("brainFallback");
+    function showFallback() { if (box) box.hidden = true; if (fb) fb.hidden = false; }
+    try {
+      if (window.lottie && box) {
+        var anim = window.lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: "/assets/network.json" });
+        anim.addEventListener("data_failed", showFallback);
+      } else { showFallback(); }
+    } catch (e) { showFallback(); }
   })();
 </script>
 </body>

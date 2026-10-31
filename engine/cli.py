@@ -116,7 +116,7 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
         nonlocal incident_count
         if not dets:
             return
-        # Linker hands back compact tuples (memory fix) — expand to
+        # Linker hands back compact tuples (memory fix) - expand to
         # the minimal dicts risk/graph need before anything else.
         dets = graph_mod.expand_compact(dets)
         incident_count += 1

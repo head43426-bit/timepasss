@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kill Chain Attack Path Reconstruction — proper project entry point.
+"""Kill Chain Attack Path Reconstruction - proper project entry point.
 
 Frontend + backend, no demo data. You bring your own .log file.
 
@@ -11,7 +11,7 @@ Frontend + backend, no demo data. You bring your own .log file.
     python main.py run --log mylogs.log --db out.duckdb --ground-truth truth.json
 
 Backend: engine/ (parser, rules, DuckDB store, NetworkX graph, report, live tailer).
-Frontend: frontend/ (index.html, styles.css, app.js) — served by this file, no build step.
+Frontend: frontend/ (index.html, styles.css, app.js) - served by this file, no build step.
 Uploads are processed by the real pipeline (engine.cli.run), not by browser JavaScript.
 Use only synthetic or authorised logs. Never real production logs or credentials.
 """
@@ -177,19 +177,19 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     return self._send_json({"error": "not found"}, 404)
                 return _send_asset(name)
             # Showcase is the main page. The real-data upload dashboard
-            # (frontend/) lives at /app — the showcase links there.
+            # (frontend/) lives at /app - the showcase links there.
             if parsed.path == "/":
                 return self._send_file(os.path.join(ROOT, "showcase.html"))
             if parsed.path in ("/app", "/app/"):
                 return self._send_file(os.path.join(FRONTEND, "index.html"))
             if parsed.path in ("/app/styles.css", "/app/app.js"):
                 return self._send_file(os.path.join(FRONTEND, parsed.path.split("/")[-1]))
-            # Frontend (no build step, plain files) — kept for /index.html
+            # Frontend (no build step, plain files) - kept for /index.html
             if parsed.path == "/index.html":
                 return self._send_file(os.path.join(FRONTEND, "index.html"))
             if parsed.path in ("/styles.css", "/app.js"):
                 return self._send_file(os.path.join(FRONTEND, parsed.path.lstrip("/")))
-            # Amazing pages from before — these were in the repo but
+            # Amazing pages from before - these were in the repo but
             # NOT served, so localhost:8001 always showed only the
             # plain frontend dashboard. That is why the dashboard
             # looked the same even after restoring them.
@@ -238,7 +238,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     if not inc:
                         return self._send_json({"error": "incident not found"}, 404)
                     # A 118,043-step incident must not ship a 118,043-item
-                    # timeline to the browser — that is what made the old
+                    # timeline to the browser - that is what made the old
                     # detail page unusable. Above 500 steps, send a
                     # summary (counts by stage/technique) plus the first
                     # and last 200 steps as a sample. Full detail is
@@ -295,7 +295,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                                             "next_frontier_total": inc.get("next_frontier_total", 0),
                                             "blast_basis": inc.get("blast_basis", ""),
                                             "blast_breakdown": inc.get("blast_breakdown")})
-                # Slim MITRE index (lookup only, lazy — see engine/mitre.py).
+                # Slim MITRE index (lookup only, lazy - see engine/mitre.py).
                 if parts == ["mitre"]:
                     return self._send_json(mitre_mod.coverage(
                         os.path.join(ROOT, "rules")))
@@ -377,7 +377,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
             if urlparse(self.path).path == "/demo":
                 # DEMO BUTTON (2026-11-01): server generates ~100 MB of
                 # synthetic log (engine/demo.py, same pattern as
-                # sample_attack.log — no real logs, no download, no
+                # sample_attack.log - no real logs, no download, no
                 # browser round-trip of 100 MB) and then runs it
                 # through the exact same processing as /upload
                 # (parallel_run / cli_run, same rules, same DB).
@@ -390,7 +390,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 tmp_path = None
                 try:
                     _set_progress(stage="generating",
-                                  stage_text="Generating demo — synthetic, about 100 MB",
+                                  stage_text="Generating demo - synthetic, about 100 MB",
                                   filename=filename, bytes_received=0,
                                   bytes_total=TARGET_BYTES, events=0,
                                   detections=0, estimated_total_events=0,
@@ -429,9 +429,9 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         eta = None
                         if stage == "reading" and eps > 0 and est_total > events:
                             eta = (est_total - events) / eps
-                        texts = {"reading": "Step 2 of 4 — Reading",
-                                 "linking": "Step 3 of 4 — Linking",
-                                 "storing": "Step 4 of 4 — Saving"}
+                        texts = {"reading": "Step 2 of 4 - Reading",
+                                 "linking": "Step 3 of 4 - Linking",
+                                 "storing": "Step 4 of 4 - Saving"}
                         _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
                                    events=events, detections=detections,
                                    events_per_second=round(eps, 1),
@@ -445,11 +445,11 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     while not LOCK.acquire(blocking=False):
                         _wait = int(time.time() - _queue_started)
                         _set_progress(stage="queued",
-                                      stage_text=f"Queued — demo file is ready and waiting for the previous upload to finish. Waiting {_wait}s so far.",
+                                      stage_text=f"Queued - demo file is ready and waiting for the previous upload to finish. Waiting {_wait}s so far.",
                                       elapsed_seconds=round(time.time() - started, 1))
                         time.sleep(1)
                     try:
-                        _set_progress(stage="reading", stage_text="Step 2 of 4 — Reading")
+                        _set_progress(stage="reading", stage_text="Step 2 of 4 - Reading")
                         try:
                             holder.con.close()
                         except Exception:
@@ -457,7 +457,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         from engine.parallel import cpu_friendly_workers as _workers_demo
                         _workers_n = _workers_demo(6)
                         if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
-                            _set_progress(stage_text=f"Step 2 of 4 — Reading ({_workers_n} workers)")
+                            _set_progress(stage_text=f"Step 2 of 4 - Reading ({_workers_n} workers)")
                             summary = parallel_run(tmp_path, db_path, rules_dir,
                                                    workers=_workers_n, on_progress=_on_progress_demo)
                         else:
@@ -470,7 +470,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     from engine import sysstats as _ss_demo
                     _total_s = round(time.time() - started, 1)
                     _set_progress(stage="done",
-                                  stage_text=f"Done in {_ss_demo.fmt_duration(_total_s)} — demo incidents are ready below.",
+                                  stage_text=f"Done in {_ss_demo.fmt_duration(_total_s)} - demo incidents are ready below.",
                                   events=summary.get("events", 0),
                                   detections=summary.get("detections", 0),
                                   elapsed_seconds=_total_s, eta_seconds=0, done=True)
@@ -497,13 +497,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
             filename = self.headers.get("X-Filename") or "uploaded.log"
             started = time.time()
             _set_progress(stage="uploading",
-                          stage_text="Step 1 of 4 — Receiving",
+                          stage_text="Step 1 of 4 - Receiving",
                           filename=filename, bytes_received=0, bytes_total=length,
                           events=0, detections=0, estimated_total_events=0,
                           events_per_second=0, elapsed_seconds=0, eta_seconds=None,
                           done=False, error="")
             # Stream the body to a temp file in chunks. The old code did
-            # rfile.read(length), which loaded the whole file into RAM —
+            # rfile.read(length), which loaded the whole file into RAM -
             # that alone would kill a 50 GB upload. Chunked reading keeps
             # memory flat whatever the file size.
             # Temp file lives NEXT TO THE DATABASE, not in system /tmp:
@@ -548,13 +548,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     if stage == "reading" and eps > 0 and est_total > events:
                         eta = (est_total - events) / eps
                     # SHORT stage texts (2026-11-01): the old sentences
-                    # were long and repeated on every poll — removed,
+                    # were long and repeated on every poll - removed,
                     # not kept. The progress line now carries the numbers
                     # (elapsed, ETA, CPU, RAM) instead of prose.
                     texts = {
-                        "reading": "Step 2 of 4 — Reading",
-                        "linking": "Step 3 of 4 — Linking",
-                        "storing": "Step 4 of 4 — Saving",
+                        "reading": "Step 2 of 4 - Reading",
+                        "linking": "Step 3 of 4 - Linking",
+                        "storing": "Step 4 of 4 - Saving",
                     }
                     _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
                                events=events, detections=detections,
@@ -578,16 +578,16 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     _wait = int(time.time() - _queue_started)
                     _set_progress(stage="queued",
                                   stage_text=(
-                                      f"Queued — your file is safely saved "
+                                      f"Queued - your file is safely saved "
                                       f"(100% received) and is waiting for "
                                       f"the previous upload to finish before "
-                                      f"it starts. Waiting {_wait}s so far — "
+                                      f"it starts. Waiting {_wait}s so far - "
                                       f"this is not stuck, it is just queued."),
                                   elapsed_seconds=round(time.time() - started, 1))
                     time.sleep(1)
                 try:
                     _set_progress(stage="reading",
-                                  stage_text="Step 2 of 4 — Reading")
+                                  stage_text="Step 2 of 4 - Reading")
                     try:
                         holder.con.close()
                     except Exception:
@@ -601,7 +601,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     import os as _os
                     from engine.parallel import cpu_friendly_workers as _workers
                     # User demand, revised (2026-11-01): 6 workers, not
-                    # 8 — the 8-worker run jammed for 5 minutes on an
+                    # 8 - the 8-worker run jammed for 5 minutes on an
                     # HDD + 90% RAM machine (8 concurrent disk streams
                     # thrash a spinning disk and page memory). 6 is the
                     # compromise the user asked to try. Explicit
@@ -609,7 +609,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     _workers_n = _workers(6)
                     if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
                         _set_progress(stage_text=(
-                            f"Step 2 of 4 — Reading ({_workers_n} workers)"))
+                            f"Step 2 of 4 - Reading ({_workers_n} workers)"))
                         summary = parallel_run(tmp_path, db_path, rules_dir,
                                                workers=_workers_n,
                                                on_progress=_on_progress)
@@ -621,13 +621,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     LOCK.release()
                 summary["filename"] = filename
                 # TOTAL TIME (2026-11-01): elapsed was tracked all along
-                # but the frontend never showed it — the done line just
+                # but the frontend never showed it - the done line just
                 # said 'incidents are ready'. Now the total time is in
                 # the done text itself, so it cannot be missed.
                 from engine import sysstats as _ss2
                 _total_s = round(time.time() - started, 1)
                 _set_progress(stage="done",
-                              stage_text=f"Done in {_ss2.fmt_duration(_total_s)} — incidents are ready below.",
+                              stage_text=f"Done in {_ss2.fmt_duration(_total_s)} - incidents are ready below.",
                               events=summary.get("events", 0),
                               detections=summary.get("detections", 0),
                               elapsed_seconds=_total_s,
@@ -639,7 +639,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 # closed before processing and never reconnected on
                 # failure, so the dashboard stayed broken until a full
                 # server restart. Reconnect to the existing DB file
-                # (not fresh — never wipe data because an upload failed).
+                # (not fresh - never wipe data because an upload failed).
                 try:
                     holder.con = store.connect(db_path)
                 except Exception:
@@ -648,7 +648,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     return self._send_json({"error": str(exc)}, 500)
                 except Exception:
                     # Client already gone (that is what WinError 10053
-                    # means) — nothing left to send to, just stay alive.
+                    # means) - nothing left to send to, just stay alive.
                     return None
             finally:
                 try:
@@ -680,7 +680,7 @@ def serve(db_path, host, port, rules_dir, watch=None, interval=2.0):
         print("Live watch: %s every %ss" % (watch, interval))
     # Lowest-spec, least-knowledge friendly: if the port is already
     # taken (another program, or an old ASK still running), do not
-    # crash with a traceback — just try the next ports and say which
+    # crash with a traceback - just try the next ports and say which
     # one actually worked, in plain words.
     server = None
     for try_port in range(port, port + 11):
@@ -691,7 +691,7 @@ def serve(db_path, host, port, rules_dir, watch=None, interval=2.0):
         except OSError:
             continue
     if server is None:
-        print(f"Sorry — ports {port} to {port + 10} are all busy. Close another program and try again.")
+        print(f"Sorry - ports {port} to {port + 10} are all busy. Close another program and try again.")
         return
     if port != 8001:
         print(f"Port 8001 was busy, so ASK is using port {port} instead.")
@@ -704,7 +704,7 @@ def serve(db_path, host, port, rules_dir, watch=None, interval=2.0):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Kill Chain — proper project")
+    ap = argparse.ArgumentParser(description="Kill Chain - proper project")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve", help="dashboard + API")
     s.add_argument("--db", required=True)

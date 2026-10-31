@@ -220,7 +220,7 @@ function GraphView({ detail, focus, onFocus }: { detail: Detail; focus: string |
         ))}
       </div>
       <p className="font-mono-label mt-1 text-[11px] text-[#A3A0A8]">
-        {focus ? `Showing connections for ${focus} — tap it again to clear.` : "Tap a host or user to highlight its connections. Amber lines are events; dashed red lines are the path between hosts."}
+        {focus ? `Showing connections for ${focus} - tap it again to clear.` : "Tap a host or user to highlight its connections. Amber lines are events; dashed red lines are the path between hosts."}
       </p>
     </div>
   );
@@ -247,7 +247,7 @@ function BeltView({
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="font-mono-label text-[11px] text-[#A3A0A8]">Packaging line — each step rides the belt as its own package</p>
+        <p className="font-mono-label text-[11px] text-[#A3A0A8]">Packaging line - each step rides the belt as its own package</p>
         <button
           type="button"
           onClick={onTogglePlay}
@@ -404,10 +404,10 @@ export function App() {
         setRulesMessage(`Rules saved. Detection re-ran over ${res.reprocessed.length} dataset(s) whose lines were available.`);
         invalidateAll();
       } else {
-        setRulesMessage(`Not saved — ${res.error}`);
+        setRulesMessage(`Not saved - ${res.error}`);
       }
     },
-    onError: (e) => setRulesMessage(`Not saved — ${String(e)}`),
+    onError: (e) => setRulesMessage(`Not saved - ${String(e)}`),
   });
 
   const resetRulesMutation = useMutation({
@@ -435,7 +435,7 @@ export function App() {
       setDatasetId("live");
       invalidateAll();
     },
-    onError: (e) => setLiveStatus(`Live append failed — ${String(e)}`),
+    onError: (e) => setLiveStatus(`Live append failed - ${String(e)}`),
   });
 
   async function handleFile(file: File): Promise<void> {
@@ -477,12 +477,12 @@ export function App() {
       setUploadState({
         fileName: file.name, done: file.size, total: file.size,
         detections: last?.detections ?? 0,
-        phase: `Done — ${last?.totalLines ?? 0} lines, ${last?.incidents ?? 0} incident(s).`,
+        phase: `Done - ${last?.totalLines ?? 0} lines, ${last?.incidents ?? 0} incident(s).`,
       });
       setDatasetId(started.datasetId);
       invalidateAll();
     } catch (e) {
-      setUploadError(`Upload failed — ${String(e)}`);
+      setUploadError(`Upload failed - ${String(e)}`);
       setUploadState(null);
     }
   }
@@ -503,7 +503,7 @@ export function App() {
       invalidateAll();
     } catch (e) {
       setStreamState({ batch: 0, batches: 0, total: 0, detections: 0, running: false, done: false });
-      setLiveStatus(`Stream demo failed — ${String(e)}`);
+      setLiveStatus(`Stream demo failed - ${String(e)}`);
     }
   }
 
@@ -518,7 +518,7 @@ export function App() {
       }
       setLiveStatus("Demo feed finished: a concealed chain arrived line by line and was linked into one incident.");
     } catch (e) {
-      setLiveStatus(`Demo feed failed — ${String(e)}`);
+      setLiveStatus(`Demo feed failed - ${String(e)}`);
     } finally {
       setFeedRunning(false);
     }
@@ -534,7 +534,7 @@ export function App() {
     <div className="min-h-screen bg-[#F3EFE3] text-[#111114]">
       <SafeAreaTopScrim backgroundColor="var(--cream)" />
 
-      {/* Chapter rail — desktop */}
+      {/* Chapter rail - desktop */}
       <nav aria-label="Chapters" className="fixed right-3 top-1/2 z-30 hidden -translate-y-1/2 flex-col items-end gap-3 lg:flex">
         {CHAPTERS.map((c) => (
           <a key={c.id} href={`#${c.id}`} className="font-mono-label group flex items-center gap-2 text-[11px] text-[#6F6A5C] hover:text-[#E8241A]">
@@ -545,7 +545,7 @@ export function App() {
         ))}
       </nav>
 
-      {/* HERO — split halves, dashed red seam */}
+      {/* HERO - split halves, dashed red seam */}
       <header className="relative">
         <div className="grid md:grid-cols-2">
           <div className="px-4 pt-8 pb-6 sm:px-8 md:pt-12">
@@ -558,7 +558,7 @@ export function App() {
             <p className="mt-4 max-w-md text-[16px] leading-relaxed">
               Millions of log lines hide one attack. This page finds the suspicious events,
               labels each with a MITRE technique and a kill-chain stage, links them across
-              hosts, users, IPs and time — and shows where the attacker began, what they
+              hosts, users, IPs and time - and shows where the attacker began, what they
               did, and what they could reach next.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -579,10 +579,10 @@ export function App() {
             </dl>
           </div>
           <div className="relative bg-[#111114] px-4 pt-8 pb-6 sm:px-8 md:pt-12">
-            <p className="font-mono-label text-[11px] text-[#F2A007]">02 · The machine room — what the logs become</p>
+            <p className="font-mono-label text-[11px] text-[#F2A007]">02 · The machine room - what the logs become</p>
             <FactoryIllustration lines={heroLines} detections={heroDetections} incidents={incidents.length} />
             <p className="mt-2 font-mono-label text-[11px] leading-relaxed text-[#A3A0A8]">
-              Left: what people see. Right: the pipeline underneath — stream, detect, link, explain.
+              Left: what people see. Right: the pipeline underneath - stream, detect, link, explain.
               Nothing here is a mockup: every count above comes from the dataset in view.
             </p>
           </div>
@@ -594,11 +594,11 @@ export function App() {
       {/* Synthetic-data banner */}
       <div className="hazard h-3 w-full" aria-hidden="true" />
       <p className="border-b-2 border-[#111114] bg-[#111114] px-4 py-2 text-center font-mono-label text-[11px] leading-relaxed text-[#FBF8EF] sm:px-8">
-        All built-in data is <span className="text-[#F2A007]">synthetic and labelled as such</span> — planted attacks, invented hosts and users.
-        Uploaded files are processed for you only. Use synthetic or authorised demo logs — never real production logs or credentials.
+        All built-in data is <span className="text-[#F2A007]">synthetic and labelled as such</span> - planted attacks, invented hosts and users.
+        Uploaded files are processed for you only. Use synthetic or authorised demo logs - never real production logs or credentials.
       </p>
 
-      {/* Chapter chips — phone */}
+      {/* Chapter chips - phone */}
       <nav aria-label="Chapters" className="sticky top-0 z-20 flex gap-2 overflow-x-auto border-b-2 border-[#111114] bg-[#F3EFE3] px-3 py-2 lg:hidden">
         {CHAPTERS.map((c) => (
           <a key={c.id} href={`#${c.id}`} className="font-mono-label shrink-0 border border-[#111114] bg-[#FBF8EF] px-2.5 py-1.5 text-[11px] hover:bg-[#E8241A] hover:text-[#FBF8EF]">
@@ -608,15 +608,15 @@ export function App() {
       </nav>
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-8">
-        {/* 01 — MISSIONS */}
+        {/* 01 - MISSIONS */}
         <section id="ch-missions" className="chapter-link pt-10">
-          <p className="font-mono-label text-[11px] text-[#E8241A]">01 · Missions — worst first</p>
+          <p className="font-mono-label text-[11px] text-[#E8241A]">01 · Missions - worst first</p>
           <h2 className="font-display mt-2 text-[clamp(1.9rem,6vw,3.2rem)] leading-none">
             Pick a mission.<br />Worst on top.
           </h2>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed">
-            Each mission is one linked incident. The risk score decides the order — the same
-            scoring the Python engine uses — and every mission shows how many raw alerts
+            Each mission is one linked incident. The risk score decides the order - the same
+            scoring the Python engine uses - and every mission shows how many raw alerts
             were merged into it.
           </p>
 
@@ -681,7 +681,7 @@ export function App() {
               <p className="font-display text-[20px]">No incidents in this dataset.</p>
               <p className="mt-2 max-w-xl text-[15px] leading-relaxed">
                 Either every line was benign, or no rule matched. Try the stream demo in
-                chapter 02 — a concealed attack is planted inside 5,009 lines — or upload a
+                chapter 02 - a concealed attack is planted inside 5,009 lines - or upload a
                 log that contains one of the rule phrases listed in chapter 04.
               </p>
               <button
@@ -731,7 +731,7 @@ export function App() {
           )}
         </section>
 
-        {/* 02 — FEED THE MACHINE */}
+        {/* 02 - FEED THE MACHINE */}
         <section id="ch-feed" className="chapter-link pt-14">
           <p className="font-mono-label text-[11px] text-[#E8241A]">02 · Feed the machine</p>
           <h2 className="font-display mt-2 text-[clamp(1.9rem,6vw,3.2rem)] leading-none">
@@ -739,7 +739,7 @@ export function App() {
           </h2>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed">
             Files are read in 64&nbsp;KB slices and processed in stream order. Benign lines are
-            counted and dropped — only detections are stored. Accepted formats: JSON-lines,
+            counted and dropped - only detections are stored. Accepted formats: JSON-lines,
             pipe-separated, and CSV, with the same flexible field names as the Python parser.
           </p>
 
@@ -767,7 +767,7 @@ export function App() {
                   className={`cursor-pointer border-2 border-dashed px-4 py-8 text-center ${dragOver ? "border-[#E8241A] bg-[#E9E2CF]" : "border-[#111114]"}`}
                 >
                   <p className="font-display text-[20px]">Drop a log file here</p>
-                  <p className="mt-1 text-[14px] text-[#6F6A5C]">or tap to choose — .log and .txt only, up to 100 MB</p>
+                  <p className="mt-1 text-[14px] text-[#6F6A5C]">or tap to choose - .log and .txt only, up to 100 MB</p>
                   <p className="font-mono-label mt-3 text-[11px] text-[#E8241A]">Processed for you only · nothing is shared</p>
                 </div>
                 <input
@@ -784,7 +784,7 @@ export function App() {
                 />
                 {uploadState && (
                   <div className="mt-4" aria-live="polite">
-                    <p className="font-mono-label text-[11px]">{uploadState.fileName} — {uploadState.phase}</p>
+                    <p className="font-mono-label text-[11px]">{uploadState.fileName} - {uploadState.phase}</p>
                     <div className="mt-2 h-3 w-full border border-[#111114] bg-[#E9E2CF]">
                       <div className="hazard h-full" style={{ width: `${uploadState.total > 0 ? Math.round((uploadState.done / uploadState.total) * 100) : 0}%` }} />
                     </div>
@@ -810,7 +810,7 @@ export function App() {
                   <h3 className="font-mono-label text-[12px] text-[#F2A007]">B · Live mode <span className="blink-dot ml-1 inline-block h-2 w-2 rounded-full bg-[#E8241A]" aria-hidden="true" /></h3>
                 </div>
                 <div className="p-4">
-                  <label htmlFor="live-lines" className="font-mono-label text-[11px] text-[#A3A0A8]">Paste log lines — new lines re-link the path within seconds</label>
+                  <label htmlFor="live-lines" className="font-mono-label text-[11px] text-[#A3A0A8]">Paste log lines - new lines re-link the path within seconds</label>
                   <textarea
                     id="live-lines"
                     value={liveText}
@@ -848,7 +848,7 @@ export function App() {
                 <div className="p-4">
                   <p className="text-[14px] leading-relaxed">
                     5,009 lines stream in 500-line batches. Most are benign; 24 planted
-                    steps from 5 concealed attacks are hidden inside. Only detections are kept — the raw stream is never
+                    steps from 5 concealed attacks are hidden inside. Only detections are kept - the raw stream is never
                     held in full.
                   </p>
                   <button
@@ -866,7 +866,7 @@ export function App() {
                       </div>
                       <p className="font-mono-label mt-1 text-[11px] text-[#6F6A5C]">
                         {streamState.total.toLocaleString()} lines seen · {streamState.detections} flagged
-                        {streamState.done ? " · stream finished — open the Stream demo dataset in chapter 01" : ""}
+                        {streamState.done ? " · stream finished - open the Stream demo dataset in chapter 01" : ""}
                       </p>
                     </div>
                   )}
@@ -879,9 +879,9 @@ export function App() {
             </div>
           </div>
         </section>
-        {/* 03 — THE LINE (incident detail) */}
+        {/* 03 - THE LINE (incident detail) */}
         <section id="ch-line" className="chapter-link pt-14">
-          <p className="font-mono-label text-[11px] text-[#E8241A]">03 · The line — timeline, graph, look-ahead</p>
+          <p className="font-mono-label text-[11px] text-[#E8241A]">03 · The line - timeline, graph, look-ahead</p>
           {detailQuery.isPending ? (
             <p className="mt-4 font-mono-label text-[12px]">Loading the incident…</p>
           ) : !detail ? (
@@ -916,7 +916,7 @@ export function App() {
                         Step {stepIndex + 1} of {detail.steps.length} · {selectedStep.stage} · {selectedStep.tactic}
                       </p>
                       <p className="font-display mt-1 text-[24px] leading-tight">
-                        {selectedStep.techniqueId} — {selectedStep.techniqueName}
+                        {selectedStep.techniqueId} - {selectedStep.techniqueName}
                       </p>
                       <p className="mt-2 text-[15px] leading-relaxed">{selectedStep.reason}</p>
                       <p className="mt-2 font-mono text-[13px] leading-relaxed text-[#D8D0BA]">
@@ -924,7 +924,7 @@ export function App() {
                         {selectedStep.ip ? ` · ${selectedStep.ip}` : ""} · {selectedStep.source}
                       </p>
                       <p className="mt-1 font-mono text-[13px] text-[#A3A0A8]">
-                        “{selectedStep.action}” — {selectedStep.detail}
+                        “{selectedStep.action}” - {selectedStep.detail}
                       </p>
                     </div>
                     <dl className="flex gap-6 md:flex-col md:gap-2 md:text-right">
@@ -951,7 +951,7 @@ export function App() {
                 {/* Scrubber */}
                 <div className="mt-4">
                   <label htmlFor="step-scrubber" className="font-mono-label text-[11px] text-[#A3A0A8]">
-                    Scrub the timeline — drag to move along the chain
+                    Scrub the timeline - drag to move along the chain
                   </label>
                   <input
                     id="step-scrubber"
@@ -999,7 +999,7 @@ export function App() {
                 {/* Graph */}
                 <div className="border-2 border-[#111114] bg-[#1D1E22] px-4 py-4 text-[#FBF8EF]">
                   <h3 className="font-mono-label text-[12px] text-[#F2A007]">Host / user graph</h3>
-                  <p className="mt-1 text-[13px] text-[#A3A0A8]">The same path as nodes and edges — the NetworkX shape of this incident.</p>
+                  <p className="mt-1 text-[13px] text-[#A3A0A8]">The same path as nodes and edges - the NetworkX shape of this incident.</p>
                   <GraphView detail={detail} focus={graphFocus} onFocus={setGraphFocus} />
                 </div>
 
@@ -1026,7 +1026,7 @@ export function App() {
                   </div>
 
                   <div className="border-2 border-[#111114] bg-[#FBF8EF] px-4 py-4">
-                    <h3 className="font-mono-label text-[12px]">What-if — block a step</h3>
+                    <h3 className="font-mono-label text-[12px]">What-if - block a step</h3>
                     <p className="mt-1 text-[13px] leading-relaxed text-[#6F6A5C]">
                       A simulation only. Blocking is not performed by this tool. Pick the step
                       where containment happens; everything after it is treated as stopped.
@@ -1038,10 +1038,10 @@ export function App() {
                       onChange={(e) => setBlockedStep(e.target.value === "" ? null : Number(e.target.value))}
                       className="mt-1 w-full border-2 border-[#111114] bg-[#FBF8EF] px-2 py-2 text-[14px]"
                     >
-                      <option value="">No block — full chain</option>
+                      <option value="">No block - full chain</option>
                       {detail.steps.map((s, i) => (
                         <option key={s.id} value={String(i + 1)}>
-                          After step {i + 1} — {s.techniqueId} on {s.host}
+                          After step {i + 1} - {s.techniqueId} on {s.host}
                         </option>
                       ))}
                     </select>
@@ -1060,9 +1060,9 @@ export function App() {
           )}
         </section>
 
-        {/* 04 — RULES FILE */}
+        {/* 04 - RULES FILE */}
         <section id="ch-rules" className="chapter-link pt-14">
-          <p className="font-mono-label text-[11px] text-[#E8241A]">04 · Rules file — config, not code</p>
+          <p className="font-mono-label text-[11px] text-[#E8241A]">04 · Rules file - config, not code</p>
           <h2 className="font-display mt-2 text-[clamp(1.9rem,6vw,3.2rem)] leading-none">
             Add a rule.<br />Edit the file.
           </h2>
@@ -1078,7 +1078,7 @@ export function App() {
             <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
               <div className="border-2 border-[#111114] bg-[#FBF8EF]">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#111114] bg-[#111114] px-4 py-2">
-                  <h3 className="font-mono-label text-[12px] text-[#FBF8EF]">rules.yml — editable</h3>
+                  <h3 className="font-mono-label text-[12px] text-[#FBF8EF]">rules.yml - editable</h3>
                   <span className="font-mono-label text-[10px] text-[#F2A007]">{rulesQuery.data?.rules.length ?? 0} rules loaded</span>
                 </div>
                 <label htmlFor="rules-editor" className="sr-only">Detection rules in YAML format</label>
@@ -1131,16 +1131,16 @@ export function App() {
                 <p className="mt-3 border-l-4 border-[#F2A007] bg-[#E9E2CF] px-3 py-2 text-[13px] leading-relaxed">
                   Try it: add a rule matching a phrase in your own log, save, and watch the
                   mission list change. The example rule <span className="font-mono">midnight_db_export</span> fires
-                  on “midnight database export” — a phrase that never appears in the synthetic set.
+                  on “midnight database export” - a phrase that never appears in the synthetic set.
                 </p>
               </div>
             </div>
           )}
         </section>
 
-        {/* 05 — ENGINE */}
+        {/* 05 - ENGINE */}
         <section id="ch-engine" className="chapter-link pt-14">
-          <p className="font-mono-label text-[11px] text-[#E8241A]">05 · Engine — the loadout</p>
+          <p className="font-mono-label text-[11px] text-[#E8241A]">05 · Engine - the loadout</p>
           <h2 className="font-display mt-2 text-[clamp(1.9rem,6vw,3.2rem)] leading-none">
             Four slots.<br />One pipeline.
           </h2>
@@ -1158,10 +1158,10 @@ export function App() {
             <h3 className="font-mono-label text-[12px] text-[#F2A007]">Read this before you judge the numbers</h3>
             <p className="mt-2 max-w-3xl text-[14px] leading-relaxed">
               This page runs the same detection, linking, scoring, graph, and reporting logic as
-              the Python engine — ported into this artifact's server actions, because the
+              the Python engine - ported into this artifact's server actions, because the
               artifact runtime is TypeScript/Bun with its own database, not Python. The Python
-              engine itself — Python + DuckDB for storage + NetworkX for the graph, Sigma-style
-              YAML rules, streaming parser, API, live mode, and the Sarvam Hindi adapter — is
+              engine itself - Python + DuckDB for storage + NetworkX for the graph, Sigma-style
+              YAML rules, streaming parser, API, live mode, and the Sarvam Hindi adapter - is
               the design source, and it is where the 15/30/50&nbsp;GB tiers run. Nothing on this
               page claims Python, DuckDB, or NetworkX executes inside the artifact.
             </p>
@@ -1185,7 +1185,7 @@ export function App() {
               </p>
             </div>
             <div className="border-2 border-[#111114] bg-[#FBF8EF] px-4 py-4">
-              <h3 className="font-mono-label text-[12px]">Measured on the local Python run — synthetic only</h3>
+              <h3 className="font-mono-label text-[12px]">Measured on the local Python run - synthetic only</h3>
               <ul className="mt-3 space-y-2">
                 {(factsQuery.data?.measured ?? []).map((m) => (
                   <li key={m.label} className="flex items-baseline justify-between gap-3 border-b border-[#D8D0BA] pb-2">
@@ -1198,7 +1198,7 @@ export function App() {
               <ul className="mt-2 space-y-1.5">
                 {(factsQuery.data?.targets ?? []).map((t) => (
                   <li key={t.measure} className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span>{t.measure} <span className="text-[#6F6A5C]">— {t.how}</span></span>
+                    <span>{t.measure} <span className="text-[#6F6A5C]">- {t.how}</span></span>
                     <span className="shrink-0 font-mono-label text-[10px]">{t.good} / {t.great}</span>
                   </li>
                 ))}
@@ -1208,8 +1208,8 @@ export function App() {
 
           <div className="mt-4 grid gap-px border-2 border-[#111114] bg-[#111114] sm:grid-cols-3">
             {[
-              ["Detect & label", "FR-1 · FR-2 · FR-3 — Stream in chunks, flag suspicious events, tag MITRE + kill-chain stage."],
-              ["Connect & explain", "FR-4 · FR-5 · FR-6 — Link by host, user, IP and time (48 h window). Timeline + graph + next-reach."],
+              ["Detect & label", "FR-1 · FR-2 · FR-3 - Stream in chunks, flag suspicious events, tag MITRE + kill-chain stage."],
+              ["Connect & explain", "FR-4 · FR-5 · FR-6 - Link by host, user, IP and time (48 h window). Timeline + graph + next-reach."],
               ["Bonuses, all five", "B-1 risk ranking · B-2 plain-English + Hindi report · B-3 merged counts · B-4 config rules · B-5 live mode."],
             ].map(([title, body]) => (
               <div key={title} className="bg-[#1D1E22] px-4 py-4 text-[#FBF8EF]">
@@ -1220,9 +1220,9 @@ export function App() {
           </div>
         </section>
 
-        {/* 06 — REPORT */}
+        {/* 06 - REPORT */}
         <section id="ch-report" className="chapter-link pt-14">
-          <p className="font-mono-label text-[11px] text-[#E8241A]">06 · Report — in plain words</p>
+          <p className="font-mono-label text-[11px] text-[#E8241A]">06 · Report - in plain words</p>
           <h2 className="font-display mt-2 text-[clamp(1.9rem,6vw,3.2rem)] leading-none">
             The story,<br />written out.
           </h2>
@@ -1237,7 +1237,7 @@ export function App() {
                   aria-pressed={reportLang === "en"}
                   className={`font-mono-label px-4 py-2 text-[12px] ${reportLang === "en" ? "bg-[#111114] text-[#FBF8EF]" : "border-2 border-[#111114] bg-[#FBF8EF]"}`}
                 >
-                  English — plain words
+                  English - plain words
                 </button>
                 <button
                   type="button"
@@ -1245,7 +1245,7 @@ export function App() {
                   aria-pressed={reportLang === "hi"}
                   className={`font-mono-label px-4 py-2 text-[12px] ${reportLang === "hi" ? "bg-[#111114] text-[#FBF8EF]" : "border-2 border-[#111114] bg-[#FBF8EF]"}`}
                 >
-                  हिन्दी — template
+                  हिन्दी - template
                 </button>
               </div>
               <div className="mt-3 border-2 border-[#111114] bg-[#FBF8EF] px-5 py-5">
@@ -1293,9 +1293,9 @@ export function App() {
 
       <footer className="border-t-2 border-[#111114] bg-[#111114] px-4 py-6 text-[#A3A0A8] sm:px-8">
         <p className="font-mono-label max-w-6xl mx-auto text-[11px] leading-relaxed">
-          Kill Chain Attack Path Reconstruction — detect, label, connect, explain, look ahead.
+          Kill Chain Attack Path Reconstruction - detect, label, connect, explain, look ahead.
           Built-in data is synthetic. The Python + DuckDB + NetworkX engine is the design source;
-          this page ports its logic into the artifact runtime. This tool finds and explains attacks —
+          this page ports its logic into the artifact runtime. This tool finds and explains attacks -
           it does not block or stop them.
         </p>
       </footer>

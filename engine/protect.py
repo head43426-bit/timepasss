@@ -1,6 +1,6 @@
 """Protection playbook (not active blocking): for every technique in an
 incident, the concrete action that stops it or fixes it. ASK cannot
-block an attack itself — it has no agent on your hosts and no firewall
+block an attack itself - it has no agent on your hosts and no firewall
 control, and claiming otherwise would be a lie. What it can do is tell
 you, per technique found, exactly what to isolate, revoke, patch or
 restore, in priority order. That is the protection this tool offers,
@@ -15,7 +15,7 @@ MITIGATIONS = {
     "T1566.001": "Block the sender domain, quarantine the attachment, and reset the password of anyone who opened it. Turn on attachment sandboxing for mail.",
     "T1204.002": "Quarantine the file on every host it touched, kill its process, and re-image any host where it ran. Block its hash at the endpoint tool.",
     "T1059.001": "Block encoded PowerShell (Constrained Language Mode / WDAC), kill the PowerShell process, and check what command it actually ran before closing the incident.",
-    "T1053.005": "Delete the scheduled task, find what created it, and remove that creator too — otherwise it comes back on reboot.",
+    "T1053.005": "Delete the scheduled task, find what created it, and remove that creator too - otherwise it comes back on reboot.",
     "T1505.003": "Remove the web shell file, patch the web application flaw that let it in, and rotate every credential stored on that web server.",
     "T1136": "Delete the new admin account, audit who created it, and reset all admin passwords.",
     "T1068": "Patch the exploited software, remove the attacker's elevated session, and audit what the elevated account touched.",
@@ -32,35 +32,35 @@ MITIGATIONS = {
     "T1071.004": "Block the DNS tunnel domain, force DNS through a filtered resolver, and alert on long or high-volume DNS queries.",
     "T1036": "Quarantine the masquerading file, check its real hash (not its name), and block that hash everywhere.",
     "T1055": "Kill the injected process and its host process, re-image the host if the injection persisted, and hunt for the injector.",
-    "T1048": "Block the outside destination, isolate the uploading host, and check what data left — then treat that data as exposed.",
+    "T1048": "Block the outside destination, isolate the uploading host, and check what data left - then treat that data as exposed.",
     "T1486": "Isolate the host immediately, do NOT pay, restore files from offline backups, and hunt for the ransomware's entry point on every other host.",
     "T1485": "Isolate the host, restore from offline backups, and check whether destruction spread to shared drives before restoring.",
 }
 
-GENERIC = "Isolate the affected host from the network, preserve its logs centrally, and work through the techniques above one by one — highest risk first."
+GENERIC = "Isolate the affected host from the network, preserve its logs centrally, and work through the techniques above one by one - highest risk first."
 
-# Why each stage matters, in one plain sentence — used by the live
+# Why each stage matters, in one plain sentence - used by the live
 # "what we're finding" slab while an upload is still running, so a
 # non-expert can read a technique and immediately understand it.
 WHY_BY_STAGE = {
-    "Reconnaissance": "The attacker is still outside, looking for a way in — this is the earliest warning you will ever get.",
+    "Reconnaissance": "The attacker is still outside, looking for a way in - this is the earliest warning you will ever get.",
     "Initial Access": "The attacker got in. Everything after this is damage control, not prevention.",
-    "Execution": "Attacker code actually ran on your host — this is no longer a probe, it is a foothold.",
+    "Execution": "Attacker code actually ran on your host - this is no longer a probe, it is a foothold.",
     "Persistence": "The attacker is trying to survive a reboot, so cleaning the one file you found will not be enough.",
-    "Privilege Escalation": "The attacker is climbing from a normal user to an admin — the blast radius just grew.",
-    "Defense Evasion": "The attacker is actively hiding — logs, files or processes you cannot see are the point.",
-    "Credential Access": "Passwords or tickets are being stolen — every account on that host must be treated as compromised.",
-    "Discovery": "The attacker is mapping your network from inside — the next move is usually lateral movement.",
-    "Lateral Movement": "The attacker is moving to other hosts — one compromised machine is becoming many.",
-    "Collection": "Data is being gathered for stealing — this is the last step before it leaves.",
-    "Command and Control": "The compromised host is talking to the attacker's server — it can receive new orders at any time.",
-    "Exfiltration": "Data is leaving your network — the breach is already real, and scope matters more than speed now.",
-    "Impact": "The attacker is destroying or encrypting — restore from backups, do not negotiate from the infected host.",
+    "Privilege Escalation": "The attacker is climbing from a normal user to an admin - the blast radius just grew.",
+    "Defense Evasion": "The attacker is actively hiding - logs, files or processes you cannot see are the point.",
+    "Credential Access": "Passwords or tickets are being stolen - every account on that host must be treated as compromised.",
+    "Discovery": "The attacker is mapping your network from inside - the next move is usually lateral movement.",
+    "Lateral Movement": "The attacker is moving to other hosts - one compromised machine is becoming many.",
+    "Collection": "Data is being gathered for stealing - this is the last step before it leaves.",
+    "Command and Control": "The compromised host is talking to the attacker's server - it can receive new orders at any time.",
+    "Exfiltration": "Data is leaving your network - the breach is already real, and scope matters more than speed now.",
+    "Impact": "The attacker is destroying or encrypting - restore from backups, do not negotiate from the infected host.",
 }
 
 
 def technique_meaning(technique_id: str, technique_name: str) -> str:
-    """What the technique IS, in one sentence — from the slim MITRE
+    """What the technique IS, in one sentence - from the slim MITRE
     index (first sentence of the MITRE description), not the stage
     rhetoric ('the attacker got in') that used to fill this slot.
     Falls back to the technique name itself if the index has no
@@ -81,7 +81,7 @@ def live_tell(technique_id: str, technique_name: str, stage: str,
               count: int, tell: str) -> Dict:
     """One live slab entry: what was found, what gave it away (the
     tell), what the technique means, why it matters, and how it
-    helps you. All plain words — this is the panel a non-expert
+    helps you. All plain words - this is the panel a non-expert
     reads while the upload runs. The frontend now renders meaning +
     how-to-prevent as one flowing paragraph, not the why text."""
     return {
@@ -89,7 +89,7 @@ def live_tell(technique_id: str, technique_name: str, stage: str,
         "kill_chain_stage": stage, "count": count,
         "tell": tell or "a log line matching this attack's signature",
         "meaning": technique_meaning(technique_id, technique_name),
-        "why": WHY_BY_STAGE.get(stage, "This is a step in the attack chain — earlier stages are warnings, later stages are damage."),
+        "why": WHY_BY_STAGE.get(stage, "This is a step in the attack chain - earlier stages are warnings, later stages are damage."),
         "help": MITIGATIONS.get(technique_id, GENERIC),
     }
 

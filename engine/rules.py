@@ -133,7 +133,7 @@ def _lower_list(value) -> tuple:
 def _fast_cond(cond: Dict) -> Dict:
     """Pre-lowercase every phrase once at load time. The old path
     lowercased the whole log line AND every phrase on every rule, for
-    every event — 25 rules x ~60 phrases x millions of lines. That
+    every event - 25 rules x ~60 phrases x millions of lines. That
     repeated lowercasing was a hidden speed tax on every upload."""
     return {
         "any": _lower_list(cond.get("any_contains")),
@@ -241,7 +241,7 @@ class Detector:
                             f"{'/'.join(rule.group_by)} followed by a success"),
                 )]
         # Heuristic (not a keyword rule): DNS tunneling. A real DNS
-        # line never looks like this — nytimes.com is 2 labels, 11
+        # line never looks like this - nytimes.com is 2 labels, 11
         # chars. A tunnel hides data in a very long hostname with many
         # labels. Thresholds are deliberately high so normal DNS never
         # fires: 5+ labels OR 60+ characters, on a DNS-subtype line.
@@ -252,13 +252,13 @@ class Detector:
                               technique_id="T1071.004", technique_name="DNS",
                               tactic="Command and Control", kill_chain_stage="Command and Control",
                               confidence=70, priority=80,
-                              description=f"Unusually long/multi-label DNS hostname ({_host}) — possible DNS tunneling",
+                              description=f"Unusually long/multi-label DNS hostname ({_host}) - possible DNS tunneling",
                               match={})
             return [self._detection(event, _dns_rule, merged=1,
-                                    reason=f"DNS hostname {_host} has {_host.count('.') + 1} labels and {len(_host)} characters — far above normal DNS, consistent with data hidden in DNS queries")]
+                                    reason=f"DNS hostname {_host} has {_host.count('.') + 1} labels and {len(_host)} characters - far above normal DNS, consistent with data hidden in DNS queries")]
         # Heuristic (not a keyword rule): EXTERNAL SMB to an INTERNAL
         # host, accepted. Internal SMB is normal file sharing and must
-        # NOT fire — that would flood false alarms. But SMB arriving
+        # NOT fire - that would flood false alarms. But SMB arriving
         # from a public IP to a private IP should never happen in
         # normal use: it is an outsider reaching straight into an
         # internal/DMZ host over the file-sharing protocol, i.e.
@@ -293,7 +293,7 @@ class Detector:
                              description="SMB connection from a public IP to a private internal host, accepted",
                              match={})
             _det = self._detection(event, _smb_rule, merged=1,
-                                   reason=(f"SMB from public IP {_src_ip} to private host {_dst_ip}, accepted by the firewall — "
+                                   reason=(f"SMB from public IP {_src_ip} to private host {_dst_ip}, accepted by the firewall - "
                                            f"SMB should never arrive from the internet to an internal host. Check whether that host was exposed, "
                                            f"whether the session was legitimate, and block external SMB at the firewall if it was not."))
             _det["severity"] = "High"

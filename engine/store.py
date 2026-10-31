@@ -59,7 +59,7 @@ def connect(db_path: str, fresh: bool = False):
         os.remove(db_path)
     con = duckdb.connect(db_path)
     # MEMORY FIX (2026-11-01): DuckDB has no memory cap by default and
-    # will happily grow toward all RAM during big inserts/queries —
+    # will happily grow toward all RAM during big inserts/queries -
     # on an 8 GB machine that is what pushes the system to 90%.
     # Cap it at 1 GB (or 25% of total RAM on smaller machines, never
     # below 256 MB); DuckDB spills to disk past the cap instead of
@@ -102,7 +102,7 @@ def connect(db_path: str, fresh: bool = False):
 
 def insert_detections(con, detections: List[Dict], start_id: int) -> int:
     """Bulk insert. The old executemany path took 30 seconds for 60,000
-    rows on this VM — that, not parsing, was the real speed wall.
+    rows on this VM - that, not parsing, was the real speed wall.
     DuckDB's C-speed CSV reader does the same 60,000 rows in 0.37s
     (80x faster, measured). CSV writing is done by Python's csv
     module, which quotes commas/quotes/newlines correctly, and any
@@ -235,7 +235,7 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
         [incident_id]).fetchone()
     if not row:
         return None
-    # FAST PATH — this is the unresponsive-page fix. A 271,896-step
+    # FAST PATH - this is the unresponsive-page fix. A 271,896-step
     # incident used to load every timeline row into Python dicts
     # before the page could draw anything, and the report then did it
     # again. For large incidents, DuckDB itself does the work: first
@@ -277,7 +277,7 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
     # MAP FIX (2026-11-01): nodes come ONLY from edge endpoints.
     # The old code added every host/user from the incident row first,
     # so the firewall name FGT... always appeared as an isolated node
-    # even when no edge touched it — that is the "single host, nothing
+    # even when no edge touched it - that is the "single host, nothing
     # showing" map. Edge endpoints are the real machines (srcip,
     # dstip/domain, user, technique); anything else is not drawn.
     _users = set(json.loads(row[5] or "[]"))

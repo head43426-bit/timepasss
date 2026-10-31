@@ -32,10 +32,10 @@ async function loadIncidents() {
   var ac = document.getElementById("activeCount");
   if (ac) ac.textContent = list.length + " active";
   document.getElementById("liveStatus").innerHTML = health.live_watch
-    ? "● Live — watching " + esc(health.live_watch) + ". New log lines are detected and linked as they arrive, and this list refreshes every 5 seconds."
-    : "○ Live off — start the server with --watch your.log to watch a live log file. Uploads still work normally.";
+    ? "● Live - watching " + esc(health.live_watch) + ". New log lines are detected and linked as they arrive, and this list refreshes every 5 seconds."
+    : "○ Live off - start the server with --watch your.log to watch a live log file. Uploads still work normally.";
   // Live update: every 5 seconds, check only /health (one cheap count
-  // query). If nothing changed, do nothing — no page reload, no
+  // query). If nothing changed, do nothing - no page reload, no
   // flicker, and the incident you are reading is never disturbed.
   if (!state.liveTimer) {
     state.liveTimer = setInterval(async function() {
@@ -46,20 +46,20 @@ async function loadIncidents() {
           await loadIncidents();
           if (state.selected) {
             document.getElementById("liveNote").innerHTML =
-              "New log lines arrived — <button class=btn onclick='selectIncident(" + state.selected.id + ")'>Refresh this incident</button>";
+              "New log lines arrived - <button class=btn onclick='selectIncident(" + state.selected.id + ")'>Refresh this incident</button>";
           }
         }
       } catch (e) { /* server down: keep the page, stop spamming */ }
     }, 5000);
   }
   // TIER FILTER (2026-11-01, user demand: 'keep it simple, don't
-  // display so many'). Incidents are grouped by tier — Critical
-  // (>=90), High (70-89), Medium (40-69), Low (<40) — with a button
+  // display so many'). Incidents are grouped by tier - Critical
+  // (>=90), High (70-89), Medium (40-69), Low (<40) - with a button
   // per tier showing its count, plus All. List is sorted by risk
   // descending, then steps descending, so the worst incidents are
   // first instead of a flat 700-card wall in id order.
   // Tiers match the backend risk_tier(): Critical 90-100, High
-  // 70-89, Medium 40-69, Low 0-39. Low is its own tier now — a
+  // 70-89, Medium 40-69, Low 0-39. Low is its own tier now - a
   // Low-severity incident must never be folded into Medium/Elevated.
   function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : s >= 40 ? "Medium" : "Low"; }
   var sorted = list.slice().sort(function(a, b) {
@@ -70,9 +70,9 @@ async function loadIncidents() {
   if (!state.tierFilter) state.tierFilter = "All";
   window.setTierFilter = function(t) { state.tierFilter = t; loadIncidents(); };
   var shown = state.tierFilter === "All" ? sorted : sorted.filter(function(i) { return tierOf(i.risk_score) === state.tierFilter; });
-  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Medium", "Low"].map(function(t) {
-    var sel = state.tierFilter === t ? " style='background:#f0a832;color:#000;font-weight:bold'" : "";
-    return "<button class=btn onclick=\"setTierFilter('" + t + "')\"" + sel + ">" + t + " (" + counts[t] + ")</button> ";
+  var filterHtml = "<div class=tier-track>" + ["All", "Critical", "High", "Medium", "Low"].map(function(t) {
+    var sel = state.tierFilter === t ? " active" : "";
+    return "<button class='tier-btn" + sel + "' onclick=\"setTierFilter('" + t + "')\">" + t + " (" + counts[t] + ")</button>";
   }).join("") + "</div>";
   function timeAgo(ts) {
     var d = new Date(ts);
@@ -86,12 +86,12 @@ async function loadIncidents() {
   var tierColor = { Critical: "#e1251b", High: "#f97316", Medium: "#d97706", Low: "#6b7280" };
   document.getElementById("incidents").innerHTML = (filterHtml + (shown.length ? shown.map(function(inc) {
     var tier = tierOf(inc.risk_score);
-    return "<button class=inc data-id=" + inc.id + " data-tier=\"" + tier + "\">" +
-      "<span class=inc-score style='color:" + tierColor[tier] + "'>" + inc.risk_score + "<small>/100</small></span>" +
-      "<span class=inc-body><b>INC-" + inc.id + " — " + esc(inc.title) + "</b>" +
+    return "<button class=inc data-id=" + inc.id + " data-tier=\"" + tier + "\" title=\"" + esc(inc.start_time || "") + "\">" +
+      "<span class=inc-score style='color:" + tierColor[tier] + "'>" + (inc.risk_score / 10).toFixed(1) + "<small>/10</small></span>" +
+      "<span class=inc-body><span class=inc-head><b>INC-" + inc.id + "</b><span class=inc-time>" + timeAgo(inc.start_time) + "</span></span>" +
+      "<span class=inc-title>" + esc(inc.title) + "</span>" +
       "<span class=inc-meta>" + esc(inc.hosts.join(", ")) + " &middot; " + tier + " &middot; " +
-      inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged</span><br>" +
-      "<span class=inc-meta>" + esc(inc.start_time || "") + " &middot; " + timeAgo(inc.start_time) + "</span></span></button>";
+      inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged</span></span></button>";
   }).join("") : "<p>No " + esc(state.tierFilter) + " incidents in this file. Try All.</p>"));
   document.querySelectorAll(".inc").forEach(function(el) {
     el.addEventListener("click", function() { selectIncident(parseInt(el.getAttribute("data-id"), 10)); });
@@ -107,21 +107,23 @@ async function selectIncident(id) {
   var banner = document.getElementById("pathBanner");
   if (banner) {
     banner.hidden = false;
-    banner.textContent = "Showing incident #" + path.id + " — risk " + path.risk_score + "/100 — " + (path.hosts || []).join(", ");
+    banner.textContent = "Showing incident #" + path.id + " - risk " + path.risk_score + "/100 - " + (path.hosts || []).join(", ");
   }
   var ap = document.getElementById("attackPaths");
+  var pc = document.getElementById("pathsCount");
+  if (pc) pc.textContent = (next.next_reach && next.next_reach.length) ? next.next_reach.length + " paths" : "No paths yet";
   if (ap) {
     var ranked = (next.next_reach || []).slice().sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
     ap.innerHTML = ranked.length
-      ? "<ol>" + ranked.map(function(n, i) { return "<li><b>" + esc(n.host) + "</b> — watch score " + n.confidence + "/100 — " + esc(n.reason) + "</li>"; }).join("") + "</ol>"
+      ? "<ol>" + ranked.map(function(n, i) { return "<li><b>" + esc(n.host) + "</b> - watch score " + n.confidence + "/100 - " + esc(n.reason) + "</li>"; }).join("") + "</ol>"
       : "<p>No frontier paths yet for this incident.</p>";
   }
   var cb = document.getElementById("corridorBtn");
-  if (cb) { cb.disabled = false; cb.textContent = "Execute Containment Isolator"; }
+  if (cb) { cb.disabled = false; var cl = document.getElementById("corridorLabel"); if (cl) cl.textContent = "Execute Containment Isolator"; }
   var cn = document.getElementById("corridorNote");
-  if (cn) cn.textContent = "Quarantine here is a dashboard simulation only — no real host is isolated and no firewall rule is changed.";
+  if (cn) cn.textContent = "Quarantine here is a dashboard simulation only - no real host is isolated and no firewall rule is changed.";
   var bs = document.getElementById("briefStatus");
-  if (bs) bs.textContent = "Incident #" + path.id + " — " + esc(path.title);
+  if (bs) bs.textContent = "Incident #" + path.id + " - " + esc(path.title);
   var br = document.getElementById("briefRisk");
   if (br) br.textContent = "Risk " + path.risk_score + "/100";
   var sn = document.getElementById("selectedNodeLabel");
@@ -129,7 +131,7 @@ async function selectIncident(id) {
   var sv = document.getElementById("severBtn");
   if (sv) { sv.disabled = true; sv.textContent = "Sever & Isolate"; }
   // Flow Log Data table: real timeline steps only (first 20 shown).
-  // Columns are Time / Src IP-or-Host / Technique / Stage / Flag —
+  // Columns are Time / Src IP-or-Host / Technique / Stage / Flag -
   // the backend timeline has no destination port/protocol per step,
   // so those are not invented here.
   var fr = document.getElementById("flowRows");
@@ -150,14 +152,14 @@ async function selectIncident(id) {
   document.getElementById("detail").innerHTML =
     "<p><b>" + esc(path.title) + "</b><br>Risk " + path.risk_score + "/100 &middot; " + path.detection_count +
     " steps &middot; " + path.merged_alerts + " raw alerts merged<br>Hosts: " + esc(path.hosts.join(", ")) +
-    "<br>Users: " + esc((path.users || []).filter(function(u) { return u; }).join(", ") || "Unknown — not recorded in the logs") + "</p>" +
+    "<br>Users: " + esc((path.users || []).filter(function(u) { return u; }).join(", ") || "Unknown - not recorded in the logs") + "</p>" +
     (path.timeline_sampled ? "<br><small>Showing a sample: first and last 200 of " + fmtNum(path.timeline_total) + " steps. " +
       (path.timeline_summary || []).map(function(s) { return esc(s.technique_name) + " (" + esc(s.technique_id) + ") × " + fmtNum(s.count); }).join(" · ") + "</small>" : "");
   // NetworkX graph map: nodes + edges from path.graph (built by the
   // backend with NetworkX, not drawn by hand). Nodes are placed on a
   // circle in first-seen order so every edge is visible at once.
   renderGraph(path);
-  // Attack path canvas: see renderAttackPathCanvas — the old
+  // Attack path canvas: see renderAttackPathCanvas - the old
   // flat arrow list invented a chain between unrelated nodes.
   renderAttackPathCanvas(path);
   // NEXT + BLAST (2026-11-01 fix): the old text said 'no topology was
@@ -169,9 +171,9 @@ async function selectIncident(id) {
   // targets), blast = Reach + Spread + Depth + Severity from the
   // observed graph, with its basis stated plainly.
   var nextHtml = (next.next_reach && next.next_reach.length)
-    ? "<p>Hosts to watch next, from the " + esc(next.next_basis || "observed graph") + " — already contacted, not yet used as a stepping stone (watch them for outbound movement; these are not guessed new targets):</p><ul>" + next.next_reach.map(function(n) {
-        return "<li><b>" + esc(n.host) + "</b> (watch score " + n.confidence + "/100) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
-      }).join("") + "</ul>" + ((next.next_frontier_total || 0) > next.next_reach.length ? "<p>And " + fmtNum(next.next_frontier_total - next.next_reach.length) + " more frontier destinations like this — see the graph map, Destinations column.</p>" : "")
+    ? "<p>Hosts to watch next, from the " + esc(next.next_basis || "observed graph") + " - already contacted, not yet used as a stepping stone (watch them for outbound movement; these are not guessed new targets):</p><ul>" + next.next_reach.map(function(n) {
+        return "<li><b>" + esc(n.host) + "</b> (watch score " + n.confidence + "/100) - " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
+      }).join("") + "</ul>" + ((next.next_frontier_total || 0) > next.next_reach.length ? "<p>And " + fmtNum(next.next_frontier_total - next.next_reach.length) + " more frontier destinations like this - see the graph map, Destinations column.</p>" : "")
     : "<p>No frontier host to watch: every destination in this incident was already used as a stepping stone, or there are no host-to-host edges at all. No new target is guessed.</p>";
   if (next.next_stages && next.next_stages.length) {
     nextHtml += "<p><b>Looking ahead in the kill chain</b> (stages, not guessed hosts): " +
@@ -181,12 +183,12 @@ async function selectIncident(id) {
   if (next.blast_radius !== undefined && next.blast_radius !== null) {
     var br = next.blast_breakdown;
     nextHtml += "<p>Blast radius, from the " + esc(next.blast_basis || "observed graph") + ": <b>" + next.blast_radius + "/100</b>" +
-      (br ? " — Reach " + br.reach + " (destinations: " + fmtNum(br.dst_count) + ") + Spread " + br.spread + " (sources: " + fmtNum(br.src_count) + ") + Depth " + br.depth + " (stages: " + br.stage_count + ") + Severity " + br.severity + " (worst: " + esc(br.worst_severity) + ")." : ".") + "</p>";
+      (br ? " - Reach " + br.reach + " (destinations: " + fmtNum(br.dst_count) + ") + Spread " + br.spread + " (sources: " + fmtNum(br.src_count) + ") + Depth " + br.depth + " (stages: " + br.stage_count + ") + Severity " + br.severity + " (worst: " + esc(br.worst_severity) + ")." : ".") + "</p>";
   }
   document.getElementById("next").innerHTML = nextHtml;
   document.getElementById("protect").innerHTML = (rep.protections && rep.protections.length)
     ? "<ol>" + rep.protections.map(function(p) {
-        return "<li><b>" + esc(p.technique_id) + " — " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
+        return "<li><b>" + esc(p.technique_id) + " - " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
       }).join("") + "</ol>"
     : "<p>No protection actions for this incident.</p>";
   showReport();
@@ -205,7 +207,7 @@ function renderGraph(path) {
   // GRAPH REDESIGN (2026-11-01, user demand: 'not so cluttered, colour
   // by importance, filters, use the clean inspiration image'). The old
   // circle layout put 250 nodes on one ring with every label on top of
-  // every other label — unreadable. The new layout is left-to-right
+  // every other label - unreadable. The new layout is left-to-right
   // by role, like the inspiration: users, then sources, then pivots
   // (hosts that are both a destination and a source, in kill-chain
   // stage order), then destinations. Colour = worst severity on that
@@ -222,7 +224,7 @@ function renderGraph(path) {
     gf.zoom = Math.min(2, Math.max(0.6, Math.round((gf.zoom + d) * 10) / 10));
     renderGraph(path);
   };
-  // Quantum Walk mode: show only the frontier subgraph — frontier
+  // Quantum Walk mode: show only the frontier subgraph - frontier
   // hosts from /next plus the hosts that reached them. Nothing here
   // is a guessed target or a simulated probability.
   if (state.graphMode === "quantum" && path.next_reach && path.next_reach.length) {
@@ -252,7 +254,7 @@ function renderGraph(path) {
     var only = allNodes[0];
     box.innerHTML = "<p><span class=node>" + esc(only.id) + "</span> <small>(" + esc(only.type) + ")</small></p>" +
       "<p class='hint'>No connections to draw: this incident has only this one host and no host-to-host or user-to-host move in the logs. " +
-      "All " + fmtNum(path.detection_count) + " steps happened on the host above — see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
+      "All " + fmtNum(path.detection_count) + " steps happened on the host above - see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
     return;
   }
   var sevColor = { Critical: "#e1251b", High: "#f97316", Medium: "#f0a832", Low: "#6b7280" };
@@ -336,7 +338,7 @@ function renderGraph(path) {
     var label = n.id.length > 22 ? n.id.slice(0, 21) + "…" : n.id;
     var sub = n.type === "technique" && n.name ? n.name : (n.stage || n.type);
     svg += "<g class='gnode-wrap' data-node='" + esc(n.id) + "' tabindex='0' role='button' aria-label='Show steps for " + esc(n.id) + "'>" +
-      "<title>" + esc(n.id) + " — " + esc(sub) + " — " + esc(sev) + "</title>" +
+      "<title>" + esc(n.id) + " - " + esc(sub) + " - " + esc(sev) + "</title>" +
       "<rect x='" + p.x + "' y='" + p.y + "' width='" + BW + "' height='" + BH + "' rx='10' fill='" + fill + "' stroke='" + stroke + "' stroke-width='3'/>" +
       "<text x='" + (p.x + 10) + "' y='" + (p.y + 22) + "' class='nlabel'>" + esc(label) + "</text>" +
       "<text x='" + (p.x + 10) + "' y='" + (p.y + 40) + "' class='ntype'>" + esc(sub.length > 24 ? sub.slice(0, 23) + "…" : sub) + "</text>" +
@@ -346,7 +348,7 @@ function renderGraph(path) {
   svg += "</svg>";
   var techOpts = ["All"];
   realEdges.forEach(function(e) { if (e.technique_id && techOpts.indexOf(e.technique_id) < 0) techOpts.push(e.technique_id); });
-  var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest — the full step list and grouped report still cover everything.</p>" : "";
+  var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest - the full step list and grouped report still cover everything.</p>" : "";
   var colNote = "<p class='hint'>Left to right: " + usedCols.map(function(i) { return colNames[i] + " (" + cols[i].length + ")"; }).join(" → ") + ".</p>";
   var zl = document.getElementById("zoomLabel");
   if (zl) zl.textContent = Math.round(gf.zoom * 100) + "%";
@@ -361,7 +363,7 @@ function renderGraph(path) {
     "<button class=btn onclick=\"setGraphZoom(-0.2)\">Zoom −</button> " +
     "<button class=btn onclick=\"setGraphFilter('zoom', 1)\">Reset zoom</button>" +
     "</div>" +
-    "<p class='hint' style='margin:0 0 8px'>Colour = worst severity on that node — <span style='color:#e1251b'><b>Critical</b></span> · <span style='color:#f97316'><b>High</b></span> · <span style='color:#f0a832'><b>Medium</b></span> · <span style='color:#6b7280'><b>Low</b></span> · <span style='color:#2563eb'><b>user</b></span> · <span style='color:#7c3aed'><b>technique</b></span>. Edge label = MITRE technique (hidden when over 60 edges, to stay readable). Click a node to see its steps. Scroll inside the box to pan.</p>" +
+    "<p class='hint' style='margin:0 0 8px'>Colour = worst severity on that node - <span style='color:#e1251b'><b>Critical</b></span> · <span style='color:#f97316'><b>High</b></span> · <span style='color:#f0a832'><b>Medium</b></span> · <span style='color:#6b7280'><b>Low</b></span> · <span style='color:#2563eb'><b>user</b></span> · <span style='color:#7c3aed'><b>technique</b></span>. Edge label = MITRE technique (hidden when over 60 edges, to stay readable). Click a node to see its steps. Scroll inside the box to pan.</p>" +
     "<div style='overflow:auto;max-height:640px'>" + svg + "</div>" +
     capNote + colNote + "</div>";
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
@@ -380,7 +382,7 @@ function renderAttackPathCanvas(path) {
   // destinations on the right as a fan-out, grouped by technique when
   // there are more than 8 of them. Annotation boxes on the right are
   // the real techniques/stages found in this incident (from the
-  // timeline summary) — never invented CVEs, Kubernetes objects, or
+  // timeline summary) - never invented CVEs, Kubernetes objects, or
   // hosts. Click a box to see its steps.
   var box = document.getElementById("path");
   var graph = path.graph || { nodes: [], edges: [] };
@@ -404,14 +406,14 @@ function renderAttackPathCanvas(path) {
   pivots.sort(function(a, b) { var ia = stageOrder.indexOf(a.stage || ""), ib = stageOrder.indexOf(b.stage || ""); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
   if (!pathEdges.length) {
     // No host-to-host edges (e.g. the sample): the honest path is the
-    // STAGE PROGRESSION in time order, labelled as such — not host
+    // STAGE PROGRESSION in time order, labelled as such - not host
     // hops. Draw one box per distinct stage, in kill-chain order.
     var stages = [];
     (path.timeline_summary || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
     if (!stages.length) (path.timeline || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
     var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]) || "Unknown host";
     box.innerHTML = "<canvas id='attackCanvas' width='1080' height='170' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
-      "<p class='hint'>No host-to-host movement in this incident — all steps happened on " + esc(hostId) + ". The canvas below shows the stage progression in time order, not host hops. Click a stage box to see its steps.</p>";
+      "<p class='hint'>No host-to-host movement in this incident - all steps happened on " + esc(hostId) + ". The canvas below shows the stage progression in time order, not host hops. Click a stage box to see its steps.</p>";
     var cv0 = document.getElementById("attackCanvas");
     var ctx0 = cv0.getContext("2d");
     drawAttackStageRow(ctx0, stages, path);
@@ -446,7 +448,7 @@ function renderAttackPathCanvas(path) {
   var rows = Math.max(srcBoxes.length, pivBoxes.length, dstBoxes.length, 1);
   var H = rows * 92 + 30, W = 1080;
   box.innerHTML = "<canvas id='attackCanvas' width='" + W + "' height='" + H + "' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
-    "<p class='hint'>Arrows are real log edges only — destinations fan out in parallel from their source, they are NOT sequential hops unless a pivot connects them. " +
+    "<p class='hint'>Arrows are real log edges only - destinations fan out in parallel from their source, they are NOT sequential hops unless a pivot connects them. " +
     (sources.length > 5 ? "Showing 5 of " + sources.length + " sources. " : "") +
     (pivots.length > 5 ? "Showing 5 of " + pivots.length + " pivots. " : "") +
     (destBoxes.length > 6 ? "Showing 6 of " + destBoxes.length + " destination groups. " : "") +
@@ -570,10 +572,10 @@ function showNodeSteps(path, nodeId) {
   }
   var shown = steps.slice(0, 100);
   document.getElementById("stepDetail").innerHTML =
-    "<b>Node: " + esc(nodeId) + "</b> — " + steps.length + " step(s) in this incident" +
-    (steps.length > 100 ? " (showing the first 100 — the rest repeat the same techniques)" : "") + ". Click a step to inspect it.<br>" +
+    "<b>Node: " + esc(nodeId) + "</b> - " + steps.length + " step(s) in this incident" +
+    (steps.length > 100 ? " (showing the first 100 - the rest repeat the same techniques)" : "") + ". Click a step to inspect it.<br>" +
     shown.map(function(x) {
-      return "<button class='btn ghost step-link' data-i='" + x.i + "'>" + (x.i + 1) + ". " + esc(x.s.kill_chain_stage) + " — " +
+      return "<button class='btn ghost step-link' data-i='" + x.i + "'>" + (x.i + 1) + ". " + esc(x.s.kill_chain_stage) + " - " +
         esc(x.s.technique_id) + " " + esc(x.s.technique_name) + " (" + esc(x.s.time) + ")</button>";
     }).join(" ");
   document.querySelectorAll(".step-link").forEach(function(el) {
@@ -589,16 +591,16 @@ function showStep(path, i) {
     el.setAttribute("aria-pressed", parseInt(el.getAttribute("data-i"), 10) === i ? "true" : "false");
   });
   // Never show a blank User/Source, and never repeat the action as
-  // the detail ("Phishing Attempts — Phishing Attempts /").
+  // the detail ("Phishing Attempts - Phishing Attempts /").
   var what = (step.action || "").trim();
   var det = (step.detail || "").trim();
   if (det && det !== what) {
     if (what && det.indexOf(what) === 0) det = det.slice(what.length).replace(/^[\s\/\-:]+/, "");
-    what = what ? what + (det ? " — " + det : "") : det;
+    what = what ? what + (det ? " - " + det : "") : det;
   }
   document.getElementById("stepDetail").innerHTML =
-    "<b>Step " + (i + 1) + " — " + esc(step.kill_chain_stage) + "</b><br>" +
-    esc(step.technique_id) + " — " + esc(step.technique_name) + " (" + step.confidence + "% confidence, " + esc(step.severity) + ")<br>" +
+    "<b>Step " + (i + 1) + " - " + esc(step.kill_chain_stage) + "</b><br>" +
+    esc(step.technique_id) + " - " + esc(step.technique_name) + " (" + step.confidence + "% confidence, " + esc(step.severity) + ")<br>" +
     esc(what || "No action text in the log") + "<br><small>Time: " + esc(step.time) + " &middot; Host: " + esc(step.host || "Unknown") +
     " &middot; User: " + esc(step.user || "Unknown") + " &middot; Source: " + esc(step.source || "Unknown") + "<br>Why this flagged: " + esc(step.reason) + "</small>";
   document.getElementById("stepDetail").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -607,8 +609,8 @@ function showStep(path, i) {
 async function showReport() {
   var langSel = document.getElementById("reportLang");
   var lang = langSel ? langSel.value : "en";
-  var pdfBtn2 = document.getElementById("pdfBtn");
-  if (pdfBtn2 && langSel) pdfBtn2.textContent = "Generate Threat Report (PDF) – " + langSel.options[langSel.selectedIndex].text;
+  var pdfLabel = document.getElementById("pdfLabel");
+  if (pdfLabel && langSel) pdfLabel.textContent = "Generate Threat Report (PDF) - " + langSel.options[langSel.selectedIndex].text;
   var box = document.getElementById("report");
   var warn = document.getElementById("reportWarning");
   if (!state.selected) return;
@@ -623,12 +625,12 @@ async function showReport() {
     box.textContent = tr.text || state.report;
     if (warn) {
       if (tr.warning) { warn.hidden = false; warn.textContent = tr.warning; }
-      else if (tr.source === "sarvam") { warn.hidden = false; warn.textContent = "Report — by Sarvam AI (" + lang + ")."; }
+      else if (tr.source === "sarvam") { warn.hidden = false; warn.textContent = "Report - by Sarvam AI (" + lang + ")."; }
       else warn.hidden = true;
     }
   } catch (e) {
     box.textContent = state.report;
-    if (warn) { warn.hidden = false; warn.textContent = "Translation could not be loaded — showing the English report."; }
+    if (warn) { warn.hidden = false; warn.textContent = "Translation could not be loaded - showing the English report."; }
   }
 }
 var reportLangSel = document.getElementById("reportLang");
@@ -647,7 +649,7 @@ if (pdfBtn) pdfBtn.addEventListener("click", function() {
   if (!w) { alert("Allow pop-ups for this page, then try Generate PDF again."); return; }
   w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>ASK Incident Report</title>" +
     "<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.6}h1{font-size:22px}</style></head><body>" +
-    "<h1>ASK — Incident #" + state.selected.id + " report (" + esc(lang) + ")</h1>" +
+    "<h1>ASK - Incident #" + state.selected.id + " report (" + esc(lang) + ")</h1>" +
     "<p>" + esc(state.selected.title || "") + "</p><pre style='white-space:pre-wrap'>" + esc(txt) + "</pre>" +
     "<p>Generated from the ASK dashboard. Choose Save as PDF in the print dialog.</p>" +
     "<script>window.onload = function(){ window.print(); };<" + "/script></body></html>");
@@ -671,7 +673,7 @@ function showBackendStatus(p, file) {
   // memory, on every progress poll. Elapsed was tracked by the
   // backend all along but never shown; CPU/RAM were never shown at
   // all (only a CLI peak-RSS print at the end). RAM is system RAM
-  // (the Task Manager number); ASK is the main server process only —
+  // (the Task Manager number); ASK is the main server process only -
   // parallel workers are separate processes, so it is a lower bound.
   var sys = "";
   if (p.elapsed_text) sys += " · Elapsed " + p.elapsed_text;
@@ -705,7 +707,7 @@ function showBackendStatus(p, file) {
     el.textContent = p.stage_text + sys + ".";
   }
   if (file && file.size > 2 * 1024 * 1024 * 1024) {
-    el.textContent += " This is a very large file — keep this tab open, it will take a while.";
+    el.textContent += " This is a very large file - keep this tab open, it will take a while.";
   }
   // Dynamic live slab: the place itself is ALWAYS visible during a
   // run (uploading, reading, linking, storing, and after done), so
@@ -719,9 +721,9 @@ function showBackendStatus(p, file) {
       // ONE FLOWING PARAGRAPH (2026-11-01, user demand, corrected:
       // heading WITH the rule number, then the MEANING of the attack
       // (from the MITRE index, not the old 'the attacker got in'
-      // stage rhetoric), then how to prevent it — all in one flow,
+      // stage rhetoric), then how to prevent it - all in one flow,
       // no full stops or labels between the parts. Example:
-      // 'Phishing (T1566.001) — adversaries may send spearphishing
+      // 'Phishing (T1566.001) - adversaries may send spearphishing
       // emails with a malicious attachment in an attempt to gain
       // access to victim systems, block the sender domain, quarantine
       // the attachment, and reset the password of anyone who opened
@@ -736,11 +738,11 @@ function showBackendStatus(p, file) {
           }).join(", ");
         };
         var meaning = t.meaning || t.technique_name || "";
-        return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(heading) + "</b> — " +
+        return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(heading) + "</b> - " +
           flow(meaning) + ", " + flow(t.help) + ".</div>";
       }).join("");
     } else if (p.stage === "uploading") {
-      list.innerHTML = "<p class='hint'>Still receiving your file — no lines have been checked yet, so no finds to show. As soon as reading starts, the attacks found so far will appear here, one card per attack.</p>";
+      list.innerHTML = "<p class='hint'>Still receiving your file - no lines have been checked yet, so no finds to show. As soon as reading starts, the attacks found so far will appear here, one card per attack.</p>";
     } else if (p.stage === "reading") {
       list.innerHTML = "<p class='hint'>Reading… no attacks found yet in the lines checked so far. The first find will appear here as soon as it is detected.</p>";
     } else {
@@ -768,7 +770,7 @@ function handleFile(file) {
       if (pollFails >= 3) {
         var el2 = document.getElementById("backendStatus");
         el2.hidden = false;
-        el2.textContent = "Server not responding — the server may have stopped or crashed. Check the server window (run.bat / run.sh) and restart it if needed, then upload again. Your file was not lost from your computer, only this run did not finish.";
+        el2.textContent = "Server not responding - the server may have stopped or crashed. Check the server window (run.bat / run.sh) and restart it if needed, then upload again. Your file was not lost from your computer, only this run did not finish.";
       }
     });
   }, 1000);
@@ -778,7 +780,7 @@ function handleFile(file) {
   xhr.upload.onprogress = function(e) {
     if (e.lengthComputable) {
       document.getElementById("bar").style.width = Math.round(100 * e.loaded / e.total) + "%";
-      showBackendStatus({ stage: "uploading", stage_text: "Step 1 of 4 — Receiving",
+      showBackendStatus({ stage: "uploading", stage_text: "Step 1 of 4 - Receiving",
         bytes_received: e.loaded, bytes_total: e.total }, file);
     }
   };
@@ -791,19 +793,19 @@ function handleFile(file) {
       document.getElementById("fileinfo").textContent = "Error: " + data.error;
       return;
     }
-    document.getElementById("fileinfo").textContent = file.name + " — " + data.events + " lines, " + data.detections +
+    document.getElementById("fileinfo").textContent = file.name + " - " + data.events + " lines, " + data.detections +
       " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
-    // Final line keeps the total time and peak memory — the old
-    // 'Done — …' text that overwrote the poll's done line (and with
+    // Final line keeps the total time and peak memory - the old
+    // 'Done - …' text that overwrote the poll's done line (and with
     // it the elapsed/CPU/RAM line) is removed, not kept.
-    document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s — " + data.events + " lines, " + data.detections +
+    document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s - " + data.events + " lines, " + data.detections +
       " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
     await loadIncidents();
     if (state.incidents.length) selectIncident(state.incidents[0].id);
   };
   xhr.onerror = function() {
     clearInterval(poll);
-    document.getElementById("fileinfo").textContent = "Upload failed — the server could not be reached.";
+    document.getElementById("fileinfo").textContent = "Upload failed - the server could not be reached.";
   };
   xhr.send(file);
 }
@@ -829,7 +831,7 @@ function runServerJob(endpoint, infoText) {
     if (state.incidents.length) selectIncident(state.incidents[0].id);
   }).catch(function() {
     clearInterval(poll);
-    document.getElementById("fileinfo").textContent = "Failed — the server could not be reached.";
+    document.getElementById("fileinfo").textContent = "Failed - the server could not be reached.";
   });
 }
 var sampleBtn = document.getElementById("sampleBtn");
@@ -856,7 +858,7 @@ if (demoBtn) {
         if (pollFails >= 3) {
           var el2 = document.getElementById("backendStatus");
           el2.hidden = false;
-          el2.textContent = "Server not responding — check the server window (run.bat / run.sh) and restart it if needed, then try Demo again.";
+          el2.textContent = "Server not responding - check the server window (run.bat / run.sh) and restart it if needed, then try Demo again.";
         }
       });
     }, 1000);
@@ -868,16 +870,16 @@ if (demoBtn) {
       if (data.error) {
         document.getElementById("fileinfo").textContent = "Demo error: " + data.error;
       } else {
-        document.getElementById("fileinfo").textContent = "Demo (synthetic) — " + data.events + " lines, " + data.detections +
+        document.getElementById("fileinfo").textContent = "Demo (synthetic) - " + data.events + " lines, " + data.detections +
           " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
-        document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s — " + data.events + " lines, " + data.detections +
+        document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s - " + data.events + " lines, " + data.detections +
           " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
         await loadIncidents();
         if (state.incidents.length) selectIncident(state.incidents[0].id);
       }
     } catch (e) {
       clearInterval(poll);
-      document.getElementById("fileinfo").textContent = "Demo failed — the server could not be reached.";
+      document.getElementById("fileinfo").textContent = "Demo failed - the server could not be reached.";
     }
     demoBtn.disabled = false;
   });
@@ -899,7 +901,7 @@ if (incidentSearch) {
 }
 
 // Mode toggle: Kill Chain (full graph) vs Quantum Walk (frontier
-// subgraph only — see renderGraph). No invented probabilities.
+// subgraph only - see renderGraph). No invented probabilities.
 document.querySelectorAll(".mode-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
     document.querySelectorAll(".mode-btn").forEach(function(b) { b.classList.remove("active"); });
@@ -908,8 +910,8 @@ document.querySelectorAll(".mode-btn").forEach(function(btn) {
     var banner = document.getElementById("modeBanner");
     var plain = document.getElementById("modePlain");
     if (state.graphMode === "quantum") {
-      if (banner) banner.textContent = "QUANTUM WALK: Classical look-ahead from the observed graph — frontier hosts, not a Qiskit simulation";
-      if (plain) plain.textContent = "Quantum Walk graph, in plain words: the same computers, but now only the frontier is shown — hosts already contacted that the attacker could move to next, with the hosts they were reached from. It answers one question: where will the attacker go next, from what we actually observed?";
+      if (banner) banner.textContent = "QUANTUM WALK: Classical look-ahead from the observed graph - frontier hosts, not a Qiskit simulation";
+      if (plain) plain.textContent = "Quantum Walk graph, in plain words: the same computers, but now only the frontier is shown - hosts already contacted that the attacker could move to next, with the hosts they were reached from. It answers one question: where will the attacker go next, from what we actually observed?";
     } else {
       if (banner) banner.textContent = "KILL CHAIN ANALYSIS: Tracking MITRE ATT&CK progression & lateral traversal";
       if (plain) plain.textContent = "Kill Chain graph, in plain words: each box is a computer (IP). An arrow means traffic went from one computer to another. Amber arrows are attack steps, in order: first access, then running code, then stealing passwords, then moving sideways, then reaching the target. Follow the amber arrows to read the attack story.";
@@ -928,7 +930,7 @@ var zReset = document.getElementById("zoomReset");
 if (zReset) zReset.addEventListener("click", function() { if (window.setGraphFilter) window.setGraphFilter("zoom", 1); });
 
 // Pan button + drag-to-pan on the graph box (reference header:
-// "< Pan >" — dragging the canvas background scrolls it).
+// "< Pan >" - dragging the canvas background scrolls it).
 var panBtn = document.getElementById("panBtn");
 var graphBox = document.getElementById("graphMap");
 var panState = null;
@@ -937,7 +939,7 @@ if (panBtn) {
     state.panMode = !state.panMode;
     panBtn.classList.toggle("active", !!state.panMode);
     if (graphBox) graphBox.classList.toggle("panning", !!state.panMode);
-    panBtn.textContent = state.panMode ? "Panning" : "Pan";
+    panBtn.textContent = state.panMode ? "Panning" : "< Pan >";
   });
 }
 if (graphBox) {
@@ -980,7 +982,7 @@ if (severBtn) {
 var corridorBtn = document.getElementById("corridorBtn");
 if (corridorBtn) {
   corridorBtn.addEventListener("click", function() {
-    corridorBtn.textContent = "Attack Path Severed & Quarantined";
+    var cl2 = document.getElementById("corridorLabel"); if (cl2) cl2.textContent = "Attack Path Severed & Quarantined";
     corridorBtn.disabled = true;
     var note = document.getElementById("corridorNote");
     if (note) note.textContent = "Incident marked contained in this dashboard only. No real host was isolated and no firewall rule was changed.";

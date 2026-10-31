@@ -1,5 +1,5 @@
 #!/bin/sh
-# ASK — one-command run for anyone, on any system with Python.
+# ASK - one-command run for anyone, on any system with Python.
 # No computer knowledge needed:
 #   ./run.sh            -> starts the dashboard, prints the link to open
 #   ./run.sh --log x.log -> processes x.log first, then starts the dashboard
@@ -8,7 +8,7 @@
 set -e
 cd "$(dirname "$0")"
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Sorry — Python 3 is not installed on this computer."
+  echo "Sorry - Python 3 is not installed on this computer."
   echo "Install Python 3 from python.org, then run ./run.sh again."
   exit 1
 fi

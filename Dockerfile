@@ -1,4 +1,4 @@
-# Kill Chain — proper project (frontend + backend, no demo data)
+# Kill Chain - proper project (frontend + backend, no demo data)
 FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .

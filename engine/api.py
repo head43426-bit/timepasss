@@ -88,7 +88,7 @@ def _incident_with_extras(con, incident_id):
     # observed-graph score then, and say which basis it is, so the
     # page never again shows a meaningless 0/100 for a 184-node
     # incident. Detections for the score come from the timeline
-    # (sampled for huge incidents — the score is an estimate then,
+    # (sampled for huge incidents - the score is an estimate then,
     # and the breakdown says so in the frontend).
     if topology.get("host_subnet"):
         inc["blast_radius"] = graph_mod.blast_radius_score(inc["hosts"], topology)

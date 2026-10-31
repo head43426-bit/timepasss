@@ -31,7 +31,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
                  else "with no user account recorded in the logs")
     # Fall back to the timeline's first/last non-empty time when the
     # stored start/end is blank (old DBs, or a last detection with no
-    # time) — never print "ended on ." again.
+    # time) - never print "ended on ." again.
     _times = [d.get("time", "") for d in timeline if d.get("time", "")]
     _start = incident.get("start_time") or (_times[0] if _times else "an unknown time")
     _end = incident.get("end_time") or (_times[-1] if _times else "an unknown time")
@@ -42,16 +42,16 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
     ]
     if incident.get("timeline_sampled") and incident.get("timeline_summary"):
         # Large incident: counts come from DuckDB's GROUP BY, not from
-        # the 400-row sample — the sample's counts would be wrong.
+        # the 400-row sample - the sample's counts would be wrong.
         summary = "; ".join(
             f"{s['technique_name']} ({s['kill_chain_stage']}, {s['technique_id']})"
-            f" — {s['count']:,} times, first {s['first']}, last {s['last']}"
+            f" - {s['count']:,} times, first {s['first']}, last {s['last']}"
             for s in incident["timeline_summary"])
         lines.append(
             f"What the attacker did, in order (distinct techniques, "
             f"first-seen order): {summary}.")
         lines.append(
-            f"The remaining steps repeat these same techniques — "
+            f"The remaining steps repeat these same techniques - "
             f"{incident.get('detection_count', 0):,} steps in total are not listed one by one, "
             f"because that list is unreadable and adds no new information.")
     elif timeline:
@@ -81,7 +81,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
                         groups[key]["first"] = d.get("time", "")
                     groups[key]["last"] = d.get("time", "")
             summary = "; ".join(
-                f"{name} ({stage}, {tid}) — {groups[k]['count']:,} times, "
+                f"{name} ({stage}, {tid}) - {groups[k]['count']:,} times, "
                 f"first {groups[k]['first']}, last {groups[k]['last']}"
                 for (stage, tid, name) in order
                 for k in [(stage, tid, name)])
@@ -89,7 +89,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
                 f"What the attacker did, in order (distinct techniques, "
                 f"first-seen order): {summary}.")
             lines.append(
-                f"The remaining steps repeat these same techniques — "
+                f"The remaining steps repeat these same techniques - "
                 f"{len(timeline):,} steps in total are not listed one by one, "
                 f"because that list is unreadable and adds no new information.")
     else:
@@ -102,7 +102,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
         nxt = "; ".join(f"{n['host']} ({n['reason']})" for n in next_list)
         _total = incident.get("next_frontier_total", len(next_list))
         _extra = f" (and {_total - len(next_list)} more like this)" if _total > len(next_list) else ""
-        lines.append(f"What the attacker could reach next — hosts already contacted, not yet used as a stepping stone, from the {incident.get('next_basis', 'observed graph')}: {nxt}{_extra}. These are hosts to watch for outbound movement, not guessed new targets.")
+        lines.append(f"What the attacker could reach next - hosts already contacted, not yet used as a stepping stone, from the {incident.get('next_basis', 'observed graph')}: {nxt}{_extra}. These are hosts to watch for outbound movement, not guessed new targets.")
     else:
         lines.append(
             "No next host to watch: every destination in this incident was "
@@ -129,7 +129,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
     if _prot:
         _p = "; ".join(f"{p['technique_id']}: {p['action']}" for p in _prot)
         lines.append(
-            f"Protect — what to do now, per technique found (ASK itself "
+            f"Protect - what to do now, per technique found (ASK itself "
             f"cannot block an attack; it has no agent on your hosts, so "
             f"these are the actions for you to take): {_p}.")
     lines.append(

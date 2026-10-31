@@ -1,5 +1,5 @@
 # New detection rule, added by editing a Sigma-style config file only
-# (B-4) — no engine code was changed to add it. It fires on encoded /
+# (B-4) - no engine code was changed to add it. It fires on encoded /
 # obfuscated PowerShell, a classic Execution-stage evasion: an attacker
 # hides the real command in Base64 so a plain-text log search misses it.
 # Test line: powershell -enc SQBFAFgAAB... on any host.

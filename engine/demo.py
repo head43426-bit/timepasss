@@ -1,6 +1,6 @@
 """Synthetic demo log generator (~100 MB, on demand).
 
-Built from the synthetic example already in the repo —
+Built from the synthetic example already in the repo -
 sample_attack.log / generate_logs.py: the same 11-step attack
 chain (port scan -> phishing -> macro -> privilege escalation ->
 credential dump -> scheduled task -> SMB lateral -> C2 -> staging

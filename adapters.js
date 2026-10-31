@@ -1,12 +1,12 @@
-// Pluggable log-source adapters — FULL version.
+// Pluggable log-source adapters - FULL version.
 // No adapter makes a live network call in this build. No real key is used.
 // Future server-side enrichment would read keys from .env (see .env.example);
 // in this browser build enrichment always falls back to clearly-labelled mock data.
 
 const ADAPTERS = [
   { id: "demo", name: "Built-in demo scenarios", kind: "demo" },
-  { id: "file", name: "File upload — JSON / CSV", kind: "file" },
-  { id: "paste", name: "Paste logs — JSON or pipe-separated", kind: "paste" },
+  { id: "file", name: "File upload - JSON / CSV", kind: "file" },
+  { id: "paste", name: "Paste logs - JSON or pipe-separated", kind: "paste" },
   { id: "mock-siem", name: "Mock SIEM adapter (simulated, no live connection)", kind: "mock" },
 ];
 
@@ -29,7 +29,7 @@ function normaliseEvent(raw, i) {
     action: String(raw.action || raw.event || "Unknown event"),
     detail: String(raw.detail || raw.description || "No detail supplied."),
     stage: String(raw.stage || "Execution"),
-    mitre: String(raw.mitre || raw.technique || "T1000 — Unmapped (demo)"),
+    mitre: String(raw.mitre || raw.technique || "T1000 - Unmapped (demo)"),
     sev: ["critical", "high", "medium", "low"].includes(sev) ? sev : "medium",
     _adapter: raw._adapter || "adapter",
     _index: i,
@@ -81,7 +81,7 @@ function parsePastedLogs(text) {
   // Pipe-separated lines: time | host | user | src | action | detail | stage | mitre | sev
   return trimmed.split(/\n+/).filter(l => l.trim()).map((line, i) => {
     const p = line.split("|").map(s => s.trim());
-    if (p.length < 5 || !p[4]) throw new Error(`Line ${i + 1}: pipe-separated logs need at least time | host | user | src | action — got ${p.length} field(s). Check that line and try again; nothing was loaded.`);
+    if (p.length < 5 || !p[4]) throw new Error(`Line ${i + 1}: pipe-separated logs need at least time | host | user | src | action - got ${p.length} field(s). Check that line and try again; nothing was loaded.`);
     return normaliseEvent({
       t: p[0], host: p[1], user: p[2], src: p[3], action: p[4],
       detail: p[5], stage: p[6], mitre: p[7], sev: p[8], _adapter: "paste",
@@ -93,18 +93,18 @@ function parsePastedLogs(text) {
 // This is NOT a live SIEM connection and must never be presented as one.
 function fetchMockSiemIncident() {
   return new Promise(resolve => setTimeout(() => resolve([
-    { t: "11:02", host: "WS-102", user: "demo.analyst", src: "mock-siem", action: "Suspicious PowerShell download", detail: "Synthetic mock-SIEM alert: encoded PowerShell fetched a payload from a demo domain. No real host involved.", stage: "Execution", mitre: "T1059.001 — PowerShell", sev: "high", _adapter: "mock-siem" },
-    { t: "11:09", host: "WS-102", user: "demo.analyst", src: "mock-siem", action: "Credential access via browser store", detail: "Synthetic mock-SIEM alert: browser credential store read by the same session.", stage: "Privilege Escalation", mitre: "T1555.003 — Credentials from Password Stores", sev: "critical", _adapter: "mock-siem" },
-    { t: "11:21", host: "SRV-APP-07", user: "svc-demo", src: "mock-siem", action: "Lateral movement via WinRM", detail: "Synthetic mock-SIEM alert: WinRM session from WS-102 to an application server using a demo service account.", stage: "Lateral Movement", mitre: "T1021.006 — Windows Remote Management", sev: "critical", _adapter: "mock-siem" },
-    { t: "11:38", host: "SRV-APP-07", user: "svc-demo", src: "mock-siem", action: "Archive staged for upload", detail: "Synthetic mock-SIEM alert: staging folder created with compressed demo data.", stage: "Collection", mitre: "T1560.001 — Archive Collected Data", sev: "high", _adapter: "mock-siem" },
+    { t: "11:02", host: "WS-102", user: "demo.analyst", src: "mock-siem", action: "Suspicious PowerShell download", detail: "Synthetic mock-SIEM alert: encoded PowerShell fetched a payload from a demo domain. No real host involved.", stage: "Execution", mitre: "T1059.001 - PowerShell", sev: "high", _adapter: "mock-siem" },
+    { t: "11:09", host: "WS-102", user: "demo.analyst", src: "mock-siem", action: "Credential access via browser store", detail: "Synthetic mock-SIEM alert: browser credential store read by the same session.", stage: "Privilege Escalation", mitre: "T1555.003 - Credentials from Password Stores", sev: "critical", _adapter: "mock-siem" },
+    { t: "11:21", host: "SRV-APP-07", user: "svc-demo", src: "mock-siem", action: "Lateral movement via WinRM", detail: "Synthetic mock-SIEM alert: WinRM session from WS-102 to an application server using a demo service account.", stage: "Lateral Movement", mitre: "T1021.006 - Windows Remote Management", sev: "critical", _adapter: "mock-siem" },
+    { t: "11:38", host: "SRV-APP-07", user: "svc-demo", src: "mock-siem", action: "Archive staged for upload", detail: "Synthetic mock-SIEM alert: staging folder created with compressed demo data.", stage: "Collection", mitre: "T1560.001 - Archive Collected Data", sev: "high", _adapter: "mock-siem" },
   ].map((e, i) => normaliseEvent(e, i))), 500));
 }
 
 // Mock enrichment only. If a future build sets a real key server-side, that
-// build should replace this function — never call a live API from this file.
+// build should replace this function - never call a live API from this file.
 function mockEnrich(event) {
   return {
-    mode: ENRICHMENT_CONFIG.keyConfigured ? "key-configured (placeholder — no live call in this build)" : "mock fallback — no key configured",
+    mode: ENRICHMENT_CONFIG.keyConfigured ? "key-configured (placeholder - no live call in this build)" : "mock fallback - no key configured",
     techniqueNote: "Technique label is illustrative. In a key-configured build, enrich this ID from the maintained MITRE dataset.",
     hostNote: "Host is synthetic. Do not treat this as a real asset or indicator.",
     eventAction: event.action,

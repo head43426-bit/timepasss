@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kill Chain Dashboard — Upload a .log file</title>
+<title>Kill Chain Dashboard - Upload a .log file</title>
 <style>
   *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0e13;color:#f4efe6}
   header{padding:18px 20px;border-bottom:3px solid #e1251b;display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
@@ -39,10 +39,10 @@
 <main>
 <section>
   <h2>1. Upload your log</h2>
-  <p>Drop a <code>.log</code> or <code>.txt</code> file here, or pick one. It is read in chunks, in your browser only — nothing is sent, stored, or uploaded anywhere.</p>
+  <p>Drop a <code>.log</code> or <code>.txt</code> file here, or pick one. It is read in chunks, in your browser only - nothing is sent, stored, or uploaded anywhere.</p>
   <div class="drop" id="drop"><b>Drop your .log file here</b><br>or click to choose a file<br><input type="file" id="file" accept=".log,.txt"></div>
   <div id="progress"><div id="bar"></div></div>
-  <div id="fileinfo" class="warn">No file loaded yet. Use only synthetic or authorised demo logs — never real production logs or credentials.</div>
+  <div id="fileinfo" class="warn">No file loaded yet. Use only synthetic or authorised demo logs - never real production logs or credentials.</div>
   <h3>Formats it understands</h3>
   <ul>
     <li>JSON lines: <code>{"time":"...","host":"WS-01","user":"priya","action":"...","detail":"..."}</code></li>
@@ -50,7 +50,7 @@
     <li>Plain lines: the whole line is searched for attack words (host/user left blank if not in the line).</li>
   </ul>
   <h3>How it decides</h3>
-  <p>Keyword rules tag each suspicious line with a MITRE technique and kill-chain stage. 5+ failed logins for the same user on the same host within 60 minutes become one brute-force detection — a single failed login never flags. Flagged lines are linked into incidents when they share a host, user, or IP within 48 hours. Everything else is counted as benign and dropped.</p>
+  <p>Keyword rules tag each suspicious line with a MITRE technique and kill-chain stage. 5+ failed logins for the same user on the same host within 60 minutes become one brute-force detection - a single failed login never flags. Flagged lines are linked into incidents when they share a host, user, or IP within 48 hours. Everything else is counted as benign and dropped.</p>
 </section>
 
 <section class="dark">
@@ -62,37 +62,37 @@
   <h2>4. Report</h2>
   <p><button id="copyBtn" disabled>Copy English report</button> <button id="hindiBtn" class="ghost" disabled>Show Hindi version</button></p>
   <pre id="report">No incident selected yet.</pre>
-  <p class="warn" id="hindiNote" style="display:none">Hindi below is a fixed template in this single file — it is NOT a live Sarvam translation. For a real Sarvam Hindi report, run the Python engine with SARVAM_API_KEY set.</p>
+  <p class="warn" id="hindiNote" style="display:none">Hindi below is a fixed template in this single file - it is NOT a live Sarvam translation. For a real Sarvam Hindi report, run the Python engine with SARVAM_API_KEY set.</p>
 </section>
 </main>
 
 <script>
 "use strict";
 var RULES=[
- {keys:["large outbound transfer","exfiltrated","data exfiltrated","upload to an outside"],mitre:"T1048.003 — Exfiltration Over Unencrypted Protocol",stage:"Exfiltration",conf:90,why:"A large amount of data left to an outside host."},
- {keys:["bucket shared externally","shared externally"],mitre:"T1567.002 — Exfiltration to Cloud Storage",stage:"Exfiltration",conf:90,why:"Sharing was opened to the outside, creating a way out for the data."},
- {keys:["web shell command"],mitre:"T1059.004 — Unix Shell",stage:"Execution",conf:90,why:"Commands were run through a hidden web shell."},
- {keys:["web shell"],mitre:"T1505.003 — Web Shell",stage:"Persistence",conf:90,why:"A hidden web backdoor was left on the server."},
- {keys:["lsass","credential dump","mimikatz"],mitre:"T1003.001 — LSASS Memory",stage:"Credential Access",conf:95,why:"Something tried to read stored login credentials from memory."},
- {keys:["kerberoasting"],mitre:"T1558.003 — Kerberoasting",stage:"Credential Access",conf:90,why:"Service tickets were harvested to crack a high-privilege account."},
- {keys:["database credentials read","credentials in files"],mitre:"T1552.001 — Credentials In Files",stage:"Credential Access",conf:85,why:"A password file was read by an account that should not need it."},
- {keys:["phishing","spearphish","lookalike domain","fake invoice","malicious attachment"],mitre:"T1566.001 — Spearphishing Attachment",stage:"Initial Access",conf:85,why:"A trick email from a lookalike sender — the classic way in."},
- {keys:["macro"],mitre:"T1204.002 — Malicious File",stage:"Execution",conf:90,why:"A document macro ran code on the computer."},
- {keys:["scheduled task"],mitre:"T1053.005 — Scheduled Task",stage:"Persistence",conf:85,why:"A task was planted to run the attack again at logon."},
- {keys:["new admin account"],mitre:"T1136 — Create Account",stage:"Persistence",conf:85,why:"A new admin account was created."},
- {keys:["new api key created","additional cloud credentials"],mitre:"T1098.001 — Additional Cloud Credentials",stage:"Persistence",conf:85,why:"A new cloud key was created — a second way back in."},
- {keys:["c2 beacon","beaconing"],mitre:"T1071.001 — Web Protocols",stage:"Command and Control",conf:80,why:"Regular hidden check-ins to an outside controller."},
- {keys:["lateral movement via smb","lateral movement","smb lateral"],mitre:"T1021.002 — SMB/Windows Admin Shares",stage:"Lateral Movement",conf:90,why:"The attacker moved to another computer over a shared drive."},
- {keys:["remote session to internal","remote desktop"],mitre:"T1021.001 — Remote Desktop Protocol",stage:"Lateral Movement",conf:80,why:"A remote login jumped from one internal computer to another."},
- {keys:["files staged","archive","compressed archive","staging files","files collected for transfer"],mitre:"T1560.001 — Archive Collected Data",stage:"Collection",conf:80,why:"Files were gathered and packed up ready to take."},
- {keys:["bulk download","bulk select"],mitre:"T1530 — Data from Cloud Storage",stage:"Collection",conf:90,why:"A huge amount of stored data was pulled down at once."},
- {keys:["logs cleared","event logs were cleared","log cleared"],mitre:"T1070.001 — Clear Logs",stage:"Defense Evasion",conf:85,why:"Logs were wiped — itself a sign someone hid their tracks."},
- {keys:["scanner probing","vulnerability scanning","probing plugin","port scan"],mitre:"T1595.002 — Vulnerability Scanning",stage:"Reconnaissance",conf:70,why:"Repeated probes looking for a weak spot."},
- {keys:["exploit public-facing","malicious file upload"],mitre:"T1190 — Exploit Public-Facing Application",stage:"Initial Access",conf:90,why:"A public website flaw was used to get in."},
- {keys:["vpn login from unusual","unusual location"],mitre:"T1078 — Valid Accounts",stage:"Initial Access",conf:75,why:"A real login, but from a place and device outside the normal pattern."},
- {keys:["enumerated cloud buckets","cloud infrastructure discovery","script enumerated"],mitre:"T1580 — Cloud Infrastructure Discovery",stage:"Execution",conf:70,why:"A script mapped out what cloud storage exists before taking anything."},
- {keys:["privilege escalation","escalated privileges"],mitre:"T1068 — Exploitation for Privilege Escalation",stage:"Privilege Escalation",conf:85,why:"Privileges were raised on a host."},
- {keys:["brute force","password spraying"],mitre:"T1110.001 — Password Guessing",stage:"Initial Access",conf:85,why:"Many password guesses in a short window — not one mistyped login."}
+ {keys:["large outbound transfer","exfiltrated","data exfiltrated","upload to an outside"],mitre:"T1048.003 - Exfiltration Over Unencrypted Protocol",stage:"Exfiltration",conf:90,why:"A large amount of data left to an outside host."},
+ {keys:["bucket shared externally","shared externally"],mitre:"T1567.002 - Exfiltration to Cloud Storage",stage:"Exfiltration",conf:90,why:"Sharing was opened to the outside, creating a way out for the data."},
+ {keys:["web shell command"],mitre:"T1059.004 - Unix Shell",stage:"Execution",conf:90,why:"Commands were run through a hidden web shell."},
+ {keys:["web shell"],mitre:"T1505.003 - Web Shell",stage:"Persistence",conf:90,why:"A hidden web backdoor was left on the server."},
+ {keys:["lsass","credential dump","mimikatz"],mitre:"T1003.001 - LSASS Memory",stage:"Credential Access",conf:95,why:"Something tried to read stored login credentials from memory."},
+ {keys:["kerberoasting"],mitre:"T1558.003 - Kerberoasting",stage:"Credential Access",conf:90,why:"Service tickets were harvested to crack a high-privilege account."},
+ {keys:["database credentials read","credentials in files"],mitre:"T1552.001 - Credentials In Files",stage:"Credential Access",conf:85,why:"A password file was read by an account that should not need it."},
+ {keys:["phishing","spearphish","lookalike domain","fake invoice","malicious attachment"],mitre:"T1566.001 - Spearphishing Attachment",stage:"Initial Access",conf:85,why:"A trick email from a lookalike sender - the classic way in."},
+ {keys:["macro"],mitre:"T1204.002 - Malicious File",stage:"Execution",conf:90,why:"A document macro ran code on the computer."},
+ {keys:["scheduled task"],mitre:"T1053.005 - Scheduled Task",stage:"Persistence",conf:85,why:"A task was planted to run the attack again at logon."},
+ {keys:["new admin account"],mitre:"T1136 - Create Account",stage:"Persistence",conf:85,why:"A new admin account was created."},
+ {keys:["new api key created","additional cloud credentials"],mitre:"T1098.001 - Additional Cloud Credentials",stage:"Persistence",conf:85,why:"A new cloud key was created - a second way back in."},
+ {keys:["c2 beacon","beaconing"],mitre:"T1071.001 - Web Protocols",stage:"Command and Control",conf:80,why:"Regular hidden check-ins to an outside controller."},
+ {keys:["lateral movement via smb","lateral movement","smb lateral"],mitre:"T1021.002 - SMB/Windows Admin Shares",stage:"Lateral Movement",conf:90,why:"The attacker moved to another computer over a shared drive."},
+ {keys:["remote session to internal","remote desktop"],mitre:"T1021.001 - Remote Desktop Protocol",stage:"Lateral Movement",conf:80,why:"A remote login jumped from one internal computer to another."},
+ {keys:["files staged","archive","compressed archive","staging files","files collected for transfer"],mitre:"T1560.001 - Archive Collected Data",stage:"Collection",conf:80,why:"Files were gathered and packed up ready to take."},
+ {keys:["bulk download","bulk select"],mitre:"T1530 - Data from Cloud Storage",stage:"Collection",conf:90,why:"A huge amount of stored data was pulled down at once."},
+ {keys:["logs cleared","event logs were cleared","log cleared"],mitre:"T1070.001 - Clear Logs",stage:"Defense Evasion",conf:85,why:"Logs were wiped - itself a sign someone hid their tracks."},
+ {keys:["scanner probing","vulnerability scanning","probing plugin","port scan"],mitre:"T1595.002 - Vulnerability Scanning",stage:"Reconnaissance",conf:70,why:"Repeated probes looking for a weak spot."},
+ {keys:["exploit public-facing","malicious file upload"],mitre:"T1190 - Exploit Public-Facing Application",stage:"Initial Access",conf:90,why:"A public website flaw was used to get in."},
+ {keys:["vpn login from unusual","unusual location"],mitre:"T1078 - Valid Accounts",stage:"Initial Access",conf:75,why:"A real login, but from a place and device outside the normal pattern."},
+ {keys:["enumerated cloud buckets","cloud infrastructure discovery","script enumerated"],mitre:"T1580 - Cloud Infrastructure Discovery",stage:"Execution",conf:70,why:"A script mapped out what cloud storage exists before taking anything."},
+ {keys:["privilege escalation","escalated privileges"],mitre:"T1068 - Exploitation for Privilege Escalation",stage:"Privilege Escalation",conf:85,why:"Privileges were raised on a host."},
+ {keys:["brute force","password spraying"],mitre:"T1110.001 - Password Guessing",stage:"Initial Access",conf:85,why:"Many password guesses in a short window - not one mistyped login."}
 ];
 var SEV={critical:40,high:25,medium:10,low:3};
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -105,7 +105,7 @@ function parseLine(line){
 function detect(ev){
   var text=(ev.action+" "+ev.detail).toLowerCase();
   for(var i=0;i<RULES.length;i++){var r=RULES[i]; for(var j=0;j<r.keys.length;j++){ if(text.indexOf(r.keys[j])>-1) return {rule:r,matched:r.keys[j]}; }}
-  if(ev.mitre && ev.mitre!=="—"){var c=ev.sev==="critical"?90:ev.sev==="high"?80:ev.sev==="medium"?60:40; return {rule:{mitre:ev.mitre,stage:ev.stage||"Unknown",conf:c,why:"No keyword rule matched, but this event already carries a technique and a "+ev.sev+" severity, so it is kept as evidence — not invented, just carried over."},matched:""};}
+  if(ev.mitre && ev.mitre!=="-"){var c=ev.sev==="critical"?90:ev.sev==="high"?80:ev.sev==="medium"?60:40; return {rule:{mitre:ev.mitre,stage:ev.stage||"Unknown",conf:c,why:"No keyword rule matched, but this event already carries a technique and a "+ev.sev+" severity, so it is kept as evidence - not invented, just carried over."},matched:""};}
   return null;
 }
 var state={lines:0,flagged:[],benign:0,incidents:[],selected:null,allEvents:[]};
@@ -136,7 +136,7 @@ function renderStats(){
     "<div class=stat><b>"+state.benign+"</b><span>benign skipped</span></div>";
   document.getElementById("incidents").innerHTML = state.incidents.length ? state.incidents.map(function(inc){
     var hosts=[...new Set(inc.steps.map(function(s){return s.host;}).filter(Boolean))].join(" → ");
-    return "<div class=inc data-id="+inc.id+"><b>Incident "+inc.id+" — risk "+inc.risk+"/100</b> &middot; "+inc.steps.length+" steps &middot; "+inc.merged+" raw alerts merged<br><small>"+esc(hosts||"unknown host")+" &middot; "+esc(inc.steps[0].mitre)+" … "+esc(inc.steps[inc.steps.length-1].mitre)+"</small></div>";
+    return "<div class=inc data-id="+inc.id+"><b>Incident "+inc.id+" - risk "+inc.risk+"/100</b> &middot; "+inc.steps.length+" steps &middot; "+inc.merged+" raw alerts merged<br><small>"+esc(hosts||"unknown host")+" &middot; "+esc(inc.steps[0].mitre)+" … "+esc(inc.steps[inc.steps.length-1].mitre)+"</small></div>";
   }).join("") : "<p>No incidents found in this file. That may mean the log is clean, or its wording does not match the rules above.</p>";
   document.querySelectorAll(".inc").forEach(function(el){el.onclick=function(){selectIncident(parseInt(el.getAttribute("data-id"),10));};});
 }
@@ -147,19 +147,19 @@ function selectIncident(id){
   var users=[...new Set(inc.steps.map(function(s){return s.user;}).filter(Boolean))];
   var nextHosts=[];
   users.forEach(function(u){ state.allEvents.forEach(function(e){ if(e.user===u && e.host && hosts.indexOf(e.host)===-1 && nextHosts.indexOf(e.host)===-1) nextHosts.push(e.host); }); });
-  var belt=inc.steps.map(function(s,i){return "<div class=pkg data-i="+i+"><b>Package "+String(i+1).padStart(2,"0")+" — "+esc(s.stage)+"</b><br>"+esc(s.mitre)+"<br><small>"+esc(s.host||"unknown host")+" &middot; "+esc(s.user||"unknown user")+"</small></div>";}).join("");
-  var steps=inc.steps.map(function(s,i){return "<div class=step id=step-"+i+"><b>Step "+(i+1)+" — "+esc(s.stage)+"</b><br>"+esc(s.mitre)+" ("+s.conf+"% confidence)<br>"+esc(s.action)+" — "+esc(s.detail)+"<br><small>Host: "+esc(s.host||"—")+" &middot; User: "+esc(s.user||"—")+" &middot; "+esc(s.why)+"</small></div>";}).join("");
+  var belt=inc.steps.map(function(s,i){return "<div class=pkg data-i="+i+"><b>Package "+String(i+1).padStart(2,"0")+" - "+esc(s.stage)+"</b><br>"+esc(s.mitre)+"<br><small>"+esc(s.host||"unknown host")+" &middot; "+esc(s.user||"unknown user")+"</small></div>";}).join("");
+  var steps=inc.steps.map(function(s,i){return "<div class=step id=step-"+i+"><b>Step "+(i+1)+" - "+esc(s.stage)+"</b><br>"+esc(s.mitre)+" ("+s.conf+"% confidence)<br>"+esc(s.action)+" - "+esc(s.detail)+"<br><small>Host: "+esc(s.host||"-")+" &middot; User: "+esc(s.user||"-")+" &middot; "+esc(s.why)+"</small></div>";}).join("");
   document.getElementById("detail").innerHTML=
-    "<h3>Incident "+inc.id+" — risk "+inc.risk+"/100, "+inc.merged+" raw alerts merged</h3>"+
-    "<p><b>Hosts:</b> "+esc(hosts.join(", ")||"—")+"<br><b>Users:</b> "+esc(users.join(", ")||"—")+"</p>"+
-    "<h3>Conveyor — one package per step, in order</h3><div class=belt>"+belt+"</div>"+
-    "<h3>Timeline — in order</h3>"+steps+
+    "<h3>Incident "+inc.id+" - risk "+inc.risk+"/100, "+inc.merged+" raw alerts merged</h3>"+
+    "<p><b>Hosts:</b> "+esc(hosts.join(", ")||"-")+"<br><b>Users:</b> "+esc(users.join(", ")||"-")+"</p>"+
+    "<h3>Conveyor - one package per step, in order</h3><div class=belt>"+belt+"</div>"+
+    "<h3>Timeline - in order</h3>"+steps+
     "<h3>What the attacker could reach next</h3>"+
-    (nextHosts.length ? "<p>These hosts appear in this same log under an account used in this incident, so they are the honest next-reach list from your data alone:</p><ul>"+nextHosts.map(function(h){return "<li><b>"+esc(h)+"</b> — block it by disabling or rotating the compromised account on that host and checking it for the same steps.</li>";}).join("")+"</ul>"
+    (nextHosts.length ? "<p>These hosts appear in this same log under an account used in this incident, so they are the honest next-reach list from your data alone:</p><ul>"+nextHosts.map(function(h){return "<li><b>"+esc(h)+"</b> - block it by disabling or rotating the compromised account on that host and checking it for the same steps.</li>";}).join("")+"</ul>"
     : "<p>No next-reach guess is made. No other host in this log shares an account with this incident, so nothing is invented here.</p>");
   document.querySelectorAll(".pkg").forEach(function(el){el.onclick=function(){var i=parseInt(el.getAttribute("data-i"),10); document.querySelectorAll(".pkg").forEach(function(p){p.classList.remove("sel");}); el.classList.add("sel"); var t=document.getElementById("step-"+i); if(t) t.scrollIntoView({behavior:"smooth",block:"center"});};});
   var first=inc.steps[0], last=inc.steps[inc.steps.length-1];
-  var report="WHERE IT BEGAN\n"+(first?first.action+" — "+first.detail+" ("+first.host+", "+first.user+")":"Unknown.")+"\n\nWHAT THE ATTACKER DID, IN ORDER\n"+inc.steps.map(function(s,i){return (i+1)+". "+s.stage+" — "+s.mitre+": "+s.action+" on "+(s.host||"unknown host")+".";}).join("\n")+"\n\nWHICH SYSTEMS THEY CAN REACH NEXT\n"+(nextHosts.length?nextHosts.join(", "):"No host in this log shares an account with this incident, so no next target is claimed.")+"\n\nRisk: "+inc.risk+"/100. Raw alerts merged: "+inc.merged+".";
+  var report="WHERE IT BEGAN\n"+(first?first.action+" - "+first.detail+" ("+first.host+", "+first.user+")":"Unknown.")+"\n\nWHAT THE ATTACKER DID, IN ORDER\n"+inc.steps.map(function(s,i){return (i+1)+". "+s.stage+" - "+s.mitre+": "+s.action+" on "+(s.host||"unknown host")+".";}).join("\n")+"\n\nWHICH SYSTEMS THEY CAN REACH NEXT\n"+(nextHosts.length?nextHosts.join(", "):"No host in this log shares an account with this incident, so no next target is claimed.")+"\n\nRisk: "+inc.risk+"/100. Raw alerts merged: "+inc.merged+".";
   state.report=report;
   document.getElementById("report").textContent=report;
   document.getElementById("copyBtn").disabled=false; document.getElementById("hindiBtn").disabled=false;
@@ -200,7 +200,7 @@ function handleFile(file){
       var key=(ev.user||"")+"|"+(ev.host||""); fails[key]=fails[key]||{count:0,first:ev};
       fails[key].count++;
       if(fails[key].count===5){
-        state.flagged.push({idx:idx++,host:ev.host,user:ev.user,src:ev.src,action:"Brute force: 5 failed logins then activity",detail:"5 failed logins for "+(ev.user||"this account")+" on "+(ev.host||"this host")+" — an aggregate pattern, not one mistyped login.",stage:"Initial Access",mitre:"T1110.001 — Password Guessing",conf:85,sev:"high",why:"5+ failed logins for the same account on the same host within 60 minutes.",mergedCount:5});
+        state.flagged.push({idx:idx++,host:ev.host,user:ev.user,src:ev.src,action:"Brute force: 5 failed logins then activity",detail:"5 failed logins for "+(ev.user||"this account")+" on "+(ev.host||"this host")+" - an aggregate pattern, not one mistyped login.",stage:"Initial Access",mitre:"T1110.001 - Password Guessing",conf:85,sev:"high",why:"5+ failed logins for the same account on the same host within 60 minutes.",mergedCount:5});
       }
       return;
     }
@@ -211,7 +211,7 @@ function handleFile(file){
   function finish(){
     if(leftover.trim()) processLine(leftover);
     buildIncidents(); renderStats();
-    document.getElementById("fileinfo").textContent=file.name+" — "+state.lines.toLocaleString()+" lines, "+state.flagged.length+" detections, "+state.incidents.length+" incidents, "+state.benign.toLocaleString()+" benign lines skipped. Nothing was sent anywhere.";
+    document.getElementById("fileinfo").textContent=file.name+" - "+state.lines.toLocaleString()+" lines, "+state.flagged.length+" detections, "+state.incidents.length+" incidents, "+state.benign.toLocaleString()+" benign lines skipped. Nothing was sent anywhere.";
     if(state.incidents.length) selectIncident(state.incidents[0].id);
     else document.getElementById("report").textContent="No incidents found in this file.";
   }

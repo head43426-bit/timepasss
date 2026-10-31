@@ -113,7 +113,7 @@ def _normalise(raw: Dict) -> Dict:
         # Severity is normalised here (any casing / synonym -> Title
         # Case) and left "" when the line carries none, instead of
         # defaulting to Medium. The detector fills it in (intrinsic
-        # technique priority, else Low) — see engine/severity.py.
+        # technique priority, else Low) - see engine/severity.py.
         "severity": normalize_severity(pick("severity", "sev", "level")),
     }
 

@@ -1,4 +1,4 @@
-// Typed RPC client. Types come straight from `server/src/actions.ts` — no
+// Typed RPC client. Types come straight from `server/src/actions.ts` - no
 // codegen. `createActionClient` returns a proxy that POSTs `{action, args}`
 // to `./actions` and returns the typed response.
 //

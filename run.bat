@@ -1,5 +1,5 @@
 @echo off
-REM ASK — one-command run for Windows. Double-click this file.
+REM ASK - one-command run for Windows. Double-click this file.
 REM First run creates .venv and installs duckdb + networkx + pyyaml.
 REM Then it prints the link to open in your browser.
 cd /d "%~dp0"

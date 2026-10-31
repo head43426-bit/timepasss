@@ -1,8 +1,8 @@
-"""Slim MITRE ATT&CK index — lookup only, never detection.
+"""Slim MITRE ATT&CK index - lookup only, never detection.
 
 The full MITRE STIX bundle is 47 MB (26,689 objects) and would bloat
 the repo, slow the push, and cost RAM on every server start on an
-8 GB machine — so it is deliberately NOT bundled. Instead
+8 GB machine - so it is deliberately NOT bundled. Instead
 ``data/mitre_techniques.json`` (562 KB, 706 entries) holds only the
 attack-pattern objects from that bundle: id, name, tactics,
 description (truncated to 600 chars), MITRE URL, and whether it is a

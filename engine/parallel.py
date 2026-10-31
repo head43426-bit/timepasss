@@ -9,14 +9,14 @@ How it works, and how it stays correct:
      adjusted to a line boundary, so every line is processed exactly once.
   2. Each worker runs the *simple* rules on its chunk only, and returns
      only detections (benign lines are counted and dropped, never returned).
-     DuckDB is never touched by workers — only the main process writes.
+     DuckDB is never touched by workers - only the main process writes.
   3. Aggregate rules (e.g. brute force: 50 failed logins, then a success)
      are NOT evaluated per worker, because a sequence split across two
      chunks would be missed. Workers return the trigger/success events,
      the main process replays them in global line order through one
      Detector, so aggregates are exactly the same as single-core.
   4. The main process merges all detections, sorts by time, links them
-     into incidents, scores risk, and stores graph edges — exactly the
+     into incidents, scores risk, and stores graph edges - exactly the
      same code path as the single-core CLI. Parallelism only speeds up
      parse + detect, the slow part.
 
@@ -25,7 +25,7 @@ Usage:
     python main.py run --log mylogs.log --db out.duckdb --workers 0   # all cores
 
 On Windows/macOS this must run under ``if __name__ == "__main__"``
-(which main.py already does) — otherwise workers would re-spawn the
+(which main.py already does) - otherwise workers would re-spawn the
 parent process.
 """
 from __future__ import annotations
@@ -81,10 +81,10 @@ def _process_range(args) -> dict:
     them to the parent. Returning them was the parallel RAM wall: the
     parent collected every detection from every worker before linking.
     Now the parent streams the temp files in chunk order, inserts in
-    batches, and links with the streaming linker — memory stays flat
+    batches, and links with the streaming linker - memory stays flat
     whatever the file size. Chunk order is time order for a
     chronological log, which real logs are. Temp files live in the
-    DB directory (passed in args), NOT system /tmp — /tmp is a RAM
+    DB directory (passed in args), NOT system /tmp - /tmp is a RAM
     disk on many machines and a large run filled it completely."""
     import json as _json
     import tempfile
@@ -152,16 +152,16 @@ def _total_ram_gb() -> float:
 
 def cpu_friendly_workers(requested: int = 0) -> int:
     """How many workers to actually use. 70% of cores, never all of
-    them, so the machine stays usable while ASK runs — the user asked
+    them, so the machine stays usable while ASK runs - the user asked
     for speed without the system freezing. On an 8-core machine that
     is 5 workers; on a 4-core machine, 2; on a 1-core machine, 1.
     Pass an explicit workers count to override, but it is still capped
     at 70% unless the caller really insists (workers < 0 means uncapped).
-    MEMORY FIX (2026-11-01): also capped by RAM — on a 4 GB machine
+    MEMORY FIX (2026-11-01): also capped by RAM - on a 4 GB machine
     at most 2 workers. WORKERS FIX (2026-11-01, user demand): the
     upload path now explicitly asks for 8 workers, and an explicit
     request is honoured up to the machine's core count (not the 70%
-    cap — that cap only applies to the default, requested == 0).
+    cap - that cap only applies to the default, requested == 0).
     On an 8 GB machine the RAM cap for an explicit request is 8
     workers; the user accepts that 8 workers use more RAM/CPU and
     the system may lag while they run, in exchange for speed."""
@@ -195,7 +195,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     # entire first ~974k-line chunk. Now the file is split into 16x
     # as many chunks as workers (96 chunks for 6 workers, ~40k lines
     # each for firex), while the pool still has only `workers`
-    # processes — pool.map preserves input order, so chunk order,
+    # processes - pool.map preserves input order, so chunk order,
     # aggregate replay and counts are unchanged, but progress now
     # updates after every small chunk, and a slow chunk blocks
     # progress for far less long. max_workers must stay `workers`,
@@ -277,7 +277,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         nonlocal incident_count
         if not dets:
             return
-        # Linker hands back compact tuples (memory fix) — expand to
+        # Linker hands back compact tuples (memory fix) - expand to
         # the minimal dicts risk/graph need before anything else.
         dets = graph_mod.expand_compact(dets)
         incident_count += 1
@@ -306,7 +306,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     def _insert_and_feed(batch):
         """Insert one batch (ids assigned contiguously at insert time),
         then feed its detections in order, merging aggregate detections
-        whose time has arrived — each aggregate is inserted as its own
+        whose time has arrived - each aggregate is inserted as its own
         row first, so incident_detections never points at a missing id."""
         nonlocal next_id, detection_count, agg_idx
         if not batch:

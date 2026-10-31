@@ -817,7 +817,7 @@ function hindiTemplate(
 }
 
 // ---------------------------------------------------------------------------
-// Synthetic data (generated lines run through the same pipeline —
+// Synthetic data (generated lines run through the same pipeline -
 // never hand-written incident rows)
 // ---------------------------------------------------------------------------
 
@@ -1352,7 +1352,7 @@ export const Actions = {
       const { rules } = await loadRules(ctx);
       const lines = buildSyntheticLines();
       await db.insert(schema.datasets).values({
-        id: "synthetic", name: "Synthetic set — planted attacks", kind: "synthetic",
+        id: "synthetic", name: "Synthetic set - planted attacks", kind: "synthetic",
         status: "ready", totalLines: 0, parsedLines: 0, unparsedLines: 0,
         detectionCount: 0, carryover: "", aggState: "{}", rawText: lines.join("\n"),
       });
@@ -1377,7 +1377,7 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       const datasetId = `up-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
       await db.insert(schema.datasets).values({
-        id: datasetId, name: `Upload — ${args.fileName}`, kind: "upload",
+        id: datasetId, name: `Upload - ${args.fileName}`, kind: "upload",
         fileName: args.fileName, status: "ingesting",
         totalLines: 0, parsedLines: 0, unparsedLines: 0, detectionCount: 0,
         carryover: "", aggState: "{}", rawText: "",
@@ -1498,7 +1498,7 @@ export const Actions = {
       if (existing.length > 0) await clearDatasetResults(ctx, "stream-demo");
       await db.delete(schema.datasets).where(eq(schema.datasets.id, "stream-demo"));
       await db.insert(schema.datasets).values({
-        id: "stream-demo", name: "Stream demo — 5,009 lines, concealed attack", kind: "stream",
+        id: "stream-demo", name: "Stream demo - 5,009 lines, concealed attack", kind: "stream",
         status: "streaming", totalLines: 0, parsedLines: 0, unparsedLines: 0,
         detectionCount: 0, carryover: "", aggState: "{}", rawText: null,
       });
@@ -1518,7 +1518,7 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       const rows = await db.select().from(schema.datasets).where(eq(schema.datasets.id, args.datasetId)).limit(1);
       const ds = rows[0];
-      if (!ds) throw new Error("Stream demo dataset not found — start it first");
+      if (!ds) throw new Error("Stream demo dataset not found - start it first");
       const { rules } = await loadRules(ctx);
       const agg = parseAggState(ds.aggState);
       const lines = buildStreamBatch(args.batch);

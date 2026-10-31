@@ -63,7 +63,7 @@ def risk_score(detections: List[Dict]) -> float:
         + 2 per distinct technique beyond the first
         + scale bonus (+5 over 10 detections, +10 over 100,
         +15 over 1,000) + 5 each for exfiltration and for
-        credential-access/privilege-escalation — then clamped to
+        credential-access/privilege-escalation - then clamped to
         the tier ceiling, which is the only cap that matters.
     So a single Low phishing line scores 10 (Low), a single High SMB
     scores 70 (High), a 137-step Low phishing flood scores 10+0+0+15
@@ -94,7 +94,7 @@ def risk_score(detections: List[Dict]) -> float:
 def build_graph(detections: List[Dict]) -> nx.DiGraph:
     """PROPER MAP (2026-11-01, user demand): nodes are the REAL
     machines, never the firewall's own name. In Fortinet logs the
-    "host" field is the firewall (FGT60FTK00000000) for every line —
+    "host" field is the firewall (FGT60FTK00000000) for every line -
     using it as a node collapses the whole incident into one dot,
     which is exactly what the user saw. So:
       * source node = srcip if present, else the host field.
@@ -112,7 +112,7 @@ def build_graph(detections: List[Dict]) -> nx.DiGraph:
     drawn: user -> source, and source -> destination.
     Nodes only ever come from edges (NetworkX creates them on
     add_edge). If there are still no edges (a flood with no srcip,
-    no dstip, no domain — e.g. pure phishing text), fall back to
+    no dstip, no domain - e.g. pure phishing text), fall back to
     source -> technique, so there is still a graph to draw.
     Blank nodes are never created."""
     graph = nx.DiGraph()
@@ -213,7 +213,7 @@ def next_stages(reached_stages: List[str]) -> List[Dict]:
     """Stage look-ahead, no topology needed: from the deepest kill-chain
     stage already reached, the next stages an attacker normally tries,
     in order, with what to watch for. This is a prediction about
-    *stages*, never a guessed host — so it works for the firex
+    *stages*, never a guessed host - so it works for the firex
     single-host incident too, where no topology was supplied."""
     reached = {s for s in reached_stages if s}
     if not reached:
@@ -235,7 +235,7 @@ def next_stages(reached_stages: List[str]) -> List[Dict]:
 
 def blast_radius_score(compromised_hosts: List[str], topology: Dict) -> int:
     """Blast-radius optimiser, classical (QAOA-style combinatorial
-    optimisation, run greedily — a Qiskit statevector simulation
+    optimisation, run greedily - a Qiskit statevector simulation
     explodes at 2^n and would never run on a 4 GB machine, so it is
     deliberately NOT used here). Score = how much of the supplied
     topology is already compromised or one hop away, 0-100."""
@@ -258,7 +258,7 @@ def _compact(det: Dict):
     needs (hostname added for the IP/domain graph). The full dict
     carries long detail/reason/source/action strings (a Fortinet
     detail alone is ~200 bytes of k=v pairs), and the linker held one
-    such dict per detection for the whole active incident — that is
+    such dict per detection for the whole active incident - that is
     why a 600k-step flood peaked at 1.7 GB RSS and why an 8 GB machine
     hit 90% memory. A tuple of short strings/ints is a fraction of
     that, and the full row already lives in DuckDB (detections are
@@ -274,7 +274,7 @@ def _compact(det: Dict):
 
 def expand_compact(compacted) -> List[Dict]:
     """Restore the minimal dicts risk_score/graph_edges need, from
-    compact tuples. Only the fields those functions read — no detail,
+    compact tuples. Only the fields those functions read - no detail,
     no reason, no source/action strings are ever rebuilt in RAM."""
     return [{"ts": t[0], "time": t[1], "host": t[2], "user": t[3],
              "ip": t[4], "dst_ip": t[5], "technique_id": t[6],
@@ -285,7 +285,7 @@ def expand_compact(compacted) -> List[Dict]:
 
 
 class StreamingLinker:
-    """Windowed linking — the 50 GB / 4 GB fix. The old link_detections
+    """Windowed linking - the 50 GB / 4 GB fix. The old link_detections
     held every detection in RAM and only linked at the end. This class
     holds only *active* incidents (ones seen within the 48-hour link
     window). As soon as an incident is older than the window, feed()
@@ -294,10 +294,10 @@ class StreamingLinker:
     not to the whole file. Requirement, stated plainly: the log must
     be roughly chronological (true for real logs, which append in
     time order). A detection arriving more than 48 hours after a
-    flushed incident cannot be merged into it — it starts a new one,
+    flushed incident cannot be merged into it - it starts a new one,
     exactly as if it had arrived in a separate, later log.
     MEMORY FIX (2026-11-01): active incidents now store compact
-    tuples (see _compact), not full detection dicts — the 600k flood
+    tuples (see _compact), not full detection dicts - the 600k flood
     that peaked at 1.7 GB is the case this fixes."""
 
     def __init__(self):
@@ -306,7 +306,7 @@ class StreamingLinker:
     def feed(self, det: Dict):
         # LINKING FIX (2026-11-01, real Fortinet data): the old code
         # matched on raw host, and host is the firewall (FGT...) for
-        # every Fortinet line — so every detection in a file linked
+        # every Fortinet line - so every detection in a file linked
         # into ONE giant incident, even unrelated attacks. It also
         # matched on blank user ("": every Fortinet line has no user,
         # so "" matched "" and linked everything again). Now:
@@ -372,7 +372,7 @@ class StreamingLinker:
 def observed_blast_radius(detections: List[Dict], edges: List[Dict]) -> Dict:
     """BLAST RADIUS FROM THE OBSERVED GRAPH (2026-11-01 fix). The old
     blast_radius_score only read a supplied topology, and a web upload
-    never supplies one — so every /app incident showed 0/100 even
+    never supplies one - so every /app incident showed 0/100 even
     when its graph touched 184 IPs/domains. That 0 was not a
     measurement, it was a missing input. The observed version scores
     what the logs actually show, in four transparent 0-25 parts:
@@ -381,7 +381,7 @@ def observed_blast_radius(detections: List[Dict], edges: List[Dict]) -> Dict:
       * Depth: distinct kill-chain stages out of 13 (25 points)
       * Severity: worst severity weight out of 40 (25 points)
     A 184-destination, single-source, Low-severity flood scores
-    roughly 25 + 3 + 4 + 2 = 34 — real, but not a full breach. A
+    roughly 25 + 3 + 4 + 2 = 34 - real, but not a full breach. A
     multi-stage Critical chain scores far higher. Never 0 for an
     incident that actually touched hosts, and never 100 unless all
     four parts are near-maximum."""
@@ -411,7 +411,7 @@ def observed_next_reach(edges: List[Dict], technique_severity: Dict) -> List[Dic
     it lists destinations the attacker has already contacted but has
     NOT yet used as a stepping stone (a destination that never
     appears as a source). Those are the next hosts to watch for
-    outbound movement — if one starts connecting onward, that is the
+    outbound movement - if one starts connecting onward, that is the
     next hop. Capped at 10, worst severity first, with the total
     frontier count kept by the caller so the page can say 'and N
     more like this' instead of dumping 184 names."""
@@ -452,7 +452,7 @@ def next_reach(compromised_hosts: List[str], compromised_users: List[str],
     transparent weighted score so the ranking can be checked:
     admin rights 50 + same subnet 25 + shared account path 15 +
     stage-depth bonus 10, capped at 100. A host reached by two routes
-    keeps the higher score and both reasons — it is not counted twice."""
+    keeps the higher score and both reasons - it is not counted twice."""
     admin_rights = topology.get("admin_rights", {})
     host_subnet = topology.get("host_subnet", {})
     compromised = set(compromised_hosts)

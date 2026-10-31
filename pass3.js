@@ -1,4 +1,4 @@
-// Kill Chain — Refinement Pass 3 (shared by simulation and full builds).
+// Kill Chain - Refinement Pass 3 (shared by simulation and full builds).
 // Plain-language layer + what-if + animated graph + comparison + playbook.
 // No new data source, no network call, no real logs/keys. All user text is
 // rendered through the host build's existing escaper (esc / escapeHtml).
@@ -12,7 +12,7 @@
 
   var PLAIN = {
     "Reconnaissance": "Someone was quietly looking around for a weak spot.",
-    "Initial Access": "They got in — through a trick email, a website hole, or a stolen login.",
+    "Initial Access": "They got in - through a trick email, a website hole, or a stolen login.",
     "Execution": "They got a program running inside the computer.",
     "Persistence": "They planted a way back in, so they could return later.",
     "Privilege Escalation": "They grabbed higher permissions than they should have.",
@@ -67,15 +67,15 @@
     if (!current.logs.length) { el.innerHTML = "<p>No events yet, so there is no plain-English story yet.</p>"; return; }
     var byStage = {};
     current.logs.forEach(function (l) { (byStage[l.stage] = byStage[l.stage] || []).push(l); });
-    var html = "<p class=\"p3-lead\">In short: <b>" + P3_ESC(current.title) + "</b> — " + P3_ESC(current.subtitle || current.summary) + "</p>";
+    var html = "<p class=\"p3-lead\">In short: <b>" + P3_ESC(current.title) + "</b> - " + P3_ESC(current.subtitle || current.summary) + "</p>";
     html += stagesOf().map(function (stage, i) {
       var ev = byStage[stage] || [];
       if (!ev.length) return "";
-      return "<div class=\"p3-step\"><h4>Step " + (i + 1) + " — " + P3_ESC(SHORT[stage] || stage) + "</h4>" +
+      return "<div class=\"p3-step\"><h4>Step " + (i + 1) + " - " + P3_ESC(SHORT[stage] || stage) + "</h4>" +
         "<p>" + P3_ESC(PLAIN[stage] || stage) + "</p>" +
-        "<p class=\"p3-evidence\">Evidence: " + ev.map(function (e) { return P3_ESC(e.t) + " — " + P3_ESC(e.action) + " (" + P3_ESC(e.host) + ")"; }).join("; ") + ".</p></div>";
+        "<p class=\"p3-evidence\">Evidence: " + ev.map(function (e) { return P3_ESC(e.t) + " - " + P3_ESC(e.action) + " (" + P3_ESC(e.host) + ")"; }).join("; ") + ".</p></div>";
     }).join("");
-    if (p3Blocked >= 0) html += "<p class=\"p3-note\">What-if is on: the step at " + P3_ESC(current.logs[p3Blocked].action) + " is treated as blocked — everything after it is shown as prevented below.</p>";
+    if (p3Blocked >= 0) html += "<p class=\"p3-note\">What-if is on: the step at " + P3_ESC(current.logs[p3Blocked].action) + " is treated as blocked - everything after it is shown as prevented below.</p>";
     el.innerHTML = html;
   }
 
@@ -85,7 +85,7 @@
     var hosts = Array.from(new Set(current.logs.map(function (l) { return l.host; })));
     var users = Array.from(new Set(current.logs.map(function (l) { return l.user; })));
     var exf = current.logs.filter(function (l) { return l.stage === "Exfiltration"; });
-    var taken = exf.length ? exf.map(function (e) { return P3_ESC(e.action); }).join("; ") + " — data could leave the company in this story." : "Nothing left in this case — there is no exfiltration step here.";
+    var taken = exf.length ? exf.map(function (e) { return P3_ESC(e.action); }).join("; ") + " - data could leave the company in this story." : "Nothing left in this case - there is no exfiltration step here.";
     var stops = [];
     stagesOf().slice(0, 3).forEach(function (st) { (PLAYBOOK[st] || []).slice(0, 1).forEach(function (a) { stops.push(a); }); });
     el.innerHTML =
@@ -99,7 +99,7 @@
   function renderWhatIf() {
     var sel = $("whatifSelect"), out = $("whatifResult"); if (!sel || !out) return;
     var keep = sel.value;
-    sel.innerHTML = "<option value=\"-1\">No step blocked — the full attack plays out</option>" +
+    sel.innerHTML = "<option value=\"-1\">No step blocked - the full attack plays out</option>" +
       current.logs.map(function (l, i) { return "<option value=\"" + i + "\">Block step " + (i + 1) + ": " + P3_ESC(l.action) + " (" + P3_ESC(l.host) + ")</option>"; }).join("");
     sel.value = keep !== null && keep !== undefined ? keep : "-1";
     if (sel.value === "" || sel.value === null) sel.value = "-1";
@@ -114,7 +114,7 @@
       out.innerHTML = "<p><b>If you block \u2018" + P3_ESC(current.logs[p3Blocked].action) + "\u2019</b>, " + b.prevented + " later step(s) are prevented.</p>" +
         "<div class=\"p3-bars\"><div><span>Risk before</span><div class=\"p3-bar\"><i style=\"width:" + P3_RISK() + "%\"></i></div><b>" + P3_RISK() + "/100</b></div>" +
         "<div><span>Risk after</span><div class=\"p3-bar green\"><i style=\"width:" + b.newRisk + "%\"></i></div><b>" + b.newRisk + "/100</b></div></div>" +
-        "<p>Blast radius falls from " + origHosts + " host(s) / " + origUsers + " user(s) to " + b.hosts + " host(s) / " + b.users + " user(s) in this what-if. This is a demo estimate, not a guarantee — a real attacker may try another route.</p>";
+        "<p>Blast radius falls from " + origHosts + " host(s) / " + origUsers + " user(s) to " + b.hosts + " host(s) / " + b.users + " user(s) in this what-if. This is a demo estimate, not a guarantee - a real attacker may try another route.</p>";
     }
     document.querySelectorAll("#timeline li[data-idx]").forEach(function (li) {
       var idx = parseInt(li.dataset.idx, 10);
@@ -204,7 +204,7 @@
     }).join("");
     var done = items.filter(function (_, i) { return p3Checked.has(i); }).length;
     if (prog) {
-      prog.innerHTML = "<div class=\"p3-bar green\"><i style=\"width:" + (items.length ? Math.round(done / items.length * 100) : 0) + "%\"></i></div><span>" + done + " of " + items.length + " containment steps ticked — ticking a box here is a demo checklist only, it does not change any real system.</span>";
+      prog.innerHTML = "<div class=\"p3-bar green\"><i style=\"width:" + (items.length ? Math.round(done / items.length * 100) : 0) + "%\"></i></div><span>" + done + " of " + items.length + " containment steps ticked - ticking a box here is a demo checklist only, it does not change any real system.</span>";
     }
     el.querySelectorAll("input[type=checkbox]").forEach(function (cb) {
       cb.addEventListener("change", function () {
@@ -219,8 +219,8 @@
     var sc = $("scrubber"), lab = $("scrubberLabel"); if (!sc) return;
     sc.max = current.logs.length;
     if (document.activeElement !== sc) sc.value = replayIndex;
-    if (lab) lab.textContent = replayIndex === 0 ? "Step 0 of " + current.logs.length + " — drag to walk the attack" :
-      "Step " + replayIndex + " of " + current.logs.length + " — " + P3_ESC(current.logs[Math.min(replayIndex, current.logs.length) - 1].action);
+    if (lab) lab.textContent = replayIndex === 0 ? "Step 0 of " + current.logs.length + " - drag to walk the attack" :
+      "Step " + replayIndex + " of " + current.logs.length + " - " + P3_ESC(current.logs[Math.min(replayIndex, current.logs.length) - 1].action);
   }
 
   function animateCounters() {
@@ -287,7 +287,7 @@
       } else if (step === "3") {
         var sel2 = $("whatifSelect");
         if (sel2 && current.logs.length > 1) { sel2.value = "1"; p3RenderAll(); }
-        if (status) status.textContent = "Step 3 done: the second step is now treated as blocked — see risk and blast radius drop in the What-if panel.";
+        if (status) status.textContent = "Step 3 done: the second step is now treated as blocked - see risk and blast radius drop in the What-if panel.";
         document.getElementById("whatifPanel").scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     });
