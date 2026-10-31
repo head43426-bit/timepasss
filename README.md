@@ -12,7 +12,9 @@ logs or credentials.
 ```bash
 pip install -r requirements.txt
 python main.py serve --db out.duckdb --port 8001
-# open http://localhost:8001 and upload your .log file there
+# open http://localhost:8001 — the showcase is the main page
+# click "Upload your own .log → real data" (or go to
+# http://localhost:8001/app) to upload your .log file there
 ```
 
 Command line only:

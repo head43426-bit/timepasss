@@ -78,8 +78,16 @@ def make_handler(holder, rules_dir, db_path):
             parsed = urlparse(self.path)
             parts = [p for p in parsed.path.split("/") if p]
             query = parse_qs(parsed.query)
-            # Frontend (no build step, plain files)
-            if parsed.path in ("/", "/index.html"):
+            # Showcase is the main page. The real-data upload dashboard
+            # (frontend/) lives at /app — the showcase links there.
+            if parsed.path == "/":
+                return self._send_file(os.path.join(ROOT, "showcase.html"))
+            if parsed.path in ("/app", "/app/"):
+                return self._send_file(os.path.join(FRONTEND, "index.html"))
+            if parsed.path in ("/app/styles.css", "/app/app.js"):
+                return self._send_file(os.path.join(FRONTEND, parsed.path.split("/")[-1]))
+            # Frontend (no build step, plain files) — kept for /index.html
+            if parsed.path == "/index.html":
                 return self._send_file(os.path.join(FRONTEND, "index.html"))
             if parsed.path in ("/styles.css", "/app.js"):
                 return self._send_file(os.path.join(FRONTEND, parsed.path.lstrip("/")))
