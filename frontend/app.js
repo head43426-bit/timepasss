@@ -264,21 +264,29 @@ function showBackendStatus(p, file) {
   if (file && file.size > 2 * 1024 * 1024 * 1024) {
     el.textContent += " This is a very large file — keep this tab open, it will take a while.";
   }
-  // Dynamic live slab: top attacks found so far, with their tell,
-  // why they matter, and how they help. Updates on every poll.
+  // Dynamic live slab: the place itself is ALWAYS visible during a
+  // run (uploading, reading, linking, storing, and after done), so
+  // it can never look "not there". Before the first find it shows a
+  // placeholder; once finds exist it lists them, updating every poll.
   var slab = document.getElementById("liveTells");
   var list = document.getElementById("liveTellsList");
-  if (p.top_techniques && p.top_techniques.length && (p.stage === "reading" || p.stage === "linking" || p.stage === "storing")) {
+  if (slab && (p.stage === "uploading" || p.stage === "reading" || p.stage === "linking" || p.stage === "storing" || p.stage === "done")) {
     slab.hidden = false;
-    list.innerHTML = p.top_techniques.map(function(t) {
-      return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(t.technique_name) + " (" + esc(t.technique_id) + ")</b> — " +
-        esc(t.kill_chain_stage) + " · ×" + fmtNum(t.count) + "<br>" +
-        "<b>Tell (what gave it away):</b> a log line containing “" + esc(t.tell) + "”.<br>" +
-        "<b>Why it matters:</b> " + esc(t.why) + "<br>" +
-        "<b>How it helps you:</b> " + esc(t.help) + "</div>";
-    }).join("");
-  } else if (p.stage === "done") {
-    slab.hidden = true;
+    if (p.top_techniques && p.top_techniques.length) {
+      list.innerHTML = p.top_techniques.map(function(t) {
+        return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(t.technique_name) + " (" + esc(t.technique_id) + ")</b> — " +
+          esc(t.kill_chain_stage) + " · ×" + fmtNum(t.count) + "<br>" +
+          "<b>Tell (what gave it away):</b> a log line containing “" + esc(t.tell) + "”.<br>" +
+          "<b>Why it matters:</b> " + esc(t.why) + "<br>" +
+          "<b>How it helps you:</b> " + esc(t.help) + "</div>";
+      }).join("");
+    } else if (p.stage === "uploading") {
+      list.innerHTML = "<p class='hint'>Still receiving your file — no lines have been checked yet, so no finds to show. As soon as reading starts, the attacks found so far will appear here, one card per attack.</p>";
+    } else if (p.stage === "reading") {
+      list.innerHTML = "<p class='hint'>Reading… no attacks found yet in the lines checked so far. The first find will appear here as soon as it is detected.</p>";
+    } else {
+      list.innerHTML = "<p class='hint'>Linking the finds into incidents… the final top attacks will stay here when the run finishes.</p>";
+    }
   }
 }
 
@@ -288,10 +296,22 @@ function handleFile(file) {
   // Poll /progress while the upload request runs: the server answers
   // that endpoint from another thread, so the status stays live even
   // while the big upload itself is still being processed.
+  var pollFails = 0;
   var poll = setInterval(function() {
     fetch("/progress").then(function(r) { return r.json(); }).then(function(p) {
+      pollFails = 0;
       showBackendStatus(p, file);
-    }).catch(function() {});
+    }).catch(function() {
+      // Old behaviour was silence here: if the server died, the page
+      // froze on the last progress text forever and looked "stuck".
+      // After 3 failed polls, say so plainly instead.
+      pollFails += 1;
+      if (pollFails >= 3) {
+        var el2 = document.getElementById("backendStatus");
+        el2.hidden = false;
+        el2.textContent = "Server not responding — the server may have stopped or crashed. Check the server window (run.bat / run.sh) and restart it if needed, then upload again. Your file was not lost from your computer, only this run did not finish.";
+      }
+    });
   }, 1000);
   var xhr = new XMLHttpRequest();
   xhr.open("POST", "/upload", true);

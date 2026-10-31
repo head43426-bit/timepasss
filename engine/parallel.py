@@ -83,15 +83,17 @@ def _process_range(args) -> dict:
     Now the parent streams the temp files in chunk order, inserts in
     batches, and links with the streaming linker — memory stays flat
     whatever the file size. Chunk order is time order for a
-    chronological log, which real logs are."""
+    chronological log, which real logs are. Temp files live in the
+    DB directory (passed in args), NOT system /tmp — /tmp is a RAM
+    disk on many machines and a large run filled it completely."""
     import json as _json
     import tempfile
-    path, start, end = args
+    path, start, end, tmpdir = args
     events = 0
     det_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl",
-                                           delete=False, encoding="utf-8")
+                                           delete=False, encoding="utf-8", dir=tmpdir)
     agg_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl",
-                                           delete=False, encoding="utf-8")
+                                           delete=False, encoding="utf-8", dir=tmpdir)
     det_count = agg_count = 0
     with open(path, "rb") as f:
         f.seek(start)
@@ -121,15 +123,52 @@ def _process_range(args) -> dict:
             "events": events, "detections": det_count, "agg_events": agg_count}
 
 
+def _total_ram_gb() -> float:
+    try:
+        import sys as _sys
+        if _sys.platform == "win32":
+            import ctypes
+            class _MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            _ms = _MS(); _ms.dwLength = ctypes.sizeof(_MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(_ms))
+            return _ms.ullTotalPhys / (1024 ** 3)
+        with open("/proc/meminfo") as _f:
+            for _line in _f:
+                if _line.startswith("MemTotal:"):
+                    return int(_line.split()[1]) / (1024 ** 2)
+    except Exception:
+        pass
+    return 0
+
+
 def cpu_friendly_workers(requested: int = 0) -> int:
     """How many workers to actually use. 70% of cores, never all of
     them, so the machine stays usable while ASK runs — the user asked
     for speed without the system freezing. On an 8-core machine that
     is 5 workers; on a 4-core machine, 2; on a 1-core machine, 1.
     Pass an explicit workers count to override, but it is still capped
-    at 70% unless the caller really insists (workers < 0 means uncapped)."""
+    at 70% unless the caller really insists (workers < 0 means uncapped).
+    MEMORY FIX (2026-11-01): also capped by RAM — on an 8 GB machine
+    at most 4 workers, on a 4 GB machine at most 2 — because each
+    worker is a full Python process and the main process spikes while
+    linking one huge incident; more workers on low RAM just pushes
+    the system into paging, which is slower than fewer workers."""
     total = os.cpu_count() or 1
     cap = max(1, int(total * 0.7))
+    _ram = _total_ram_gb()
+    if _ram and _ram <= 4:
+        cap = min(cap, 2)
+    elif _ram and _ram <= 8:
+        cap = min(cap, 4)
     if requested < 0:
         return total
     if requested == 0:
@@ -153,7 +192,8 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     with ProcessPoolExecutor(max_workers=len(ranges),
                              initializer=_init_worker, initargs=(rules_dir,)) as pool:
         completed_workers = 0
-        for result in pool.map(_process_range, [(log_path, s, e) for s, e in ranges]):
+        _tmpdir = os.path.dirname(os.path.abspath(db_path)) or "."
+        for result in pool.map(_process_range, [(log_path, s, e, _tmpdir) for s, e in ranges]):
             completed_workers += 1
             total_events += result["events"]
             chunk_results.append(result)
@@ -223,6 +263,9 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         nonlocal incident_count
         if not dets:
             return
+        # Linker hands back compact tuples (memory fix) — expand to
+        # the minimal dicts risk/graph need before anything else.
+        dets = graph_mod.expand_compact(dets)
         incident_count += 1
         first = dets[0]
         times = [d.get("time", "") for d in dets if d.get("time", "")]

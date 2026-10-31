@@ -56,6 +56,40 @@ def connect(db_path: str, fresh: bool = False):
     if fresh and os.path.exists(db_path):
         os.remove(db_path)
     con = duckdb.connect(db_path)
+    # MEMORY FIX (2026-11-01): DuckDB has no memory cap by default and
+    # will happily grow toward all RAM during big inserts/queries —
+    # on an 8 GB machine that is what pushes the system to 90%.
+    # Cap it at 1 GB (or 25% of total RAM on smaller machines, never
+    # below 256 MB); DuckDB spills to disk past the cap instead of
+    # eating the machine. Slightly slower on huge runs, far safer.
+    try:
+        import sys as _sys
+        if _sys.platform == "win32":
+            import ctypes
+            class _MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            _ms = _MS(); _ms.dwLength = ctypes.sizeof(_MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(_ms))
+            _total_gb = _ms.ullTotalPhys / (1024 ** 3)
+        else:
+            _total_gb = 0
+            with open("/proc/meminfo") as _f:
+                for _line in _f:
+                    if _line.startswith("MemTotal:"):
+                        _total_gb = int(_line.split()[1]) / (1024 ** 2)
+                        break
+        _cap_gb = max(0.25, min(1.0, _total_gb * 0.25)) if _total_gb else 1.0
+        con.execute(f"SET memory_limit='{_cap_gb:.2f}GB'")
+    except Exception:
+        pass
     con.execute("BEGIN TRANSACTION")
     for stmt in SCHEMA.strip().split(";\n"):
         if stmt.strip():

@@ -289,7 +289,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
             # rfile.read(length), which loaded the whole file into RAM —
             # that alone would kill a 50 GB upload. Chunked reading keeps
             # memory flat whatever the file size.
-            with tempfile.NamedTemporaryFile(mode="wb", suffix=".log", delete=False) as tmp:
+            # Temp file lives NEXT TO THE DATABASE, not in system /tmp:
+            # on many machines /tmp is a RAM disk (512 MB here), and a
+            # 2 GB upload plus parallel temp files filled it completely
+            # ("No space left on device" mid-upload, which looked like a
+            # freeze). The DB directory is real disk, with room.
+            _db_dir = os.path.dirname(os.path.abspath(db_path)) or "."
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".log", delete=False, dir=_db_dir) as tmp:
                 tmp_path = tmp.name
                 remaining = length
                 while remaining > 0:
@@ -338,7 +344,29 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         _kw["top_techniques"] = top
                     _set_progress(**_kw)
 
-                with LOCK:
+                # STUCK-STEP-1 FIX: receiving is DONE at this point, so
+                # never leave the stage as "uploading" again. And never
+                # wait silently for the global lock: a previous upload
+                # may still be processing for tens of minutes, and the
+                # old code sat inside `with LOCK:` with the text still
+                # saying Step 1, which looked exactly like a freeze.
+                # Now: try the lock once a second, and while waiting
+                # say so plainly ("Queued") with the wait time.
+                _queue_started = time.time()
+                while not LOCK.acquire(blocking=False):
+                    _wait = int(time.time() - _queue_started)
+                    _set_progress(stage="queued",
+                                  stage_text=(
+                                      f"Queued — your file is safely saved "
+                                      f"(100% received) and is waiting for "
+                                      f"the previous upload to finish before "
+                                      f"it starts. Waiting {_wait}s so far — "
+                                      f"this is not stuck, it is just queued."),
+                                  elapsed_seconds=round(time.time() - started, 1))
+                    time.sleep(1)
+                try:
+                    _set_progress(stage="reading",
+                                  stage_text="Step 2 of 4 — Starting to read your file line by line.")
                     try:
                         holder.con.close()
                     except Exception:
@@ -364,6 +392,8 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         summary = cli_run(tmp_path, db_path, rules_dir,
                                           chunk_size=20000, on_progress=_on_progress)
                     holder.con = store.connect(db_path)
+                finally:
+                    LOCK.release()
                 summary["filename"] = filename
                 _set_progress(stage="done",
                               stage_text="Done — incidents are ready below.",
@@ -374,7 +404,21 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 return self._send_json(summary)
             except Exception as exc:  # keep the server alive, report the error
                 _set_progress(stage="error", stage_text=f"Failed: {exc}", done=True, error=str(exc))
-                return self._send_json({"error": str(exc)}, 500)
+                # Bug found via the WinError 10053 report: holder.con was
+                # closed before processing and never reconnected on
+                # failure, so the dashboard stayed broken until a full
+                # server restart. Reconnect to the existing DB file
+                # (not fresh — never wipe data because an upload failed).
+                try:
+                    holder.con = store.connect(db_path)
+                except Exception:
+                    pass
+                try:
+                    return self._send_json({"error": str(exc)}, 500)
+                except Exception:
+                    # Client already gone (that is what WinError 10053
+                    # means) — nothing left to send to, just stay alive.
+                    return None
             finally:
                 try:
                     os.unlink(tmp_path)
