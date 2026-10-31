@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 
@@ -81,11 +82,51 @@ def _normalise(raw: Dict) -> Dict:
     }
 
 
+_KV_RE = re.compile(r'([a-zA-Z0-9_\.\-]+)=(?:"([^"]*)"|(\S+))')
+
+
+def _parse_kv(line: str) -> Optional[Dict]:
+    pairs = _KV_RE.findall(line)
+    if not pairs or len(pairs) < 3:
+        return None
+    raw = {}
+    for k, v_quoted, v_unquoted in pairs:
+        raw[k] = v_quoted if v_quoted != "" else v_unquoted
+    if "date" in raw and "time" in raw:
+        raw["time"] = f"{raw['date']}T{raw['time']}"
+    if "devname" in raw and "host" not in raw:
+        raw["host"] = raw["devname"]
+    if "srcip" in raw and "ip" not in raw:
+        raw["ip"] = raw["srcip"]
+    if "logdesc" in raw and "action" not in raw:
+        raw["action"] = raw["logdesc"]
+    elif "action" in raw and "logdesc" in raw:
+        raw["action"] = f"{raw['logdesc']} {raw['action']}"
+    if "msg" in raw:
+        raw["detail"] = raw["msg"]
+    elif "attack" in raw:
+        raw["detail"] = f"Attack {raw.get('attack')} on {raw.get('dstip', '')}"
+        # Keep logdesc in the action: overwriting it here used to lose
+        # the only keyword a rule could match on.
+        raw["action"] = f"{raw.get('logdesc', '')} attack {raw.get('attack')}".strip()
+    elif "virus" in raw:
+        raw["detail"] = f"Virus {raw.get('virus')} url: {raw.get('url', '')}"
+        raw["action"] = "malicious file virus"
+    elif "catdesc" in raw:
+        raw["detail"] = f"{raw.get('catdesc')} {raw.get('url', '')}"
+        raw["action"] = raw.get("catdesc")
+    return _normalise(raw)
+
+
 def parse_line(line: str) -> Optional[Dict]:
     """Parse one log line. Returns None for blank / unparseable lines."""
     line = line.strip()
     if not line:
         return None
+    if "=" in line and (" " in line or "\t" in line):
+        kv = _parse_kv(line)
+        if kv is not None:
+            return kv
     if line.startswith("{"):
         try:
             data = json.loads(line)

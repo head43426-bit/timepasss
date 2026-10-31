@@ -21,7 +21,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import resource
+try:
+    import resource
+except ImportError:
+    resource = None
 import sys
 import time
 from typing import List
@@ -35,8 +38,38 @@ from .rules import Detector, load_rules
 
 def peak_rss_mb() -> float:
     # ru_maxrss is KiB on Linux, bytes on macOS.
-    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return round(value / 1024.0, 1) if sys.platform != "darwin" else round(value / 1e6, 1)
+    if resource is not None:
+        value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(value / 1024.0, 1) if sys.platform != "darwin" else round(value / 1e6, 1)
+    
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = PROCESS_MEMORY_COUNTERS()
+        counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+        handle = ctypes.windll.kernel32.GetCurrentProcess()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+            return round(counters.PeakWorkingSetSize / (1024.0 * 1024.0), 1)
+    except Exception:
+        pass
+    return 0.0
+
+
 
 
 def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
@@ -67,6 +100,7 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
             print(f"  ... {total_lines} events, {detection_count} detections, "
                   f"peak RSS {peak_rss_mb()} MB", flush=True)
     # Link + score + store incidents.
+    det_id_map = {id(d): idx for idx, d in enumerate(all_detections, 1)}
     incidents = graph_mod.link_detections(all_detections)
     stored = []
     for idx, dets in enumerate(incidents, start=1):
@@ -86,7 +120,7 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
             # Detection ids are 1-based in insertion order; all_detections
             # order matches insertion order, so map by object identity via
             # index in the full list.
-            "detection_ids": [all_detections.index(d) + 1 for d in dets],
+            "detection_ids": [det_id_map[id(d)] for d in dets],
             "edges": graph_mod.graph_edges(dets),
         }
         stored.append(record)

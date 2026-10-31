@@ -14,6 +14,18 @@ rules:
     match:
       any_contains: ["upload to outside", "upload to an outside", "data exfiltrated"]
 
+  - id: malware_detected
+    name: Malware / virus detected
+    technique_id: T1204.002
+    technique_name: Malicious File
+    tactic: Execution
+    kill_chain_stage: Execution
+    confidence: 85
+    priority: 80
+    description: Fortinet virus branch in the KV parser used to set action "malicious file virus" with no matching rule, so a virus line was silently dropped. This rule matches that exact phrase.
+    match:
+      any_contains: ["malicious file virus", "virus detected", "malware detected"]
+
   - id: log_clearing
     name: Security logs cleared
     technique_id: T1070

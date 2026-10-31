@@ -38,7 +38,29 @@ and DuckDB writes stay in the main process, exactly as single-core.
 
 API: `GET /health`, `GET /incidents`, `GET /incidents/{id}/path`,
 `GET /incidents/{id}/report`, `GET /incidents/{id}/next`
-(`?hindi=1` for the Hindi report).
+(`?hindi=1` for the Hindi report), `GET /db/stats` (table counts,
+DB size, top techniques).
+
+Merged from Amogh's `timess` update (code only, UI untouched):
+- **O(n²) → O(1) incident lookup** — `cli.py` and `parallel.py` used
+  `all_detections.index(d)` for every detection; now a dict built once
+  (`det_id_map`) maps object id → detection id.
+- **O(n) → O(1) aggregate pruning** — brute-force state is a `deque`,
+  old timestamps are popped from the front instead of re-filtering
+  the whole list on every event.
+- **Batch DB writes** — `store.py` uses `executemany` for incident
+  detections and edges instead of one INSERT per row.
+- **Windows support** — `cli.py` falls back to a Win32 peak-memory
+  reading when `resource` is unavailable; `parallel.py` reuses it.
+- **Fortinet KV log parser** — `parser.py` now parses `key=value`
+  logs (Fortinet style: `date= time= devname= srcip= msg=` etc.).
+- **Synthetic log generator** — `generate_logs.py` + `sample_attack.log`
+  (60 benign + 11 attack steps, synthetic only, for testing; the
+  dashboard does not load it automatically).
+- Two fixes applied on merge: the Fortinet virus branch set an action
+  no rule matched, so a virus line was dropped — a `malware_detected`
+  rule now matches it; the attack branch overwrote `logdesc`, so it
+  now keeps it in the action.
 
 Docker:
 

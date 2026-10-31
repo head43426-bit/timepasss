@@ -25,6 +25,8 @@ for aggregate rules), and a plain-words ``reason`` naming what matched.
 
 from __future__ import annotations
 
+from collections import deque
+
 import glob
 import os
 from dataclasses import dataclass, field
@@ -152,19 +154,20 @@ class Detector:
         # Aggregate rules first: trigger events are counted, not emitted.
         for rule in self.aggregate:
             group = tuple(event.get(k, "") for k in rule.group_by)
-            state = self._agg_state[rule.id].setdefault(group, [])
+            state = self._agg_state[rule.id].setdefault(group, deque())
             ts = event.get("ts")
             if _match_conditions(event, rule.trigger):
                 if ts is not None:
                     window = rule.window_minutes * 60
-                    state[:] = [t for t in state if ts - t <= window]
+                    while state and ts - state[0] > window:
+                        state.popleft()
                     state.append(ts)
                 else:
                     state.append(0.0)
                 return []
             if _match_conditions(event, rule.success) and len(state) >= rule.threshold:
                 count = len(state)
-                self._agg_state[rule.id][group] = []
+                state.clear()
                 return [self._detection(
                     event, rule, merged=count + 1,
                     reason=(f"{count} failed logins for the same "

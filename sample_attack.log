@@ -1,0 +1,71 @@
+2026-10-31T08:01:14Z|workstation-01|emma|192.168.1.58|network|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:03:11Z|workstation-03|grace|192.168.1.133|sysmon|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:03:53Z|laptop-sales|grace|192.168.1.26|auth|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:05:05Z|workstation-03|carol|192.168.1.129|auth|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:05:13Z|hr-pc|grace|192.168.1.40|network|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:06:13Z|workstation-01|david|192.168.1.84|auth|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:07:56Z|hr-pc|grace|192.168.1.103|network|system|Windows Update check completed|Normal|None|Low
+2026-10-31T08:09:06Z|workstation-01|grace|192.168.1.83|network|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:10:01Z|workstation-01|grace|192.168.1.121|os|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:10:30Z|hr-pc|emma|192.168.1.127|os|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:11:47Z|laptop-sales|bob|192.168.1.24|sysmon|service|Print spooler service status healthy|Normal|None|Low
+2026-10-31T08:12:15Z|hr-pc|grace|192.168.1.87|os|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:14:07Z|workstation-03|carol|192.168.1.117|network|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:14:47Z|workstation-02|carol|192.168.1.101|auth|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:15:47Z|hr-pc|grace|192.168.1.48|network|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:17:41Z|dev-box|alice|192.168.1.101|network|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:18:07Z|dev-box|emma|192.168.1.35|os|system|Windows Update check completed|Normal|None|Low
+2026-10-31T08:18:55Z|laptop-sales|david|192.168.1.22|sysmon|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:20:29Z|dev-box|david|192.168.1.83|auth|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:21:37Z|workstation-01|bob|192.168.1.98|sysmon|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:23:27Z|workstation-02|carol|192.168.1.63|auth|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:25:06Z|hr-pc|alice|192.168.1.89|auth|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:26:18Z|workstation-02|bob|192.168.1.60|sysmon|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:28:11Z|workstation-01|grace|192.168.1.71|os|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:29:13Z|workstation-03|david|192.168.1.123|sysmon|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:29:45Z|dev-box|alice|192.168.1.27|auth|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:30:43Z|workstation-01|carol|192.168.1.135|auth|service|Print spooler service status healthy|Normal|None|Low
+2026-10-31T08:31:15Z|workstation-03|grace|192.168.1.117|network|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:32:52Z|hr-pc|bob|192.168.1.66|os|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:33:27Z|hr-pc|grace|192.168.1.22|auth|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:33:40Z|workstation-01|bob|192.168.1.18|network|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:34:51Z|dev-box|bob|192.168.1.63|sysmon|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:36:20Z|laptop-sales|emma|192.168.1.15|os|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:37:03Z|workstation-02|carol|192.168.1.57|os|service|Print spooler service status healthy|Normal|None|Low
+2026-10-31T08:38:55Z|hr-pc|grace|192.168.1.140|os|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:40:08Z|dev-box|alice|192.168.1.71|network|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:42:06Z|laptop-sales|alice|192.168.1.69|network|system|Windows Update check completed|Normal|None|Low
+2026-10-31T08:43:28Z|workstation-03|carol|192.168.1.123|sysmon|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:43:59Z|dev-box|emma|192.168.1.137|auth|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:44:11Z|dev-box|grace|192.168.1.24|auth|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:45:31Z|laptop-sales|frank|192.168.1.13|os|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T08:46:36Z|dev-box|bob|192.168.1.139|auth|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T08:48:03Z|workstation-03|david|192.168.1.120|auth|system|Windows Update check completed|Normal|None|Low
+2026-10-31T08:48:18Z|hr-pc|bob|192.168.1.59|auth|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:48:43Z|workstation-02|david|192.168.1.73|auth|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:50:22Z|dev-box|grace|192.168.1.97|os|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:50:40Z|workstation-01|grace|192.168.1.129|os|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:51:52Z|laptop-sales|frank|192.168.1.56|auth|net_connect|Outbound HTTPS connection to cdn.microsoft.com|Normal|None|Low
+2026-10-31T08:52:00Z|workstation-01|alice|192.168.1.105|firewall|scan_detected|Active port scan detected from internal subnet|Reconnaissance|T1595|Medium
+2026-10-31T08:53:15Z|workstation-02|frank|192.168.1.148|sysmon|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T08:54:06Z|dev-box|carol|192.168.1.54|os|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:55:33Z|workstation-02|david|192.168.1.63|sysmon|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T08:57:29Z|laptop-sales|alice|192.168.1.134|network|system|Windows Update check completed|Normal|None|Low
+2026-10-31T08:58:19Z|hr-pc|carol|192.168.1.109|auth|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T08:58:28Z|hr-pc|bob|192.168.1.122|sysmon|system|Windows Update check completed|Normal|None|Low
+2026-10-31T09:00:02Z|hr-pc|grace|192.168.1.99|auth|file_access|Read access to departmental shared drive|Normal|None|Low
+2026-10-31T09:00:59Z|laptop-sales|bob|192.168.1.110|network|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T09:02:24Z|workstation-03|alice|192.168.1.84|os|dns|DNS query resolved for internal portal|Normal|None|Low
+2026-10-31T09:04:12Z|workstation-02|frank|192.168.1.46|network|dhcp|DHCP lease renewed successfully|Normal|None|Low
+2026-10-31T09:05:43Z|laptop-sales|carol|192.168.1.101|network|process_start|Chrome browser process spawned|Normal|None|Low
+2026-10-31T09:07:00Z|laptop-sales|david|192.168.1.144|auth|auth|User logged in via Kerberos ticket|Normal|None|Low
+2026-10-31T09:20:00Z|workstation-01|alice|192.168.1.105|email_gateway|email_delivered|Phishing email opened with invoice.xlsm malicious attachment|Initial Access|T1566.001|High
+2026-10-31T09:41:00Z|workstation-01|alice|192.168.1.105|sysmon|macro_exec|Malicious macro executed via excel.exe child process powershell|Execution|T1204.002|High
+2026-10-31T09:56:00Z|workstation-01|alice|192.168.1.105|sysmon|priv_esc|Privilege escalation vulnerability exploited on workstation-01|Privilege Escalation|T1068|Critical
+2026-10-31T10:39:00Z|workstation-01|SYSTEM|192.168.1.105|sysmon|mimikatz|Credential dump detected: lsass memory access by mimikatz|Credential Access|T1003.001|Critical
+2026-10-31T10:52:00Z|workstation-01|admin_backup|192.168.1.105|task_scheduler|task_created|Scheduled task created for persistence running hidden payload|Persistence|T1053.005|High
+2026-10-31T11:22:00Z|fileserver-01|admin_backup|192.168.1.105|windows_security|smb_session|SMB lateral movement from workstation-01 to fileserver-01|Lateral Movement|T1021.002|Critical
+2026-10-31T12:00:00Z|fileserver-01|admin_backup|192.168.1.20|edr|c2_connect|Periodic C2 beacon detected connecting to external server 185.220.101.5|Command and Control|T1071.001|High
+2026-10-31T12:14:00Z|fileserver-01|admin_backup|192.168.1.20|file_monitor|archive_created|Confidential database export files staged for exfiltration in 7z archive|Collection|T1560|High
+2026-10-31T12:51:00Z|fileserver-01|admin_backup|192.168.1.20|network_ids|data_transfer|Large data upload to an outside IP 185.220.101.5 detected|Exfiltration|T1048|Critical
+2026-10-31T13:32:00Z|fileserver-01|admin_backup|192.168.1.20|event_log|log_clear|Security event logs cleared with wevtutil to evade detection|Defense Evasion|T1070|High

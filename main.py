@@ -98,6 +98,18 @@ def make_handler(holder, rules_dir, db_path):
                     return self._send_json({"error": "not found"}, 404)
                 return self._send_file(os.path.join(ROOT, rel))
             with LOCK:
+                if parts == ["db", "stats"]:
+                    tables = [t[0] for t in holder.con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'").fetchall()]
+                    counts = {t: holder.con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
+                    file_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+                    breakdown = holder.con.execute("SELECT kill_chain_stage, technique_id, technique_name, count(*) as count FROM detections GROUP BY kill_chain_stage, technique_id, technique_name ORDER BY count DESC LIMIT 10").fetchall()
+                    return self._send_json({
+                        "db_path": os.path.abspath(db_path),
+                        "file_size_bytes": file_size,
+                        "file_size_mb": round(file_size / (1024 * 1024), 2),
+                        "tables": counts,
+                        "top_techniques": [{"stage": b[0], "technique_id": b[1], "technique_name": b[2], "count": b[3]} for b in breakdown]
+                    })
                 if parts == ["health"]:
                     return self._send_json({"status": "ok",
                                             "detections": store.count_detections(holder.con),

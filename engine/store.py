@@ -90,15 +90,13 @@ def insert_incident(con, incident: Dict) -> None:
          float(incident.get("risk_score", 0)),
          int(incident.get("merged_alerts", 0)),
          int(incident.get("detection_count", 0))])
-    for seq, det_id in enumerate(incident.get("detection_ids", [])):
-        con.execute(
-            "INSERT INTO incident_detections VALUES (?,?,?)",
-            [incident["id"], det_id, seq])
-    for edge in incident.get("edges", []):
-        con.execute(
-            "INSERT INTO edges VALUES (?,?,?,?,?,?)",
-            [incident["id"], edge["from"], edge["to"], edge["kind"],
-             edge.get("technique_id", ""), edge.get("time", "")])
+    det_rows = [(incident["id"], det_id, seq) for seq, det_id in enumerate(incident.get("detection_ids", []))]
+    if det_rows:
+        con.executemany("INSERT INTO incident_detections VALUES (?,?,?)", det_rows)
+    edge_rows = [(incident["id"], edge["from"], edge["to"], edge["kind"],
+                  edge.get("technique_id", ""), edge.get("time", "")) for edge in incident.get("edges", [])]
+    if edge_rows:
+        con.executemany("INSERT INTO edges VALUES (?,?,?,?,?,?)", edge_rows)
 
 
 def load_topology(con, topology: Dict) -> None:

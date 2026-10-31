@@ -31,7 +31,7 @@ parent process.
 from __future__ import annotations
 
 import os
-import resource
+from .cli import peak_rss_mb
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -127,30 +127,36 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     simple_detections, agg_events = [], []
     with ProcessPoolExecutor(max_workers=len(ranges),
                              initializer=_init_worker, initargs=(rules_dir,)) as pool:
+        completed_workers = 0
         for result in pool.map(_process_range, [(log_path, s, e) for s, e in ranges]):
+            completed_workers += 1
             total_events += result["events"]
             simple_detections.extend(result["detections"])
             agg_events.extend(result["agg_events"])
+            print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {len(result['detections'])} detections)", flush=True)
     # Global aggregate pass, in original file order.
     agg_detections = []
     if agg_events:
+        print(f"  ... Processing {len(agg_events):,} aggregate candidates...", flush=True)
         agg_events.sort(key=lambda x: x[0])
         agg_detector = Detector(load_rules(rules_dir))
-        # Only aggregate rules: simple rules in this detector would
-        # re-emit simple detections, so filter to aggregate only.
         agg_detector.simple = []
         for _, event in agg_events:
             agg_detections.extend(agg_detector.process(event))
+        print(f"  ... Finished aggregate pass ({len(agg_detections)} aggregate detections)", flush=True)
     all_detections = simple_detections + agg_detections
-    # Store detections in time order (linking sorts by time anyway).
     all_detections.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
     for d in all_detections:
         d.pop("_pos", None)
     if all_detections:
+        print(f"  ... Inserting {len(all_detections):,} detections into DuckDB...", flush=True)
         con.execute("BEGIN TRANSACTION")
         store.insert_detections(con, all_detections, 1)
         con.execute("COMMIT")
+    det_id_map = {id(d): idx for idx, d in enumerate(all_detections, 1)}
+    print(f"  ... Linking {len(all_detections):,} detections into incident paths...", flush=True)
     incidents = graph_mod.link_detections(all_detections)
+    print(f"  ... Built {len(incidents):,} incidents. Storing into DuckDB...", flush=True)
     stored = []
     for idx, dets in enumerate(incidents, start=1):
         hosts = sorted({d["host"] for d in dets})
@@ -165,7 +171,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
             "risk_score": graph_mod.risk_score(dets),
             "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),
             "detection_count": len(dets),
-            "detection_ids": [all_detections.index(d) + 1 for d in dets],
+            "detection_ids": [det_id_map[id(d)] for d in dets],
             "edges": graph_mod.graph_edges(dets),
         })
     con.execute("BEGIN TRANSACTION")
@@ -179,7 +185,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         "incidents": len(stored), "seconds": round(elapsed, 2),
         "events_per_second": round(total_events / elapsed, 1) if elapsed else 0,
         "workers": len(ranges), "chunks": len(ranges),
-        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1) if sys.platform != "darwin" else round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 1),
+        "peak_rss_mb": peak_rss_mb(),
     }
     if ground_truth_path:
         summary["evaluation"] = evaluate_fn(db_path, ground_truth_path)

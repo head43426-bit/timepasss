@@ -4,3 +4,5 @@
 __pycache__/
 out.duckdb
 uploaded_logs/
+.venv/
+test*.duckdb
