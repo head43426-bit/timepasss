@@ -83,6 +83,20 @@ def make_handler(holder, rules_dir, db_path):
                 return self._send_file(os.path.join(FRONTEND, "index.html"))
             if parsed.path in ("/styles.css", "/app.js"):
                 return self._send_file(os.path.join(FRONTEND, parsed.path.lstrip("/")))
+            # Amazing pages from before — these were in the repo but
+            # NOT served, so localhost:8001 always showed only the
+            # plain frontend dashboard. That is why the dashboard
+            # looked the same even after restoring them.
+            if parsed.path in ("/showcase.html", "/dashboard.html"):
+                return self._send_file(os.path.join(ROOT, parsed.path.lstrip("/")))
+            if parsed.path == "/demo" or parsed.path.startswith("/demo/"):
+                # Original browser demo (root index.html + its JS/CSS).
+                # Served under /demo/ so its relative styles.css/app.js
+                # do not clash with the frontend's files at /styles.css.
+                rel = "index.html" if parsed.path in ("/demo", "/demo/") else parsed.path[len("/demo/"):]
+                if ".." in rel:
+                    return self._send_json({"error": "not found"}, 404)
+                return self._send_file(os.path.join(ROOT, rel))
             with LOCK:
                 if parts == ["health"]:
                     return self._send_json({"status": "ok",
