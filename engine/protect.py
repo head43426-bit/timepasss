@@ -39,6 +39,39 @@ MITIGATIONS = {
 
 GENERIC = "Isolate the affected host from the network, preserve its logs centrally, and work through the techniques above one by one — highest risk first."
 
+# Why each stage matters, in one plain sentence — used by the live
+# "what we're finding" slab while an upload is still running, so a
+# non-expert can read a technique and immediately understand it.
+WHY_BY_STAGE = {
+    "Reconnaissance": "The attacker is still outside, looking for a way in — this is the earliest warning you will ever get.",
+    "Initial Access": "The attacker got in. Everything after this is damage control, not prevention.",
+    "Execution": "Attacker code actually ran on your host — this is no longer a probe, it is a foothold.",
+    "Persistence": "The attacker is trying to survive a reboot, so cleaning the one file you found will not be enough.",
+    "Privilege Escalation": "The attacker is climbing from a normal user to an admin — the blast radius just grew.",
+    "Defense Evasion": "The attacker is actively hiding — logs, files or processes you cannot see are the point.",
+    "Credential Access": "Passwords or tickets are being stolen — every account on that host must be treated as compromised.",
+    "Discovery": "The attacker is mapping your network from inside — the next move is usually lateral movement.",
+    "Lateral Movement": "The attacker is moving to other hosts — one compromised machine is becoming many.",
+    "Collection": "Data is being gathered for stealing — this is the last step before it leaves.",
+    "Command and Control": "The compromised host is talking to the attacker's server — it can receive new orders at any time.",
+    "Exfiltration": "Data is leaving your network — the breach is already real, and scope matters more than speed now.",
+    "Impact": "The attacker is destroying or encrypting — restore from backups, do not negotiate from the infected host.",
+}
+
+
+def live_tell(technique_id: str, technique_name: str, stage: str,
+              count: int, tell: str) -> Dict:
+    """One live slab entry: what was found, what gave it away (the
+    tell), why it matters, and how it helps you. All plain words —
+    this is the panel a non-expert reads while the upload runs."""
+    return {
+        "technique_id": technique_id, "technique_name": technique_name,
+        "kill_chain_stage": stage, "count": count,
+        "tell": tell or "a log line matching this attack's signature",
+        "why": WHY_BY_STAGE.get(stage, "This is a step in the attack chain — earlier stages are warnings, later stages are damage."),
+        "help": MITIGATIONS.get(technique_id, GENERIC),
+    }
+
 
 def protections_for(incident: Dict) -> List[Dict]:
     """One protection action per distinct technique in the incident,

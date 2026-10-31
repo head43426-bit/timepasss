@@ -264,6 +264,22 @@ function showBackendStatus(p, file) {
   if (file && file.size > 2 * 1024 * 1024 * 1024) {
     el.textContent += " This is a very large file — keep this tab open, it will take a while.";
   }
+  // Dynamic live slab: top attacks found so far, with their tell,
+  // why they matter, and how they help. Updates on every poll.
+  var slab = document.getElementById("liveTells");
+  var list = document.getElementById("liveTellsList");
+  if (p.top_techniques && p.top_techniques.length && (p.stage === "reading" || p.stage === "linking" || p.stage === "storing")) {
+    slab.hidden = false;
+    list.innerHTML = p.top_techniques.map(function(t) {
+      return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(t.technique_name) + " (" + esc(t.technique_id) + ")</b> — " +
+        esc(t.kill_chain_stage) + " · ×" + fmtNum(t.count) + "<br>" +
+        "<b>Tell (what gave it away):</b> a log line containing “" + esc(t.tell) + "”.<br>" +
+        "<b>Why it matters:</b> " + esc(t.why) + "<br>" +
+        "<b>How it helps you:</b> " + esc(t.help) + "</div>";
+    }).join("");
+  } else if (p.stage === "done") {
+    slab.hidden = true;
+  }
 }
 
 function handleFile(file) {

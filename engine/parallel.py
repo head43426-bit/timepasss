@@ -121,11 +121,27 @@ def _process_range(args) -> dict:
             "events": events, "detections": det_count, "agg_events": agg_count}
 
 
+def cpu_friendly_workers(requested: int = 0) -> int:
+    """How many workers to actually use. 70% of cores, never all of
+    them, so the machine stays usable while ASK runs — the user asked
+    for speed without the system freezing. On an 8-core machine that
+    is 5 workers; on a 4-core machine, 2; on a 1-core machine, 1.
+    Pass an explicit workers count to override, but it is still capped
+    at 70% unless the caller really insists (workers < 0 means uncapped)."""
+    total = os.cpu_count() or 1
+    cap = max(1, int(total * 0.7))
+    if requested < 0:
+        return total
+    if requested == 0:
+        return cap
+    return min(requested, cap)
+
+
 def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
-                 topology_path: str = None, ground_truth_path: str = None) -> dict:
+                 topology_path: str = None, ground_truth_path: str = None,
+                 on_progress=None) -> dict:
     started = time.time()
-    if workers <= 0:
-        workers = os.cpu_count() or 1
+    workers = cpu_friendly_workers(workers)
     con = store.connect(db_path, fresh=True)
     if topology_path:
         import json
@@ -141,6 +157,8 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
             completed_workers += 1
             total_events += result["events"]
             chunk_results.append(result)
+            if on_progress:
+                on_progress(total_events, sum(r["detections"] for r in chunk_results), "reading")
             print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {result['detections']} detections)", flush=True)
     # Global aggregate pass, in original file order (chunk order, then
     # byte position inside the chunk). Aggregate detections are few by
@@ -164,6 +182,37 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     # detections by time as they are reached, inserting in batches
     # and linking with the streaming linker. Nothing here holds the
     # whole detection list.
+    from engine import protect as _protect
+    _rules = load_rules(rules_dir)
+    _tell_map = {}
+    for _r in _rules:
+        _phrases = []
+        for _k in ("any_contains", "action_contains", "detail_contains"):
+            _v = _r.match.get(_k)
+            if _v:
+                _phrases = [str(_v)] if isinstance(_v, str) else [str(x) for x in _v]
+                break
+        _tell_map[_r.id] = _phrases[0] if _phrases else (_r.description or "")
+    _top_counter = {}
+
+    def _top_list():
+        _items = sorted(_top_counter.items(), key=lambda kv: -kv[1]["count"])[:5]
+        return [_protect.live_tell(v["technique_id"], v["technique_name"],
+                                   v["stage"], v["count"], v["tell"])
+                for _, v in _items]
+
+    def _count_top(dets):
+        for _d in dets:
+            _key = _d.get("technique_id", "")
+            if _key:
+                _e = _top_counter.setdefault(_key, {
+                    "technique_id": _key,
+                    "technique_name": _d.get("technique_name", ""),
+                    "stage": _d.get("kill_chain_stage", ""),
+                    "tell": _tell_map.get(_d.get("rule_id", ""), ""),
+                    "count": 0})
+                _e["count"] += _d.get("merged_alerts", 1)
+
     linker = graph_mod.StreamingLinker()
     next_id = 1
     detection_count = 0
@@ -212,6 +261,9 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         con.execute("COMMIT")
         next_id += len(batch)
         detection_count += len(batch)
+        _count_top(batch)
+        if on_progress:
+            on_progress(total_events, detection_count, "reading", _top_list())
         for det in batch:
             while agg_idx < len(agg_detections) and (agg_detections[agg_idx].get("ts") or 0) <= (det.get("ts") or 0):
                 agg = agg_detections[agg_idx]

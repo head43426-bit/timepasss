@@ -32,6 +32,26 @@ from typing import Dict, Iterator, List, Optional
 _TIME_FORMATS = ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M")
 
 
+def epoch_from_eventtime(value) -> Optional[float]:
+    """Fortinet eventtime is epoch in nanoseconds (19 digits), sometimes
+    microseconds or milliseconds. Normalise to seconds by magnitude, so
+    a real UTM line gives an exact timestamp instead of a date+time
+    string that is off by the timezone offset."""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    if n > 1e17:  # nanoseconds
+        return n / 1e9
+    if n > 1e14:  # microseconds
+        return n / 1e6
+    if n > 1e11:  # milliseconds
+        return n / 1e3
+    if n > 1e9:  # seconds already
+        return n
+    return None
+
+
 def parse_timestamp(value) -> Optional[float]:
     if value is None or value == "":
         return None
@@ -67,9 +87,15 @@ def _normalise(raw: Dict) -> Dict:
         return default
 
     time_value = pick("time", "timestamp", "t", "datetime")
+    # eventtime wins for ts when present: it is the device's own epoch,
+    # exact to the nanosecond, and immune to the tz parsing below.
+    ts = epoch_from_eventtime(raw.get("eventtime")) if "eventtime" in raw else None
+    if ts is None:
+        ts = parse_timestamp(time_value)
     return {
         "time": str(time_value),
-        "ts": parse_timestamp(time_value),
+        "ts": ts,
+        "hostname": str(pick("hostname", "host_name", default="")),
         "host": str(pick("host", "hostname", "device")),
         "user": str(pick("user", "username", "account")),
         "ip": str(pick("ip", "src_ip", "source_ip")),
@@ -98,10 +124,31 @@ def _parse_kv(line: str) -> Optional[Dict]:
         raw[k] = v_quoted if v_quoted != "" else v_unquoted
     if "date" in raw and "time" in raw:
         raw["time"] = f"{raw['date']}T{raw['time']}"
+        # tz="+0530" -> "+05:30", so fromisoformat gives the true UTC
+        # epoch. Without this, every Fortinet time was 5.5 hours off
+        # for IST logs (08:48 IST was stored as 08:48 UTC).
+        if "tz" in raw:
+            _tz = raw["tz"].strip()
+            if len(_tz) == 5 and _tz[0] in "+-":
+                raw["time"] = raw["time"] + f"{_tz[:3]}:{_tz[3:]}"
     if "devname" in raw and "host" not in raw:
         raw["host"] = raw["devname"]
     if "srcip" in raw and "ip" not in raw:
         raw["ip"] = raw["srcip"]
+    # Fortinet level -> severity, so a critical UTM line does not
+    # score as a generic Medium in the risk formula.
+    _level_map = {"emergency": "Critical", "alert": "Critical",
+                  "critical": "Critical", "error": "High",
+                  "warning": "Medium", "notice": "Low",
+                  "information": "Low", "debug": "Low"}
+    if "level" in raw and "severity" not in raw:
+        raw["severity"] = _level_map.get(raw["level"].lower(), "Medium")
+    # Real UTM context: subtype/service are the source, not an empty
+    # string, so rules and the graph can tell DNS from web from IPS.
+    if "subtype" in raw and "source" not in raw:
+        raw["source"] = raw["subtype"]
+    elif "type" in raw and "source" not in raw:
+        raw["source"] = raw["type"]
     if "logdesc" in raw and "action" not in raw:
         raw["action"] = raw["logdesc"]
     elif "action" in raw and "logdesc" in raw:
@@ -119,6 +166,22 @@ def _parse_kv(line: str) -> Optional[Dict]:
     elif "catdesc" in raw:
         raw["detail"] = f"{raw.get('catdesc')} {raw.get('url', '')}"
         raw["action"] = raw.get("catdesc")
+    else:
+        # Generic UTM line (the DNS sample): action="pass" alone tells
+        # the detector nothing, and detail was empty, so hostname,
+        # country, port and protocol were all lost. Build a detail
+        # that keeps them, without inventing an attack: a benign DNS
+        # pass to nytimes.com still produces NO detection, but a
+        # suspicious hostname now has something to match on.
+        _parts = []
+        for _k in ("subtype", "service", "hostname", "url", "dstip",
+                   "dstport", "dstcountry", "proto", "sessionid"):
+            if raw.get(_k):
+                _parts.append(f"{_k}={raw[_k]}")
+        if _parts:
+            raw["detail"] = " ".join(_parts)
+            if "action" in raw:
+                raw["action"] = f"{raw.get('subtype', '')} {raw.get('service', '')} {raw['action']}".strip()
     return _normalise(raw)
 
 

@@ -90,6 +90,27 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
     next_id = 1
     incident_count = 0
     linker = graph_mod.StreamingLinker()
+    # Live tells: counts + the giveaway phrase per technique, for the
+    # dynamic slab shown while the upload runs. Updated per batch, so
+    # the slab changes as new attacks are found, not just at the end.
+    from collections import Counter as _Counter
+    from . import protect as _protect
+    _tell_map = {}
+    for _r in rules:
+        _phrases = []
+        for _k in ("any_contains", "action_contains", "detail_contains"):
+            _v = _r.match.get(_k)
+            if _v:
+                _phrases = [str(_v)] if isinstance(_v, str) else [str(x) for x in _v]
+                break
+        _tell_map[_r.id] = _phrases[0] if _phrases else (_r.description or "")
+    _top_counter: Dict = {}
+
+    def _top_list():
+        _items = sorted(_top_counter.items(), key=lambda kv: -kv[1]["count"])[:5]
+        return [_protect.live_tell(v["technique_id"], v["technique_name"],
+                                   v["stage"], v["count"], v["tell"])
+                for _, v in _items]
 
     def _flush(dets):
         nonlocal incident_count
@@ -132,19 +153,28 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
             con.execute("COMMIT")
             detection_count += len(batch_detections)
             for det in batch_detections:
+                _key = det.get("technique_id", "")
+                if _key:
+                    _entry = _top_counter.setdefault(_key, {
+                        "technique_id": _key,
+                        "technique_name": det.get("technique_name", ""),
+                        "stage": det.get("kill_chain_stage", ""),
+                        "tell": _tell_map.get(det.get("rule_id", ""), ""),
+                        "count": 0})
+                    _entry["count"] += det.get("merged_alerts", 1)
                 for finished in linker.feed(det):
                     _flush(finished)
         if on_progress:
-            on_progress(total_lines, detection_count, "reading")
+            on_progress(total_lines, detection_count, "reading", _top_list())
         if total_lines % 100000 < chunk_size:
             print(f"  ... {total_lines} events, {detection_count} detections, "
                   f"peak RSS {peak_rss_mb()} MB", flush=True)
     if on_progress:
-        on_progress(total_lines, detection_count, "linking")
+        on_progress(total_lines, detection_count, "linking", _top_list())
     for finished in linker.finish():
         _flush(finished)
     if on_progress:
-        on_progress(total_lines, detection_count, "storing")
+        on_progress(total_lines, detection_count, "storing", _top_list())
     con.close()
     elapsed = time.time() - started
     summary = {

@@ -47,7 +47,7 @@ PROGRESS = {
     "filename": "", "bytes_received": 0, "bytes_total": 0,
     "events": 0, "detections": 0, "estimated_total_events": 0,
     "events_per_second": 0, "elapsed_seconds": 0, "eta_seconds": None,
-    "done": False, "error": "",
+    "done": False, "error": "", "top_techniques": [],
 }
 PROGRESS_LOCK = threading.Lock()
 
@@ -318,7 +318,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     est_total = 0
                 _set_progress(estimated_total_events=est_total)
 
-                def _on_progress(events, detections, stage):
+                def _on_progress(events, detections, stage, top=None):
                     elapsed = max(time.time() - started, 0.001)
                     eps = events / elapsed if stage == "reading" else 0
                     eta = None
@@ -329,18 +329,40 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         "linking": "Step 3 of 4 — Linking flagged lines that share a host, user or IP into one attack path, and scoring its risk.",
                         "storing": "Step 4 of 4 — Saving the incidents to the database so you can open them below.",
                     }
-                    _set_progress(stage=stage, stage_text=texts.get(stage, stage),
-                                  events=events, detections=detections,
-                                  events_per_second=round(eps, 1),
-                                  elapsed_seconds=round(elapsed, 1),
-                                  eta_seconds=round(eta) if eta is not None else None)
+                    _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
+                               events=events, detections=detections,
+                               events_per_second=round(eps, 1),
+                               elapsed_seconds=round(elapsed, 1),
+                               eta_seconds=round(eta) if eta is not None else None)
+                    if top is not None:
+                        _kw["top_techniques"] = top
+                    _set_progress(**_kw)
 
                 with LOCK:
                     try:
                         holder.con.close()
                     except Exception:
                         pass
-                    summary = cli_run(tmp_path, db_path, rules_dir, on_progress=_on_progress)
+                    # Speed, capped at 70% CPU so Windows stays usable:
+                    # large uploads (over ~50k lines or 20 MB) run on
+                    # parallel workers; small uploads stay single-core
+                    # (spawning workers would cost more than it saves).
+                    # Parallel uses byte-range chunks + global aggregate
+                    # replay, so no line is ever dropped or double-counted.
+                    import os as _os
+                    from engine.parallel import cpu_friendly_workers as _workers
+                    _workers_n = _workers(0)
+                    if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
+                        _set_progress(stage_text=(
+                            f"Step 2 of 4 — Reading with {_workers_n} workers "
+                            f"(70% of your CPU, so your system stays usable). "
+                            f"Benign lines are counted and dropped, not stored."))
+                        summary = parallel_run(tmp_path, db_path, rules_dir,
+                                               workers=_workers_n,
+                                               on_progress=_on_progress)
+                    else:
+                        summary = cli_run(tmp_path, db_path, rules_dir,
+                                          chunk_size=20000, on_progress=_on_progress)
                     holder.con = store.connect(db_path)
                 summary["filename"] = filename
                 _set_progress(stage="done",
@@ -422,7 +444,7 @@ def main():
     r.add_argument("--topology", default=None)
     r.add_argument("--ground-truth", default=None)
     r.add_argument("--workers", type=int, default=1,
-                   help="1 = single-core (default). >1 = multi-core parallel, 0 = all cores")
+                   help="1 = single-core (default). >1 = multi-core parallel, capped at 70% of cores so the system stays usable. 0 = 70% of cores, negative = all cores")
     args = ap.parse_args()
     if args.cmd == "serve":
         serve(args.db, args.host, args.port, args.rules, args.watch)
