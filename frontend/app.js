@@ -529,27 +529,38 @@ function showBackendStatus(p, file) {
   var el = document.getElementById("backendStatus");
   el.hidden = false;
   var bar = document.getElementById("bar");
+  // SYSTEM LINE (2026-11-01): elapsed/total time + CPU + RAM + ASK
+  // memory, on every progress poll. Elapsed was tracked by the
+  // backend all along but never shown; CPU/RAM were never shown at
+  // all (only a CLI peak-RSS print at the end). RAM is system RAM
+  // (the Task Manager number); ASK is the main server process only —
+  // parallel workers are separate processes, so it is a lower bound.
+  var sys = "";
+  if (p.elapsed_text) sys += " · Elapsed " + p.elapsed_text;
+  if (p.cpu_percent !== undefined && p.cpu_percent !== null) sys += " · CPU " + p.cpu_percent + "%";
+  if (p.ram_total_mb) sys += " · RAM " + (p.ram_used_mb / 1024).toFixed(1) + "/" + (p.ram_total_mb / 1024).toFixed(1) + " GB (" + p.ram_percent + "%)";
+  if (p.ask_rss_mb) sys += " · ASK (main) " + p.ask_rss_mb + " MB";
   if (p.stage === "uploading" && p.bytes_total > 0) {
     var pct = Math.min(100, Math.round(100 * p.bytes_received / p.bytes_total));
     bar.style.width = pct + "%";
-    el.textContent = p.stage_text + " " + fmtNum(p.bytes_received) + " of " + fmtNum(p.bytes_total) + " bytes received (" + pct + "%).";
+    el.textContent = p.stage_text + " · " + fmtNum(p.bytes_received) + " of " + fmtNum(p.bytes_total) + " bytes (" + pct + "%)" + sys + ".";
   } else if (p.stage === "reading" && p.estimated_total_events > 0) {
     var pct2 = Math.min(99, Math.round(100 * p.events / p.estimated_total_events));
     bar.style.width = pct2 + "%";
-    el.textContent = p.stage_text + " " + fmtNum(p.events) + " lines read (about " + pct2 + "% of an estimated " +
-      fmtNum(p.estimated_total_events) + "), " + fmtNum(p.detections) + " detections so far, at " +
-      fmtNum(Math.round(p.events_per_second)) + " lines/sec. " +
-      (p.eta_text ? "Estimated time left: " + p.eta_text + " (estimate — it updates as speed changes)." : "Estimating time left…");
+    el.textContent = p.stage_text + " · " + fmtNum(p.events) + " lines (about " + pct2 + "% of an estimated " +
+      fmtNum(p.estimated_total_events) + ") · " + fmtNum(p.detections) + " detections · " +
+      fmtNum(Math.round(p.events_per_second)) + " lines/sec" +
+      (p.eta_text ? " · ETA " + p.eta_text : " · ETA estimating…") + sys + ".";
   } else if (p.stage === "linking" || p.stage === "storing") {
     bar.style.width = "99%";
-    el.textContent = p.stage_text + " " + fmtNum(p.events) + " lines read, " + fmtNum(p.detections) + " detections.";
+    el.textContent = p.stage_text + " · " + fmtNum(p.events) + " lines · " + fmtNum(p.detections) + " detections" + sys + ".";
   } else if (p.stage === "done") {
     bar.style.width = "100%";
-    el.textContent = p.stage_text;
+    el.textContent = p.stage_text + sys + ".";
   } else if (p.error) {
     el.textContent = "Error: " + p.error;
   } else {
-    el.textContent = p.stage_text;
+    el.textContent = p.stage_text + sys + ".";
   }
   if (file && file.size > 2 * 1024 * 1024 * 1024) {
     el.textContent += " This is a very large file — keep this tab open, it will take a while.";
@@ -625,7 +636,7 @@ function handleFile(file) {
   xhr.upload.onprogress = function(e) {
     if (e.lengthComputable) {
       document.getElementById("bar").style.width = Math.round(100 * e.loaded / e.total) + "%";
-      showBackendStatus({ stage: "uploading", stage_text: "Step 1 of 4 — Receiving your file and saving it on this machine. It is not sent anywhere else.",
+      showBackendStatus({ stage: "uploading", stage_text: "Step 1 of 4 — Receiving",
         bytes_received: e.loaded, bytes_total: e.total }, file);
     }
   };
@@ -640,8 +651,11 @@ function handleFile(file) {
     }
     document.getElementById("fileinfo").textContent = file.name + " — " + data.events + " lines, " + data.detections +
       " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
-    document.getElementById("backendStatus").textContent = "Done — " + data.events + " lines read, " + data.detections +
-      " detections, " + data.incidents + " incidents.";
+    // Final line keeps the total time and peak memory — the old
+    // 'Done — …' text that overwrote the poll's done line (and with
+    // it the elapsed/CPU/RAM line) is removed, not kept.
+    document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s — " + data.events + " lines, " + data.detections +
+      " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
     await loadIncidents();
     if (state.incidents.length) selectIncident(state.incidents[0].id);
   };

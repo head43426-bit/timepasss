@@ -73,6 +73,13 @@ def _progress_snapshot():
     with PROGRESS_LOCK:
         snap = dict(PROGRESS)
     snap["eta_text"] = _fmt_eta(snap["eta_seconds"])
+    # CPU/RAM on every poll (never break a poll if stats fail).
+    try:
+        from engine import sysstats as _ss
+        snap.update(_ss.snapshot())
+        snap["elapsed_text"] = _ss.fmt_duration(snap.get("elapsed_seconds", 0))
+    except Exception:
+        pass
     return snap
 
 
@@ -294,7 +301,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
             filename = self.headers.get("X-Filename") or "uploaded.log"
             started = time.time()
             _set_progress(stage="uploading",
-                          stage_text="Step 1 of 4 — Receiving your file and saving it on this machine. It is not sent anywhere else.",
+                          stage_text="Step 1 of 4 — Receiving",
                           filename=filename, bytes_received=0, bytes_total=length,
                           events=0, detections=0, estimated_total_events=0,
                           events_per_second=0, elapsed_seconds=0, eta_seconds=None,
@@ -344,10 +351,14 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     eta = None
                     if stage == "reading" and eps > 0 and est_total > events:
                         eta = (est_total - events) / eps
+                    # SHORT stage texts (2026-11-01): the old sentences
+                    # were long and repeated on every poll — removed,
+                    # not kept. The progress line now carries the numbers
+                    # (elapsed, ETA, CPU, RAM) instead of prose.
                     texts = {
-                        "reading": "Step 2 of 4 — Reading line by line and checking each line against the detection rules. Benign lines are counted and dropped, not stored.",
-                        "linking": "Step 3 of 4 — Linking flagged lines that share a host, user or IP into one attack path, and scoring its risk.",
-                        "storing": "Step 4 of 4 — Saving the incidents to the database so you can open them below.",
+                        "reading": "Step 2 of 4 — Reading",
+                        "linking": "Step 3 of 4 — Linking",
+                        "storing": "Step 4 of 4 — Saving",
                     }
                     _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
                                events=events, detections=detections,
@@ -380,7 +391,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     time.sleep(1)
                 try:
                     _set_progress(stage="reading",
-                                  stage_text="Step 2 of 4 — Starting to read your file line by line.")
+                                  stage_text="Step 2 of 4 — Reading")
                     try:
                         holder.con.close()
                     except Exception:
@@ -402,10 +413,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     _workers_n = _workers(6)
                     if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
                         _set_progress(stage_text=(
-                            f"Step 2 of 4 — Reading with {_workers_n} workers. "
-                            f"Benign lines are counted and dropped, not stored. "
-                            f"Progress updates after every small chunk, so "
-                            f"the first update arrives within seconds."))
+                            f"Step 2 of 4 — Reading ({_workers_n} workers)"))
                         summary = parallel_run(tmp_path, db_path, rules_dir,
                                                workers=_workers_n,
                                                on_progress=_on_progress)
@@ -416,11 +424,17 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 finally:
                     LOCK.release()
                 summary["filename"] = filename
+                # TOTAL TIME (2026-11-01): elapsed was tracked all along
+                # but the frontend never showed it — the done line just
+                # said 'incidents are ready'. Now the total time is in
+                # the done text itself, so it cannot be missed.
+                from engine import sysstats as _ss2
+                _total_s = round(time.time() - started, 1)
                 _set_progress(stage="done",
-                              stage_text="Done — incidents are ready below.",
+                              stage_text=f"Done in {_ss2.fmt_duration(_total_s)} — incidents are ready below.",
                               events=summary.get("events", 0),
                               detections=summary.get("detections", 0),
-                              elapsed_seconds=round(time.time() - started, 1),
+                              elapsed_seconds=_total_s,
                               eta_seconds=0, done=True)
                 return self._send_json(summary)
             except Exception as exc:  # keep the server alive, report the error
