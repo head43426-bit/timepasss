@@ -253,20 +253,17 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 return self._send_file(os.path.join(FRONTEND, "index.html"))
             if parsed.path in ("/styles.css", "/app.js"):
                 return self._send_file(os.path.join(FRONTEND, parsed.path.lstrip("/")))
-            # Amazing pages from before - these were in the repo but
-            # NOT served, so localhost:8001 always showed only the
-            # plain frontend dashboard. That is why the dashboard
-            # looked the same even after restoring them.
-            if parsed.path in ("/showcase.html", "/dashboard.html"):
-                return self._send_file(os.path.join(ROOT, parsed.path.lstrip("/")))
-            if parsed.path == "/demo" or parsed.path.startswith("/demo/"):
-                # Original browser demo (root index.html + its JS/CSS).
-                # Served under /demo/ so its relative styles.css/app.js
-                # do not clash with the frontend's files at /styles.css.
-                rel = "index.html" if parsed.path in ("/demo", "/demo/") else parsed.path[len("/demo/"):]
-                if ".." in rel:
-                    return self._send_json({"error": "not found"}, 404)
-                return self._send_file(os.path.join(ROOT, rel))
+            # REMOVED (2026-11-01, user: delete legacy pages): the old
+            # browser demo (root index.html + adapters/pass3/pass4.js
+            # + styles.css/app.js) served at GET /demo/, and the old
+            # single-file page at GET /dashboard.html, are deleted.
+            # Their routes are removed here too, so those URLs fall
+            # through to the generic "not found" handler below instead
+            # of a route pointing at files that no longer exist.
+            # POST /demo (100 MB synthetic generation, engine/demo.py)
+            # is a different route in do_POST and is NOT removed.
+            if parsed.path == "/showcase.html":
+                return self._send_file(os.path.join(ROOT, "showcase.html"))
             if parts == ["progress"]:
                 return self._send_json(_progress_snapshot())
             if parts == ["run-stats"]:
