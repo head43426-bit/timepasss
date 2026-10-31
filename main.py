@@ -76,6 +76,8 @@ PROGRESS = {
     "events": 0, "detections": 0, "estimated_total_events": 0,
     "events_per_second": 0, "elapsed_seconds": 0, "eta_seconds": None,
     "done": False, "error": "", "top_techniques": [],
+    "detected_format": "", "detected_format_warning": "",
+    "rule_pack": "",
 }
 PROGRESS_LOCK = threading.Lock()
 
@@ -701,6 +703,14 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     except Exception:
                         est_total = 0
                     _set_progress(estimated_total_events=est_total)
+                    from engine.format import sniff_file as _sniff_demo_file
+                    from engine.packs import packs_for_format as _packs_demo, FORTINET_PACK as _FP_demo, MACOS_PACK as _MP_demo
+                    _sniffed_demo = _sniff_demo_file(tmp_path)
+                    _set_progress(detected_format=_sniffed_demo["format"],
+                                  detected_format_warning=_sniffed_demo["warning"])
+                    _rule_files_demo = _packs_demo(_sniffed_demo["format"], _sniffed_demo.get("os_hint", ""))
+                    _pack_name_demo = "macos" if _rule_files_demo == _MP_demo else ("fortinet" if _rule_files_demo == _FP_demo else "all")
+                    _set_progress(rule_pack=_pack_name_demo)
 
                     def _on_progress_demo(events, detections, stage, top=None):
                         elapsed = max(time.time() - started, 0.001)
@@ -738,14 +748,16 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
                             _set_progress(stage_text=f"Step 2 of 4 - Reading ({_workers_n} workers)")
                             summary = parallel_run(tmp_path, db_path, rules_dir,
-                                                   workers=_workers_n, on_progress=_on_progress_demo)
+                                                   workers=_workers_n, on_progress=_on_progress_demo, rule_files=_rule_files_demo or None)
                         else:
                             summary = cli_run(tmp_path, db_path, rules_dir,
-                                              chunk_size=20000, on_progress=_on_progress_demo)
+                                              chunk_size=20000, on_progress=_on_progress_demo, rule_files=_rule_files_demo or None)
                         holder.con = store.connect(db_path)
                     finally:
                         LOCK.release()
                     summary["filename"] = filename
+                    summary["detected_format"] = _sniffed_demo
+                    summary["rule_pack"] = _pack_name_demo
                     from engine import sysstats as _ss_demo
                     _total_s = round(time.time() - started, 1)
                     _set_progress(stage="done",
@@ -819,6 +831,26 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 except Exception:
                     est_total = 0
                 _set_progress(estimated_total_events=est_total)
+                # FORMAT SNIFF + FIXED PACK + STOP-IF-UNKNOWN (my changes, merged onto remote):
+                # Sniff first 200 lines, pick the fixed Fortinet pack only for fortinet_kv,
+                # otherwise load all rules. Stop-if-unknown checkbox (X-Stop-On-Unknown: 1)
+                # stops here, before any processing / DB write / worker spawn.
+                from engine.format import sniff_file as _sniff_file
+                from engine.packs import packs_for_format as _packs_up, FORTINET_PACK as _FP_up, MACOS_PACK as _MP_up
+                _sniffed = _sniff_file(tmp_path)
+                _set_progress(detected_format=_sniffed["format"],
+                              detected_format_warning=_sniffed["warning"])
+                _rule_files = _packs_up(_sniffed["format"], _sniffed.get("os_hint", ""))
+                _pack_name = "macos" if _rule_files == _MP_up else ("fortinet" if _rule_files == _FP_up else "all")
+                _set_progress(rule_pack=_pack_name)
+                _stop_on_unknown = self.headers.get("X-Stop-On-Unknown") in ("1", "true", "yes")
+                if _stop_on_unknown and _sniffed["format"] in ("unknown", "empty"):
+                    _err = ("Stopped: format not recognised from the first lines. "
+                            "No processing was done and nothing was written to the database. "
+                            "Untick 'Stop if format is unknown' to let plain keyword rules try anyway, "
+                            "or share a few sample lines to add this format.")
+                    _set_progress(stage="error", stage_text=_err, done=True, error=_err)
+                    return self._send_json({"error": _err, "detected_format": _sniffed}, 400)
 
                 def _on_progress(events, detections, stage, top=None):
                     elapsed = max(time.time() - started, 0.001)
@@ -891,14 +923,16 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                             f"Step 2 of 4 - Reading ({_workers_n} workers)"))
                         summary = parallel_run(tmp_path, db_path, rules_dir,
                                                workers=_workers_n,
-                                               on_progress=_on_progress)
+                                               on_progress=_on_progress, rule_files=_rule_files or None)
                     else:
                         summary = cli_run(tmp_path, db_path, rules_dir,
-                                          chunk_size=20000, on_progress=_on_progress)
+                                          chunk_size=20000, on_progress=_on_progress, rule_files=_rule_files or None)
                     holder.con = store.connect(db_path)
                 finally:
                     LOCK.release()
                 summary["filename"] = filename
+                summary["detected_format"] = _sniffed
+                summary["rule_pack"] = _pack_name
                 _record_run(db_path, summary, "upload")
                 # TOTAL TIME (2026-11-01): elapsed was tracked all along
                 # but the frontend never showed it - the done line just

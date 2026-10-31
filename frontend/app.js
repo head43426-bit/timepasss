@@ -795,6 +795,9 @@ function showBackendStatus(p, file) {
   // (the Task Manager number); ASK is the main server process only -
   // parallel workers are separate processes, so it is a lower bound.
   var sys = "";
+  if (p.detected_format) sys += " · Format " + p.detected_format;
+  if (p.rule_pack) sys += " · Rules: " + p.rule_pack + " pack";
+  if (p.detected_format_warning) sys += " · Warning: " + p.detected_format_warning;
   if (p.elapsed_text) sys += " · Elapsed " + p.elapsed_text;
   if (p.cpu_percent !== undefined && p.cpu_percent !== null) sys += " · CPU " + p.cpu_percent + "%";
   if (p.ram_total_mb) sys += " · RAM " + (p.ram_used_mb / 1024).toFixed(1) + "/" + (p.ram_total_mb / 1024).toFixed(1) + " GB (" + p.ram_percent + "%)";
@@ -896,6 +899,8 @@ function handleFile(file) {
   var xhr = new XMLHttpRequest();
   xhr.open("POST", "/upload", true);
   xhr.setRequestHeader("X-Filename", file.name);
+  var stopBox = document.getElementById("stopOnUnknown");
+  if (stopBox && stopBox.checked) xhr.setRequestHeader("X-Stop-On-Unknown", "1");
   xhr.upload.onprogress = function(e) {
     if (e.lengthComputable) {
       document.getElementById("bar").style.width = Math.round(100 * e.loaded / e.total) + "%";
@@ -913,7 +918,10 @@ function handleFile(file) {
       return;
     }
     document.getElementById("fileinfo").textContent = file.name + " - " + data.events + " lines, " + data.detections +
-      " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
+      " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine." +
+      (data.detected_format ? " Detected format: " + data.detected_format.format + "." : "") +
+      (data.rule_pack ? " Rules: " + data.rule_pack + " pack." : "") +
+      (data.detected_format && data.detected_format.warning ? " " + data.detected_format.warning : "");
     // Final line keeps the total time and peak memory - the old
     // 'Done - …' text that overwrote the poll's done line (and with
     // it the elapsed/CPU/RAM line) is removed, not kept.

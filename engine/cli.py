@@ -74,7 +74,7 @@ def peak_rss_mb() -> float:
 
 def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
         chunk_size: int = 5000, ground_truth_path: str = None,
-        on_progress=None, fresh: bool = True) -> dict:
+        on_progress=None, fresh: bool = True, rule_files=None) -> dict:
     """on_progress(events, detections, stage) is called after each batch
     (stage "reading") and again for "linking" / "storing", so a caller
     (e.g. the dashboard) can show plain-words progress and an ETA.
@@ -87,7 +87,7 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
     among themselves into NEW incidents - existing incident rows,
     their detection lists and their graphs are never rewritten."""
     started = time.time()
-    rules = load_rules(rules_dir)
+    rules = load_rules(rules_dir, only_files=rule_files)
     detector = Detector(rules)
     con = store.connect(db_path, fresh=fresh)
     if topology_path:

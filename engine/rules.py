@@ -79,10 +79,18 @@ def _rule_from_dict(data: Dict) -> Rule:
     )
 
 
-def load_rules(rules_dir: str) -> List[Rule]:
-    """Load every ``*.yml`` in ``rules_dir``, sorted by priority desc."""
+def load_rules(rules_dir: str, only_files=None) -> List[Rule]:
+    """Load rules from ``rules_dir``, sorted by priority desc.
+    only_files=None (default): every ``*.yml`` in the dir, as before.
+    only_files=[...]: only those filenames - a fixed pack. Missing
+    files are skipped, never an error, so a pack never crashes a run."""
     rules: List[Rule] = []
-    for path in sorted(glob.glob(os.path.join(rules_dir, "*.yml"))):
+    if only_files is not None:
+        _paths = [os.path.join(rules_dir, f) for f in only_files
+                  if os.path.isfile(os.path.join(rules_dir, f))]
+    else:
+        _paths = sorted(glob.glob(os.path.join(rules_dir, "*.yml")))
+    for path in _paths:
         with open(path, "r", encoding="utf-8") as handle:
             doc = yaml.safe_load(handle) or {}
         for item in doc.get("rules", []):

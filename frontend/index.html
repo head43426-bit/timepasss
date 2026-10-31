@@ -121,6 +121,9 @@
         <button id="uploadBtn" type="button" class="btn ghost">Upload PCAP/Logs</button>
         <button id="sampleBtn" type="button" class="btn ghost">Load Sample</button>
       </div>
+      <div style="margin: 12px 0 0;">
+        <label style="font-size: 14px; cursor: pointer;"><input type="checkbox" id="stopOnUnknown" style="margin-right: 6px;"> Stop if format is unknown</label>
+      </div>
       <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
       <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs - never real production logs or credentials.</p>
       <p id="backendStatus" class="warn" hidden></p>

@@ -1,0 +1,58 @@
+# macOS rules (2026-11-01): Apple logs mapped in parser.py
+# (eventMessage -> detail/action, sender/process -> source).
+# These fire ONLY on explicit macOS attack phrases, not on every
+# benign admin use — e.g. plain "sudo" alone never flags, and
+# plain "osascript" for a normal automation is Medium confidence,
+# not Critical. Add phrases here to cover new macOS attacks,
+# no code change needed (B-4).
+rules:
+  - id: macos_applescript
+    name: AppleScript execution
+    technique_id: T1059.002
+    technique_name: AppleScript
+    tactic: Execution
+    kill_chain_stage: Execution
+    confidence: 75
+    priority: 70
+    description: osascript / AppleScript used to execute code — a common macOS execution technique
+    match:
+      any_contains: ["osascript", "apple script"]
+
+  - id: macos_launch_persistence
+    name: LaunchAgent / LaunchDaemon persistence
+    technique_id: T1543.001
+    technique_name: Launch Agent
+    tactic: Persistence
+    kill_chain_stage: Persistence
+    confidence: 80
+    priority: 75
+    description: LaunchAgent or LaunchDaemon plist installed for persistence
+    match:
+      any_contains: ["launchagent", "launchdaemon", "launch agent", "launch daemon",
+                     "library/launchagents", "library/launchdaemons"]
+
+  - id: macos_gatekeeper_bypass
+    name: Gatekeeper bypass
+    technique_id: T1553.001
+    technique_name: Gatekeeper Bypass
+    tactic: Defense Evasion
+    kill_chain_stage: Defense Evasion
+    confidence: 85
+    priority: 75
+    description: Gatekeeper disabled or bypassed to run unsigned code
+    match:
+      any_contains: ["gatekeeper bypass", "spctl --master-disable",
+                     "gatekeeper disabled", "quarantine attribute removed"]
+
+  - id: macos_keychain_access
+    name: Keychain credential access
+    technique_id: T1555.001
+    technique_name: Keychain
+    tactic: Credential Access
+    kill_chain_stage: Credential Access
+    confidence: 80
+    priority: 75
+    description: Keychain dumped or read to steal stored credentials
+    match:
+      any_contains: ["keychain dumped", "security find-generic-password",
+                     "keychain access", "login keychain"]

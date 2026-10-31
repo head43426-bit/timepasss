@@ -182,7 +182,7 @@ def cpu_friendly_workers(requested: int = 0) -> int:
 
 def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
                  topology_path: str = None, ground_truth_path: str = None,
-                 on_progress=None) -> dict:
+                 on_progress=None, rule_files=None) -> dict:
     started = time.time()
     workers = cpu_friendly_workers(workers)
     con = store.connect(db_path, fresh=True)
@@ -204,7 +204,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     total_events = 0
     chunk_results = []
     with ProcessPoolExecutor(max_workers=workers,
-                             initializer=_init_worker, initargs=(rules_dir,)) as pool:
+                             initializer=_init_worker, initargs=(rules_dir, rule_files)) as pool:
         completed_workers = 0
         _tmpdir = os.path.dirname(os.path.abspath(db_path)) or "."
         for result in pool.map(_process_range, [(log_path, s, e, _tmpdir) for s, e in ranges]):
@@ -223,7 +223,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     total_agg = sum(r["agg_events"] for r in chunk_results)
     if total_agg:
         print(f"  ... Processing {total_agg:,} aggregate candidates...", flush=True)
-        agg_detector = Detector(load_rules(rules_dir))
+        agg_detector = Detector(load_rules(rules_dir, only_files=rule_files))
         agg_detector.simple = []
         for result in chunk_results:
             with open(result["agg_path"], encoding="utf-8") as fh:
@@ -237,7 +237,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     # and linking with the streaming linker. Nothing here holds the
     # whole detection list.
     from engine import protect as _protect
-    _rules = load_rules(rules_dir)
+    _rules = load_rules(rules_dir, only_files=rule_files)
     _tell_map = {}
     for _r in _rules:
         _phrases = []

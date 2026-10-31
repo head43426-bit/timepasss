@@ -31,7 +31,8 @@ from typing import Dict, Iterator, List, Optional
 
 from .severity import normalize_severity
 
-_TIME_FORMATS = ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M")
+_TIME_FORMATS = ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M",
+                 "%b %d %H:%M:%S", "%b %d %Y %H:%M:%S")
 
 
 def epoch_from_eventtime(value) -> Optional[float]:
@@ -54,14 +55,31 @@ def epoch_from_eventtime(value) -> Optional[float]:
     return None
 
 
+def _normalise_epoch(value: float) -> Optional[float]:
+    """Epoch in s/ms/us/ns, by magnitude - same rule as
+    epoch_from_eventtime, applied to ANY timestamp field, not
+    just Fortinet eventtime."""
+    if value > 1e17:
+        return value / 1e9
+    if value > 1e14:
+        return value / 1e6
+    if value > 1e11:
+        return value / 1e3
+    if value > 1e9:
+        return value
+    if value > 0:
+        return value
+    return None
+
+
 def parse_timestamp(value) -> Optional[float]:
     if value is None or value == "":
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        return _normalise_epoch(float(value))
     text = str(value).strip()
     try:
-        return float(text)
+        return _normalise_epoch(float(text))
     except ValueError:
         pass
     if text.endswith("Z"):
@@ -75,46 +93,103 @@ def parse_timestamp(value) -> Optional[float]:
         pass
     for fmt in _TIME_FORMATS:
         try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).timestamp()
+            dt = datetime.strptime(text, fmt)
+            if fmt == "%b %d %H:%M:%S":
+                dt = dt.replace(year=datetime.now(timezone.utc).year)
+            return dt.replace(tzinfo=timezone.utc).timestamp()
         except ValueError:
             continue
     return None
 
 
+def _deep_pick(raw: Dict, *keys):
+    """Pick a field by any of its names, case-insensitively, and
+    searching nested dicts/lists too. Top-level exact match wins,
+    then case-insensitive top-level, then recursive search."""
+    wanted = {k.lower() for k in keys}
+    for key in keys:
+        if key in raw and raw[key] not in (None, ""):
+            v = raw[key]
+            if isinstance(v, (str, int, float)):
+                return v
+            if isinstance(v, dict) and v.get("name") not in (None, ""):
+                return v["name"]
+    for k, v in raw.items():
+        if k.lower() in wanted and v not in (None, ""):
+            if isinstance(v, (str, int, float)):
+                return v
+            if isinstance(v, dict) and v.get("name") not in (None, ""):
+                return v["name"]
+    def _walk(obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k.lower() in wanted and v not in (None, "") and isinstance(v, (str, int, float)):
+                    return v
+            for v in obj.values():
+                r = _walk(v)
+                if r is not None:
+                    return r
+        elif isinstance(obj, list):
+            for v in obj:
+                r = _walk(v)
+                if r is not None:
+                    return r
+        return None
+    r = _walk(raw)
+    return r if r is not None else ""
+
+
 def _normalise(raw: Dict) -> Dict:
     def pick(*keys, default=""):
-        for key in keys:
-            if key in raw and raw[key] not in (None, ""):
-                return raw[key]
-        return default
+        v = _deep_pick(raw, *keys)
+        return v if v != "" else default
 
-    time_value = pick("time", "timestamp", "t", "datetime")
+    time_value = pick("time", "timestamp", "t", "datetime", "@timestamp",
+                      "event_time", "log_time", "date_time", "timestamp_ms",
+                      "eventtime")
     # eventtime wins for ts when present: it is the device's own epoch,
     # exact to the nanosecond, and immune to the tz parsing below.
     ts = epoch_from_eventtime(raw.get("eventtime")) if "eventtime" in raw else None
     if ts is None:
         ts = parse_timestamp(time_value)
+    _action = pick("action", "event", "event_type", "event_name", "eventName",
+                   "activity", "operation", "verb")
+    _detail = pick("detail", "message", "description", "msg", "eventMessage",
+                   "event_message", "log_message", "text", "summary", "reason")
+    if not _action and _detail:
+        _action = _detail
     return {
         "time": str(time_value),
         "ts": ts,
-        "hostname": str(pick("hostname", "host_name", default="")),
-        "host": str(pick("host", "hostname", "device")),
-        "user": str(pick("user", "username", "account")),
-        "ip": str(pick("ip", "src_ip", "source_ip")),
+        "hostname": str(pick("hostname", "host_name", "machine_name", default="")),
+        "host": str(pick("host", "hostname", "device", "computer", "machine",
+                         "endpoint", "device_name", "host_name")),
+        "user": str(pick("user", "username", "account", "user_name", "principal",
+                         "actor", "subject", "targetusername", "target_user_name",
+                         "user_id")),
+        "ip": str(pick("ip", "src_ip", "source_ip", "src_addr", "source_address",
+                       "client_ip", "remote_ip", "ip_address", "ipaddress",
+                       "srcip")),
         # Destination IP is the real host-to-host target in firewall
         # logs (srcip -> dstip). It used to be dropped, which is why
         # every Fortinet detection collapsed onto the firewall host.
-        "dst_ip": str(pick("dst_ip", "dstip", "destination_ip")),
-        "source": str(pick("source", "src", "system")),
-        "action": str(pick("action", "event", "event_type")),
-        "detail": str(pick("detail", "message", "description", "msg")),
-        "stage_hint": str(pick("stage", "kill_chain_stage")),
-        "technique_hint": str(pick("technique", "mitre", "technique_id")),
+        "dst_ip": str(pick("dst_ip", "dstip", "destination_ip", "dst_addr",
+                           "destination_address", "dest_ip", "dest_addr",
+                           "target_ip", "dstip")),
+        "source": str(pick("source", "src", "system", "sender", "process",
+                           "subsystem", "category", "service", "component",
+                           "facility", "log_source", "vendor")),
+        "action": str(_action),
+        "detail": str(_detail),
+        "stage_hint": str(pick("stage", "kill_chain_stage", "phase", "killchain")),
+        "technique_hint": str(pick("technique", "mitre", "technique_id",
+                                   "mitre_id", "attack_id", "tactic")),
         # Severity is normalised here (any casing / synonym -> Title
         # Case) and left "" when the line carries none, instead of
         # defaulting to Medium. The detector fills it in (intrinsic
         # technique priority, else Low) - see engine/severity.py.
-        "severity": normalize_severity(pick("severity", "sev", "level")),
+        "severity": normalize_severity(pick("severity", "sev", "level", "priority",
+                                            "criticality")),
     }
 
 
@@ -219,6 +294,14 @@ def parse_line(line: str) -> Optional[Dict]:
         else:
             return None
         return _normalise(dict(zip(keys, parts)))
+    _syslog = re.match(
+        r"^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}"
+        r"|\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)"
+        r"\s+(\S+)\s+([^\s:]+)(?:\[\d+\])?:\s*(.*)$", line)
+    if _syslog:
+        _ts_str, _host, _proc, _msg = _syslog.groups()
+        return _normalise({"time": _ts_str, "host": _host, "source": _proc,
+                           "action": _msg, "detail": _msg})
     # CSV fallback (single row).
     try:
         row = next(csv.reader(io.StringIO(line)))
