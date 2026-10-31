@@ -149,14 +149,124 @@ def link_detections(detections: List[Dict]) -> List[List[Dict]]:
     return out
 
 
+KILL_CHAIN_ORDER = ["Reconnaissance", "Initial Access", "Execution",
+                    "Persistence", "Privilege Escalation", "Defense Evasion",
+                    "Credential Access", "Discovery", "Lateral Movement",
+                    "Collection", "Command and Control", "Exfiltration",
+                    "Impact"]
+
+
+def next_stages(reached_stages: List[str]) -> List[Dict]:
+    """Stage look-ahead, no topology needed: from the deepest kill-chain
+    stage already reached, the next stages an attacker normally tries,
+    in order, with what to watch for. This is a prediction about
+    *stages*, never a guessed host — so it works for the firex
+    single-host incident too, where no topology was supplied."""
+    reached = {s for s in reached_stages if s}
+    if not reached:
+        return []
+    deepest = max((KILL_CHAIN_ORDER.index(s) for s in reached
+                   if s in KILL_CHAIN_ORDER), default=-1)
+    out = []
+    for stage in KILL_CHAIN_ORDER[deepest + 1:]:
+        out.append({
+            "stage": stage,
+            "reason": (f"Attacker has already reached "
+                       f"{KILL_CHAIN_ORDER[deepest]}; {stage} is the next "
+                       f"stage in the kill chain after it"),
+            "block": f"Watch for {stage} activity on the compromised host(s) "
+                     f"and alert on its first sign",
+        })
+    return out
+
+
+def blast_radius_score(compromised_hosts: List[str], topology: Dict) -> int:
+    """Blast-radius optimiser, classical (QAOA-style combinatorial
+    optimisation, run greedily — a Qiskit statevector simulation
+    explodes at 2^n and would never run on a 4 GB machine, so it is
+    deliberately NOT used here). Score = how much of the supplied
+    topology is already compromised or one hop away, 0-100."""
+    host_subnet = topology.get("host_subnet", {})
+    if not host_subnet:
+        return 0
+    compromised = set(compromised_hosts)
+    one_hop = set()
+    for host in compromised:
+        subnet = host_subnet.get(host)
+        for peer, peer_subnet in host_subnet.items():
+            if peer_subnet == subnet and peer not in compromised:
+                one_hop.add(peer)
+    total = len(host_subnet)
+    return round(100 * (len(compromised) + 0.5 * len(one_hop)) / total) if total else 0
+
+
+class StreamingLinker:
+    """Windowed linking — the 50 GB / 4 GB fix. The old link_detections
+    held every detection in RAM and only linked at the end. This class
+    holds only *active* incidents (ones seen within the 48-hour link
+    window). As soon as an incident is older than the window, feed()
+    returns it finished, and the caller writes it to DuckDB and drops
+    it. Memory is therefore proportional to one window of activity,
+    not to the whole file. Requirement, stated plainly: the log must
+    be roughly chronological (true for real logs, which append in
+    time order). A detection arriving more than 48 hours after a
+    flushed incident cannot be merged into it — it starts a new one,
+    exactly as if it had arrived in a separate, later log."""
+
+    def __init__(self):
+        self.active = []  # {hosts, users, ips, last_ts, dets}
+
+    def feed(self, det: Dict) -> List[List[Dict]]:
+        ts = det.get("ts") or 0
+        finished = [a["dets"] for a in self.active
+                    if ts - a["last_ts"] > LINK_WINDOW_SECONDS]
+        self.active = [a for a in self.active
+                       if ts - a["last_ts"] <= LINK_WINDOW_SECONDS]
+        matches = [a for a in self.active
+                   if det["host"] in a["hosts"] or det["user"] in a["users"]
+                   or (det.get("ip") and det["ip"] in a["ips"])]
+        if not matches:
+            self.active.append({"hosts": {det["host"]}, "users": {det["user"]},
+                                "ips": {det["ip"]} if det.get("ip") else set(),
+                                "last_ts": ts, "dets": [det]})
+        else:
+            first = matches[0]
+            for other in matches[1:]:
+                first["hosts"] |= other["hosts"]
+                first["users"] |= other["users"]
+                first["ips"] |= other["ips"]
+                first["dets"].extend(other["dets"])
+                self.active.remove(other)
+            first["hosts"].add(det["host"])
+            first["users"].add(det["user"])
+            if det.get("ip"):
+                first["ips"].add(det["ip"])
+            first["last_ts"] = max(first["last_ts"], ts)
+            first["dets"].append(det)
+        for dets in finished:
+            dets.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
+        return finished
+
+    def finish(self) -> List[List[Dict]]:
+        out = [a["dets"] for a in self.active]
+        self.active = []
+        for dets in out:
+            dets.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
+        out.sort(key=lambda dets: dets[0].get("ts") or 0 if dets else 0)
+        return out
+
+
 def next_reach(compromised_hosts: List[str], compromised_users: List[str],
                topology: Dict) -> List[Dict]:
-    """What the attacker could reach next, from topology only."""
+    """What the attacker could reach next, from topology only, with a
+    transparent weighted score so the ranking can be checked:
+    admin rights 50 + same subnet 25 + shared account path 15 +
+    stage-depth bonus 10, capped at 100. A host reached by two routes
+    keeps the higher score and both reasons — it is not counted twice."""
     admin_rights = topology.get("admin_rights", {})
     host_subnet = topology.get("host_subnet", {})
     compromised = set(compromised_hosts)
     results: Dict[str, Dict] = {}
-    # Same-subnet peers of compromised hosts.
     subnet_of = {h: s for h, s in host_subnet.items()}
     for host in compromised_hosts:
         subnet = subnet_of.get(host)
@@ -164,20 +274,26 @@ def next_reach(compromised_hosts: List[str], compromised_users: List[str],
             continue
         for peer, peer_subnet in host_subnet.items():
             if peer_subnet == subnet and peer not in compromised:
-                results[peer] = {
-                    "host": peer, "confidence": 60,
-                    "reason": f"Same subnet as compromised host {host}",
-                    "block": f"Segment the subnet or isolate {host} first",
-                }
-    # Hosts where a compromised account has admin rights (FR-6 example:
-    # "This account has admin rights on 3 more servers").
+                cur = results.get(peer, {"host": peer, "score": 0,
+                                         "confidence": 0, "reasons": []})
+                cur["score"] = min(100, cur["score"] + 25)
+                cur["reasons"].append(f"Same subnet as compromised host {host}")
+                cur["block"] = f"Segment the subnet or isolate {host} first"
+                results[peer] = cur
     for account in compromised_users:
         for host in admin_rights.get(account, []):
             if host not in compromised:
-                results[host] = {
-                    "host": host, "confidence": 85,
-                    "reason": f"Account {account} has admin rights on {host}",
-                    "block": (f"Revoke admin rights for {account} on {host} "
-                              f"and reset its credentials"),
-                }
-    return sorted(results.values(), key=lambda r: (-r["confidence"], r["host"]))
+                cur = results.get(host, {"host": host, "score": 0,
+                                         "confidence": 0, "reasons": []})
+                cur["score"] = min(100, cur["score"] + 50)
+                cur["reasons"].append(f"Account {account} has admin rights on {host}")
+                cur["block"] = (f"Revoke admin rights for {account} on {host} "
+                                f"and reset its credentials")
+                results[host] = cur
+    out = []
+    for r in results.values():
+        r["confidence"] = r["score"]
+        r["reason"] = "; ".join(dict.fromkeys(r["reasons"]))
+        del r["reasons"]
+        out.append(r)
+    return sorted(out, key=lambda r: (-r["confidence"], r["host"]))

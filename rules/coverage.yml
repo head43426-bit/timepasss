@@ -1,0 +1,88 @@
+# Coverage rules: fill the MITRE gaps found in the audit — Discovery,
+# Impact, a second Defense Evasion technique, and DNS command-and-control.
+# Same Sigma-style format as the other files: edit this file to add a
+# rule, no code change needed.
+rules:
+  - id: account_discovery
+    name: Account discovery / user enumeration
+    technique_id: T1087
+    technique_name: Account Discovery
+    tactic: Discovery
+    kill_chain_stage: Discovery
+    confidence: 75
+    priority: 70
+    description: Attacker enumerating accounts before choosing a target
+    match:
+      any_contains: ["account discovery", "user enumeration", "enumerated users", "list all accounts"]
+
+  - id: network_service_scan
+    name: Network service scanning
+    technique_id: T1046
+    technique_name: Network Service Discovery
+    tactic: Discovery
+    kill_chain_stage: Discovery
+    confidence: 75
+    priority: 70
+    description: Probing which services run on reachable hosts
+    match:
+      any_contains: ["service scan", "network service scanning", "scanning services", "probing services"]
+
+  - id: dns_tunneling
+    name: DNS tunneling / covert DNS channel
+    technique_id: T1071.004
+    technique_name: DNS
+    tactic: Command and Control
+    kill_chain_stage: Command and Control
+    confidence: 80
+    priority: 80
+    description: Data hidden in DNS queries to bypass web filtering
+    match:
+      any_contains: ["dns tunneling", "unusual dns queries", "dns exfiltration", "covert dns"]
+
+  - id: masquerading
+    name: Masquerading as a system process or file
+    technique_id: T1036
+    technique_name: Masquerading
+    tactic: Defense Evasion
+    kill_chain_stage: Defense Evasion
+    confidence: 80
+    priority: 80
+    description: Malware disguised with a trusted name or location
+    match:
+      any_contains: ["masquerading", "disguised as system", "fake system process", "renamed to svchost"]
+
+  - id: process_injection
+    name: Process injection into a trusted process
+    technique_id: T1055
+    technique_name: Process Injection
+    tactic: Defense Evasion
+    kill_chain_stage: Defense Evasion
+    confidence: 85
+    priority: 85
+    description: Malicious code injected into a legitimate process
+    match:
+      any_contains: ["process injection", "injected into process", "code injection into"]
+
+  - id: data_encrypted_impact
+    name: Files encrypted (ransomware-style impact)
+    technique_id: T1486
+    technique_name: Data Encrypted for Impact
+    tactic: Impact
+    kill_chain_stage: Impact
+    confidence: 90
+    priority: 95
+    description: Bulk file encryption, the signature of ransomware
+    match:
+      any_contains: ["files encrypted", "ransom note", "data encrypted for ransom", "bulk encryption"]
+
+  - id: data_destruction
+    name: Data destruction / disk wiping
+    technique_id: T1485
+    technique_name: Data Destruction
+    tactic: Impact
+    kill_chain_stage: Impact
+    confidence: 90
+    priority: 95
+    description: Attacker destroying data instead of stealing it
+    match:
+      any_contains: ["data destroyed", "disk wiped", "files wiped", "drive formatted"]

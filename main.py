@@ -83,7 +83,7 @@ class DBHolder:
         self.con = con
 
 
-def make_handler(holder, rules_dir, db_path):
+def make_handler(holder, rules_dir, db_path, live_watch=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
@@ -190,7 +190,8 @@ def make_handler(holder, rules_dir, db_path):
                 if parts == ["health"]:
                     return self._send_json({"status": "ok",
                                             "detections": store.count_detections(holder.con),
-                                            "incidents": len(store.list_incidents(holder.con))})
+                                            "incidents": len(store.list_incidents(holder.con)),
+                                            "live_watch": live_watch})
                 if parts == ["incidents"]:
                     return self._send_json(store.list_incidents(holder.con))
                 if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "path":
@@ -221,6 +222,13 @@ def make_handler(holder, rules_dir, db_path):
                              "technique_name": k[2], "count": c}
                             for k, c in counts.items()]
                         inc["timeline"] = tl[:200] + tl[-200:]
+                    # Look-ahead rides along with the path, so the
+                    # frontend does not need a second slow request.
+                    _extra = _incident_with_extras(holder.con, inc_id)
+                    if _extra:
+                        inc["next_reach"] = _extra["next_reach"]
+                        inc["next_stages"] = _extra["next_stages"]
+                        inc["blast_radius"] = _extra["blast_radius"]
                     return self._send_json(inc)
                 if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "report":
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None
@@ -229,6 +237,9 @@ def make_handler(holder, rules_dir, db_path):
                     out = {"incident_id": inc["id"], "title": inc["title"],
                            "report": report_mod.english_report(inc, inc["next_reach"]),
                            "next_reach": inc["next_reach"],
+                           "next_stages": inc["next_stages"],
+                           "blast_radius": inc["blast_radius"],
+                           "protections": inc["protections"],
                            "merged_alerts": inc["merged_alerts"]}
                     if query.get("hindi") == ["1"]:
                         out["hindi"] = report_mod.hindi_report(inc, inc["next_reach"])
@@ -237,7 +248,21 @@ def make_handler(holder, rules_dir, db_path):
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None
                     if not inc:
                         return self._send_json({"error": "incident not found"}, 404)
-                    return self._send_json({"incident_id": inc["id"], "next_reach": inc["next_reach"]})
+                    return self._send_json({"incident_id": inc["id"], "next_reach": inc["next_reach"],
+                                            "next_stages": inc["next_stages"],
+                                            "blast_radius": inc["blast_radius"]})
+                # Custom 404 page for browsers, JSON only for API calls.
+                if parts and parts[0] not in ("health", "incidents", "progress", "db", "clear", "upload"):
+                    _p404 = os.path.join(FRONTEND, "404.html")
+                    if os.path.isfile(_p404):
+                        with open(_p404, "rb") as _f:
+                            _body = _f.read()
+                        self.send_response(404)
+                        self.send_header("Content-Type", "text/html; charset=utf-8")
+                        self.send_header("Content-Length", str(len(_body)))
+                        self.end_headers()
+                        self.wfile.write(_body)
+                        return None
                 return self._send_json({"error": "not found, try / , /health or /incidents"}, 404)
 
         def do_POST(self):
@@ -356,7 +381,23 @@ def serve(db_path, host, port, rules_dir, watch=None, interval=2.0):
 
         threading.Thread(target=_watch_loop, daemon=True).start()
         print("Live watch: %s every %ss" % (watch, interval))
-    server = ThreadingHTTPServer((host, port), make_handler(holder, rules_dir, db_path))
+    # Lowest-spec, least-knowledge friendly: if the port is already
+    # taken (another program, or an old ASK still running), do not
+    # crash with a traceback — just try the next ports and say which
+    # one actually worked, in plain words.
+    server = None
+    for try_port in range(port, port + 11):
+        try:
+            server = ThreadingHTTPServer((host, try_port), make_handler(holder, rules_dir, db_path, live_watch=watch))
+            port = try_port
+            break
+        except OSError:
+            continue
+    if server is None:
+        print(f"Sorry — ports {port} to {port + 10} are all busy. Close another program and try again.")
+        return
+    if port != 8001:
+        print(f"Port 8001 was busy, so ASK is using port {port} instead.")
     print("Dashboard: http://%s:%d  (upload your .log file there)" % (host, port))
     print("API: /health, /incidents, /incidents/{id}/path, /incidents/{id}/report, /incidents/{id}/next")
     try:

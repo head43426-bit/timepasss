@@ -19,7 +19,7 @@
       <p class="tag">Analyse &middot; Secure &middot; Kill the chain &middot; Your log files only &middot; No demo data</p>
     </div>
   </div>
-  <p class="tag"><a href="/" style="color:#f0a832">← Home</a></p>
+  <p class="tag"><a href="/" style="color:#f0a832">← Home</a> &nbsp;·&nbsp; <a href="#story" style="color:#f0a832">How ASK works</a></p>
 </header>
 
 <main>
@@ -50,6 +50,9 @@
 
   <section class="card dark">
     <h2>Incidents, worst first</h2>
+    <p class="hint" id="liveStatus">Live status loading…</p>
+    <p class="hint" id="liveNote"></p>
+    <p class="hint">Every incident below shows its own risk score (0–100, worst first). The score is the weighted formula from the story section — severity weights + distinct kill-chain stages + exfiltration/credential bonuses — not a guess.</p>
     <div class="stats" id="stats"></div>
     <div id="incidents"><p>No incidents yet. Upload a log to see them here.</p></div>
   </section>
@@ -71,6 +74,10 @@
     <h3>What the attacker could reach next</h3>
     <div id="next"></div>
 
+    <h3>Protect — what to do now</h3>
+    <p class="hint">ASK cannot block an attack itself — it has no agent on your hosts. These are the concrete actions for each technique found in this incident, worst first. Do them in order.</p>
+    <div id="protect"></div>
+
     <h3>Report</h3>
     <p>
       <button class="btn" id="copyBtn" disabled>Copy English report</button>
@@ -78,6 +85,22 @@
     </p>
     <pre id="report">No incident selected yet.</pre>
     <p class="warn" id="hindiNote" hidden>Hindi here is a fixed template — it is NOT a live Sarvam translation. For a real Sarvam Hindi report, run the backend with SARVAM_API_KEY set in a private .env.</p>
+  </section>
+
+  <section class="card dark" id="story">
+    <h2>How ASK works — the story, in plain words</h2>
+    <p>ASK is <strong>Analyse · Secure · Kill</strong>: it reads your log, finds the attack, links it into one chain, and tells you what to do next. No demo data, no guessed hosts, no real production logs unless you choose to upload them. Here is every step, in order:</p>
+    <ol>
+      <li><strong>1. Ingest, streaming, memory-safe.</strong> Your file is received in 1 MB chunks and read line by line. Benign lines are counted and dropped immediately — only flagged lines ever reach the database. That is why a multi-GB file runs on a 4 GB machine, and why it is fast: no line is parsed twice, no whole file is ever held in RAM. With <code>--workers 4</code> the file is split into byte-range chunks and processed in parallel, then replayed into one incident list.</li>
+      <li><strong>2. Detect and label (Agent 1 in spirit).</strong> Every line is checked against Sigma-style rules in <code>rules/*.yml</code> — plain config files, not code, so you can add a rule without touching the engine. A match stamps a MITRE ATT&amp;CK technique (for example T1566.001 Phishing, T1204.002 Malicious File, T1071.001 Web Protocols) and a kill-chain stage (Reconnaissance → Initial Access → Execution → Persistence → Privilege Escalation → Credential Access → Lateral Movement → Collection → Command and Control → Exfiltration). A single failed login never flags; brute force needs 50+ failures plus a success for the same user and host.</li>
+      <li><strong>3. Link into one incident (Agent 2).</strong> Flagged lines that share a host, a user, or an IP within 48 hours join the same incident. That is the whole linking rule — host, user, IP, time — and it is why a phishing line, a malware line and a beacon line on the same host become one attack path instead of three separate alerts.</li>
+      <li><strong>4. Graph (NetworkX).</strong> Hosts and users become nodes, moves become edges. A real host-to-host move is <code>srcip → dstip</code> from firewall logs. When an incident has only one host and no move, the graph draws host → technique instead, so there is still a map to look at. Hosts are squares, users are circles, techniques are diamonds.</li>
+      <li><strong>5. Risk scoring (Agent 3, JEV-style validation).</strong> A transparent weighted formula, not a black box: severity weights (Critical 40, High 25, Medium 10, Low 3) plus 3 points per distinct kill-chain stage, plus 15 for exfiltration and 10 for credential access or privilege escalation, capped at 100. Merged-alert counts are kept separately, so a flood of 271,896 detections is reported as grouped counts, never as a wall of steps. Low-confidence matches are dropped by the rule threshold, which is the false-positive filter.</li>
+      <li><strong>6. Look ahead (Agent 4, QAOA-inspired — honestly classical).</strong> Two predictions, and they are kept separate so neither pretends to be the other. <em>Next hosts</em> come only from a topology you supply: admin rights score 50, same subnet 25, with the reason shown for every host. <em>Next stages</em> come from the kill chain itself: after the deepest stage reached, the following stages are listed as what to watch for. The blast-radius optimiser then scores how much of your topology is compromised or one hop away. A true Qiskit statevector QAOA simulation grows as 2<sup>n</sup> and would never run on 4 GB — so ASK runs the same combinatorial idea classically (greedy + score), which gives the same ranking on real graphs and actually finishes.</li>
+      <li><strong>7. Report (Agent 5).</strong> A plain-English narrative — where it began, what the attacker did in order, what they could reach next, what to block first — plus a Hindi version. Hindi is a real Sarvam API translation only when <code>SARVAM_API_KEY</code> is set; otherwise it is clearly labelled a template, never presented as a translation. If Sarvam is slow or rate-limited, the local fallback is the template, not a hallucinated translation.</li>
+      <li><strong>8. Live mode.</strong> Run the server with <code>--watch your.log</code> and new lines are tailed, detected and linked into incidents as they arrive — the incident list below refreshes on its own while a watch is running.</li>
+    </ol>
+    <p class="hint">What ASK does <em>not</em> do: it does not invent a host, a user, or a next target that is not in your logs or topology; it does not block or stop an attack (it describes it, so you can); it does not send your logs anywhere — the file stays on the machine running the server.</p>
   </section>
 </main>
 

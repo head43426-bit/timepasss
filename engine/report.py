@@ -40,7 +40,21 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
         f"and ended on {_end}. "
         f"It involved {host_text}, {user_text}.",
     ]
-    if timeline:
+    if incident.get("timeline_sampled") and incident.get("timeline_summary"):
+        # Large incident: counts come from DuckDB's GROUP BY, not from
+        # the 400-row sample — the sample's counts would be wrong.
+        summary = "; ".join(
+            f"{s['technique_name']} ({s['kill_chain_stage']}, {s['technique_id']})"
+            f" — {s['count']:,} times, first {s['first']}, last {s['last']}"
+            for s in incident["timeline_summary"])
+        lines.append(
+            f"What the attacker did, in order (distinct techniques, "
+            f"first-seen order): {summary}.")
+        lines.append(
+            f"The remaining steps repeat these same techniques — "
+            f"{incident.get('detection_count', 0):,} steps in total are not listed one by one, "
+            f"because that list is unreadable and adds no new information.")
+    elif timeline:
         # Group repeated steps: a 118,043-step flood of the same two
         # techniques must never be printed step by step. Summarise by
         # technique, in first-seen order, with counts and time ranges.
@@ -91,6 +105,24 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
         lines.append(
             "No next system could be identified from the supplied topology, "
             "so no next target is guessed.")
+    # Stage look-ahead: always available, even with no topology.
+    _next_stages = incident.get("next_stages", [])
+    if _next_stages:
+        _st = "; ".join(s["stage"] for s in _next_stages)
+        lines.append(
+            f"Looking ahead in the kill chain, the next stages to watch "
+            f"for are: {_st}. These are stages, not guessed hosts.")
+    if incident.get("blast_radius") is not None:
+        lines.append(
+            f"Blast radius from the supplied topology: "
+            f"{incident['blast_radius']} out of 100.")
+    _prot = incident.get("protections", [])
+    if _prot:
+        _p = "; ".join(f"{p['technique_id']}: {p['action']}" for p in _prot)
+        lines.append(
+            f"Protect — what to do now, per technique found (ASK itself "
+            f"cannot block an attack; it has no agent on your hosts, so "
+            f"these are the actions for you to take): {_p}.")
     lines.append(
         "This report describes the attack only; it does not block or stop it.")
     return " ".join(lines)

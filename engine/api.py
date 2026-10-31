@@ -45,6 +45,17 @@ def _incident_with_extras(con, incident_id):
     topology = store.get_topology(con)
     nxt = graph_mod.next_reach(inc["hosts"], inc["users"], topology)
     inc["next_reach"] = nxt
+    # Stage look-ahead works even without topology (firex case).
+    _stages = []
+    for _s in inc.get("timeline_summary", []):
+        if _s.get("kill_chain_stage"):
+            _stages.append(_s["kill_chain_stage"])
+    if not _stages:
+        _stages = [d.get("kill_chain_stage", "") for d in inc.get("timeline", [])]
+    inc["next_stages"] = graph_mod.next_stages(_stages)
+    inc["blast_radius"] = graph_mod.blast_radius_score(inc["hosts"], topology)
+    from engine import protect as protect_mod
+    inc["protections"] = protect_mod.protections_for(inc)
     return inc
 
 

@@ -1,0 +1,20 @@
+# New detection rule, added by editing a Sigma-style config file only
+# (B-4) — no engine code was changed to add it. It fires on encoded /
+# obfuscated PowerShell, a classic Execution-stage evasion: an attacker
+# hides the real command in Base64 so a plain-text log search misses it.
+# Test line: powershell -enc SQBFAFgAAB... on any host.
+rules:
+  - id: powershell_encoded_command
+    name: Encoded PowerShell command executed
+    technique_id: T1059.001
+    technique_name: PowerShell
+    tactic: Execution
+    kill_chain_stage: Execution
+    confidence: 85
+    priority: 85
+    description: PowerShell run with an encoded command, or with
+      FromBase64String / Invoke-Expression, which hides the payload
+    match:
+      any_contains: ["powershell -enc", "powershell -encodedcommand",
+                     "powershell.exe -enc", "frombase64string",
+                     "invoke-expression", "iex (", "downloadstring"]

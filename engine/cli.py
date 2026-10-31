@@ -88,68 +88,68 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
     total_lines = 0
     detection_count = 0
     next_id = 1
-    all_detections: List[dict] = []
+    incident_count = 0
+    linker = graph_mod.StreamingLinker()
+
+    def _flush(dets):
+        nonlocal incident_count
+        if not dets:
+            return
+        incident_count += 1
+        hosts = sorted({d["host"] for d in dets if d["host"]})
+        users = sorted({d["user"] for d in dets if d["user"]})
+        first = dets[0]
+        times = [d.get("time", "") for d in dets if d.get("time", "")]
+        record = {
+            "id": incident_count,
+            "title": (f"{first.get('technique_name') or first.get('technique_id', '')} "
+                       f"path on {first['host']}" if dets else f"Incident {incident_count}"),
+            "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
+            "hosts": hosts, "users": users,
+            "risk_score": graph_mod.risk_score(dets),
+            "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),
+            "detection_count": len(dets),
+            "detection_ids": [d["_id"] for d in dets],
+            "edges": graph_mod.graph_edges(dets),
+        }
+        con.execute("BEGIN TRANSACTION")
+        store.insert_incident(con, record)
+        con.execute("COMMIT")
+
     for batch in iter_events(log_path, chunk_size=chunk_size):
         total_lines += len(batch)
         batch_detections = []
         for event in batch:
             batch_detections.extend(detector.process(event))
         if batch_detections:
+            # Stamp the DB id onto each detection BEFORE linking, so a
+            # flushed incident can point at its rows without any
+            # all-detections list or id() map.
+            for i, d in enumerate(batch_detections):
+                d["_id"] = next_id + i
             con.execute("BEGIN TRANSACTION")
             next_id = store.insert_detections(con, batch_detections, next_id)
             con.execute("COMMIT")
-            all_detections.extend(batch_detections)
             detection_count += len(batch_detections)
+            for det in batch_detections:
+                for finished in linker.feed(det):
+                    _flush(finished)
         if on_progress:
             on_progress(total_lines, detection_count, "reading")
         if total_lines % 100000 < chunk_size:
             print(f"  ... {total_lines} events, {detection_count} detections, "
                   f"peak RSS {peak_rss_mb()} MB", flush=True)
-    # Link + score + store incidents.
     if on_progress:
         on_progress(total_lines, detection_count, "linking")
-    det_id_map = {id(d): idx for idx, d in enumerate(all_detections, 1)}
-    incidents = graph_mod.link_detections(all_detections)
-    stored = []
-    for idx, dets in enumerate(incidents, start=1):
-        # Filter blanks: a Fortinet-style log with no user must not
-        # store "" as a host/user — that "" rendered as an empty black
-        # pill in the Attack path section.
-        hosts = sorted({d["host"] for d in dets if d["host"]})
-        users = sorted({d["user"] for d in dets if d["user"]})
-        first, last = dets[0], dets[-1]
-        # Start/end from the first/last detection WITH a time: a
-        # detection with an empty time used to make end_time (and the
-        # report's "ended on" / "last") print blank.
-        times = [d.get("time", "") for d in dets if d.get("time", "")]
-        title = (f"{first.get('technique_name') or first.get('technique_id', '')} "
-                 f"path on {first['host']}"
-                 if dets else f"Incident {idx}")
-        record = {
-            "id": idx, "title": title,
-            "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
-            "hosts": hosts, "users": users,
-            "risk_score": graph_mod.risk_score(dets),
-            "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),
-            "detection_count": len(dets),
-            # Detection ids are 1-based in insertion order; all_detections
-            # order matches insertion order, so map by object identity via
-            # index in the full list.
-            "detection_ids": [det_id_map[id(d)] for d in dets],
-            "edges": graph_mod.graph_edges(dets),
-        }
-        stored.append(record)
+    for finished in linker.finish():
+        _flush(finished)
     if on_progress:
         on_progress(total_lines, detection_count, "storing")
-    con.execute("BEGIN TRANSACTION")
-    for record in stored:
-        store.insert_incident(con, record)
-    con.execute("COMMIT")
     con.close()
     elapsed = time.time() - started
     summary = {
         "events": total_lines, "detections": detection_count,
-        "incidents": len(stored), "seconds": round(elapsed, 2),
+        "incidents": incident_count, "seconds": round(elapsed, 2),
         "peak_rss_mb": peak_rss_mb(),
         "events_per_second": round(total_lines / elapsed, 1) if elapsed else 0,
     }

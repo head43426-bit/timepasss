@@ -8,10 +8,32 @@ async function loadIncidents() {
   var list = await res.json();
   state.incidents = list;
   var health = await (await fetch("/health")).json();
+  state.lastHealth = health.detections + "/" + health.incidents;
   document.getElementById("stats").innerHTML =
     "<div class=stat><b>" + list.length + "</b><span>incidents</span></div>" +
     "<div class=stat><b>" + health.detections + "</b><span>detections</span></div>" +
     "<div class=stat><b>" + list.reduce(function(n, i) { return n + (i.merged_alerts || 0); }, 0) + "</b><span>raw alerts merged</span></div>";
+  document.getElementById("liveStatus").innerHTML = health.live_watch
+    ? "● Live — watching " + esc(health.live_watch) + ". New log lines are detected and linked as they arrive, and this list refreshes every 5 seconds."
+    : "○ Live off — start the server with --watch your.log to watch a live log file. Uploads still work normally.";
+  // Live update: every 5 seconds, check only /health (one cheap count
+  // query). If nothing changed, do nothing — no page reload, no
+  // flicker, and the incident you are reading is never disturbed.
+  if (!state.liveTimer) {
+    state.liveTimer = setInterval(async function() {
+      try {
+        var h = await (await fetch("/health")).json();
+        var sig = h.detections + "/" + h.incidents;
+        if (sig !== state.lastHealth) {
+          await loadIncidents();
+          if (state.selected) {
+            document.getElementById("liveNote").innerHTML =
+              "New log lines arrived — <button class=btn onclick='selectIncident(" + state.selected.id + ")'>Refresh this incident</button>";
+          }
+        }
+      } catch (e) { /* server down: keep the page, stop spamming */ }
+    }, 5000);
+  }
   document.getElementById("incidents").innerHTML = list.length ? list.map(function(inc) {
     return "<button class=inc data-id=" + inc.id + "><b>Incident " + inc.id + " — risk " + inc.risk_score + "/100</b> &middot; " +
       inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged<br><small>" +
@@ -46,11 +68,25 @@ async function selectIncident(id) {
     : pathHosts.length === 1
       ? "<span class=node>" + esc(pathHosts[0]) + "</span><p class='hint'>Single host — no host-to-host path in this incident. All steps happened on this one host, so there is no chain of hosts to draw.</p>"
       : "<p>Unknown host path.</p>";
-  document.getElementById("next").innerHTML = (next.next_reach && next.next_reach.length)
+  var nextHtml = (next.next_reach && next.next_reach.length)
     ? "<ul>" + next.next_reach.map(function(n) {
-        return "<li><b>" + esc(n.host) + "</b> (" + n.confidence + "%) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
+        return "<li><b>" + esc(n.host) + "</b> (score " + n.confidence + "/100 — admin rights 50 + same subnet 25, capped at 100) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
       }).join("") + "</ul>"
     : "<p>No next system is guessed here: no topology was supplied with this upload, so there is no list of other hosts or admin rights to check against. The attacker is not assumed to reach anything beyond what the logs actually show.</p>";
+  if (next.next_stages && next.next_stages.length) {
+    nextHtml += "<p><b>Looking ahead in the kill chain</b> (stages, not guessed hosts): " +
+      next.next_stages.map(function(s) { return esc(s.stage); }).join(" → ") +
+      ". Watch for these stages next on the compromised host(s).</p>";
+  }
+  if (next.blast_radius !== undefined && next.blast_radius !== null) {
+    nextHtml += "<p>Blast radius from the supplied topology: <b>" + next.blast_radius + "/100</b>.</p>";
+  }
+  document.getElementById("next").innerHTML = nextHtml;
+  document.getElementById("protect").innerHTML = (rep.protections && rep.protections.length)
+    ? "<ol>" + rep.protections.map(function(p) {
+        return "<li><b>" + esc(p.technique_id) + " — " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
+      }).join("") + "</ol>"
+    : "<p>No protection actions for this incident.</p>";
   document.getElementById("report").textContent = state.report;
   document.getElementById("copyBtn").disabled = false;
   document.getElementById("hindiBtn").disabled = false;

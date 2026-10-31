@@ -76,15 +76,25 @@ def _byte_ranges(path: str, workers: int) -> List[Tuple[int, int]]:
 
 
 def _process_range(args) -> dict:
+    """Worker: parse + detect its byte range, writing detections and
+    aggregate candidates to DISK (temp JSONL files), never returning
+    them to the parent. Returning them was the parallel RAM wall: the
+    parent collected every detection from every worker before linking.
+    Now the parent streams the temp files in chunk order, inserts in
+    batches, and links with the streaming linker — memory stays flat
+    whatever the file size. Chunk order is time order for a
+    chronological log, which real logs are."""
+    import json as _json
+    import tempfile
     path, start, end = args
-    detections, agg_events, events = [], [], 0
-    seq = start  # approximate global order key; exact order is by byte offset
+    events = 0
+    det_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl",
+                                           delete=False, encoding="utf-8")
+    agg_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl",
+                                           delete=False, encoding="utf-8")
+    det_count = agg_count = 0
     with open(path, "rb") as f:
         f.seek(start)
-        # No line is discarded here: _byte_ranges already aligned every
-        # range start to a line boundary. Discarding here dropped the
-        # first line of every chunk after the first (a real bug, caught
-        # in testing: 10 lines became 7 with 4 workers).
         while True:
             pos = f.tell()
             if pos >= end:
@@ -97,19 +107,18 @@ def _process_range(args) -> dict:
             if event is None:
                 continue
             events += 1
-            # Simple rules, in chunk order, stateful only within this chunk
-            # (simple rules carry no cross-event state, so this is exact).
-            detections.extend(_SIMPLE_DETECTOR.process(event))
-            # Aggregate candidates: replayed globally in the main process.
+            for det in _SIMPLE_DETECTOR.process(event):
+                det_file.write(_json.dumps(det) + "\n")
+                det_count += 1
             for rule in _AGG_RULES:
                 if _match_conditions(event, rule.trigger) or _match_conditions(event, rule.success):
-                    agg_events.append((pos, event))
+                    agg_file.write(_json.dumps({"pos": pos, "event": event}) + "\n")
+                    agg_count += 1
                     break
-            seq += 1
-    # Tag simple detections with their byte position for final ordering.
-    for d in detections:
-        d["_pos"] = pos
-    return {"detections": detections, "agg_events": agg_events, "events": events}
+    det_file.close()
+    agg_file.close()
+    return {"det_path": det_file.name, "agg_path": agg_file.name,
+            "events": events, "detections": det_count, "agg_events": agg_count}
 
 
 def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
@@ -124,65 +133,131 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
             store.load_topology(con, json.load(handle))
     ranges = _byte_ranges(log_path, workers)
     total_events = 0
-    simple_detections, agg_events = [], []
+    chunk_results = []
     with ProcessPoolExecutor(max_workers=len(ranges),
                              initializer=_init_worker, initargs=(rules_dir,)) as pool:
         completed_workers = 0
         for result in pool.map(_process_range, [(log_path, s, e) for s, e in ranges]):
             completed_workers += 1
             total_events += result["events"]
-            simple_detections.extend(result["detections"])
-            agg_events.extend(result["agg_events"])
-            print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {len(result['detections'])} detections)", flush=True)
-    # Global aggregate pass, in original file order.
+            chunk_results.append(result)
+            print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {result['detections']} detections)", flush=True)
+    # Global aggregate pass, in original file order (chunk order, then
+    # byte position inside the chunk). Aggregate detections are few by
+    # definition (only emitted after threshold + success), so holding
+    # them sorted is cheap; simple detections are never held.
+    import json as _json
     agg_detections = []
-    if agg_events:
-        print(f"  ... Processing {len(agg_events):,} aggregate candidates...", flush=True)
-        agg_events.sort(key=lambda x: x[0])
+    total_agg = sum(r["agg_events"] for r in chunk_results)
+    if total_agg:
+        print(f"  ... Processing {total_agg:,} aggregate candidates...", flush=True)
         agg_detector = Detector(load_rules(rules_dir))
         agg_detector.simple = []
-        for _, event in agg_events:
-            agg_detections.extend(agg_detector.process(event))
+        for result in chunk_results:
+            with open(result["agg_path"], encoding="utf-8") as fh:
+                for line in fh:
+                    row = _json.loads(line)
+                    agg_detections.extend(agg_detector.process(row["event"]))
+        agg_detections.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
         print(f"  ... Finished aggregate pass ({len(agg_detections)} aggregate detections)", flush=True)
-    all_detections = simple_detections + agg_detections
-    all_detections.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
-    for d in all_detections:
-        d.pop("_pos", None)
-    if all_detections:
-        print(f"  ... Inserting {len(all_detections):,} detections into DuckDB...", flush=True)
+    # Stream simple detections in chunk order, merging aggregate
+    # detections by time as they are reached, inserting in batches
+    # and linking with the streaming linker. Nothing here holds the
+    # whole detection list.
+    linker = graph_mod.StreamingLinker()
+    next_id = 1
+    detection_count = 0
+    incident_count = 0
+    agg_idx = 0
+
+    def _flush(dets):
+        nonlocal incident_count
+        if not dets:
+            return
+        incident_count += 1
+        first = dets[0]
+        times = [d.get("time", "") for d in dets if d.get("time", "")]
         con.execute("BEGIN TRANSACTION")
-        store.insert_detections(con, all_detections, 1)
-        con.execute("COMMIT")
-    det_id_map = {id(d): idx for idx, d in enumerate(all_detections, 1)}
-    print(f"  ... Linking {len(all_detections):,} detections into incident paths...", flush=True)
-    incidents = graph_mod.link_detections(all_detections)
-    print(f"  ... Built {len(incidents):,} incidents. Storing into DuckDB...", flush=True)
-    stored = []
-    for idx, dets in enumerate(incidents, start=1):
-        hosts = sorted({d["host"] for d in dets})
-        users = sorted({d["user"] for d in dets})
-        first, last = dets[0], dets[-1]
-        stored.append({
-            "id": idx,
+        store.insert_incident(con, {
+            "id": incident_count,
             "title": (f"{first.get('technique_name') or first.get('technique_id', '')} path on {first['host']}"
-                       if dets else f"Incident {idx}"),
-            "start_time": first.get("time", ""), "end_time": last.get("time", ""),
-            "hosts": hosts, "users": users,
+                       if dets else f"Incident {incident_count}"),
+            "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
+            "hosts": sorted({d["host"] for d in dets if d["host"]}),
+            "users": sorted({d["user"] for d in dets if d["user"]}),
             "risk_score": graph_mod.risk_score(dets),
             "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),
             "detection_count": len(dets),
-            "detection_ids": [det_id_map[id(d)] for d in dets],
+            "detection_ids": [d["_id"] for d in dets],
             "edges": graph_mod.graph_edges(dets),
         })
-    con.execute("BEGIN TRANSACTION")
-    for record in stored:
-        store.insert_incident(con, record)
-    con.execute("COMMIT")
+        con.execute("COMMIT")
+
+    def _feed(det):
+        for finished in linker.feed(det):
+            _flush(finished)
+
+    def _insert_and_feed(batch):
+        """Insert one batch (ids assigned contiguously at insert time),
+        then feed its detections in order, merging aggregate detections
+        whose time has arrived — each aggregate is inserted as its own
+        row first, so incident_detections never points at a missing id."""
+        nonlocal next_id, detection_count, agg_idx
+        if not batch:
+            return
+        for i, d in enumerate(batch):
+            d["_id"] = next_id + i
+        con.execute("BEGIN TRANSACTION")
+        store.insert_detections(con, batch, batch[0]["_id"])
+        con.execute("COMMIT")
+        next_id += len(batch)
+        detection_count += len(batch)
+        for det in batch:
+            while agg_idx < len(agg_detections) and (agg_detections[agg_idx].get("ts") or 0) <= (det.get("ts") or 0):
+                agg = agg_detections[agg_idx]
+                agg["_id"] = next_id
+                con.execute("BEGIN TRANSACTION")
+                store.insert_detections(con, [agg], next_id)
+                con.execute("COMMIT")
+                next_id += 1
+                detection_count += 1
+                _feed(agg)
+                agg_idx += 1
+            _feed(det)
+
+    for result in chunk_results:
+        batch = []
+        with open(result["det_path"], encoding="utf-8") as fh:
+            for line in fh:
+                batch.append(_json.loads(line))
+                if len(batch) >= 5000:
+                    _insert_and_feed(batch)
+                    batch = []
+        _insert_and_feed(batch)
+    # Any aggregate detections after the last simple detection.
+    while agg_idx < len(agg_detections):
+        agg = agg_detections[agg_idx]
+        agg["_id"] = next_id
+        con.execute("BEGIN TRANSACTION")
+        store.insert_detections(con, [agg], next_id)
+        con.execute("COMMIT")
+        next_id += 1
+        detection_count += 1
+        _feed(agg)
+        agg_idx += 1
+    for finished in linker.finish():
+        _flush(finished)
+    for result in chunk_results:
+        for key in ("det_path", "agg_path"):
+            try:
+                os.unlink(result[key])
+            except OSError:
+                pass
     con.close()
     elapsed = time.time() - started
     summary = {
-        "events": total_events, "detections": len(all_detections),
-        "incidents": len(stored), "seconds": round(elapsed, 2),
+        "events": total_events, "detections": detection_count,
+        "incidents": incident_count, "seconds": round(elapsed, 2),
         "events_per_second": round(total_events / elapsed, 1) if elapsed else 0,
         "workers": len(ranges), "chunks": len(ranges),
         "peak_rss_mb": peak_rss_mb(),
