@@ -112,6 +112,14 @@ def make_handler(holder, rules_dir, db_path):
             parsed = urlparse(self.path)
             parts = [p for p in parsed.path.split("/") if p]
             query = parse_qs(parsed.query)
+            # ASK brand assets (transparent logo + favicons, assets/).
+            if parsed.path == "/favicon.ico":
+                return self._send_file(os.path.join(ROOT, "assets", "favicon.ico"))
+            if parsed.path.startswith("/assets/") or parsed.path.startswith("/app/assets/"):
+                name = parsed.path.split("/")[-1]
+                if ".." in name or "/" in name:
+                    return self._send_json({"error": "not found"}, 404)
+                return self._send_file(os.path.join(ROOT, "assets", name))
             # Showcase is the main page. The real-data upload dashboard
             # (frontend/) lives at /app — the showcase links there.
             if parsed.path == "/":

@@ -1,7 +1,16 @@
-# Kill Chain Attack Path Reconstruction
+# ASK — Analyse Secure Kill
+## Kill Chain Attack Path Reconstruction
 
 Turn your security logs into one attack story: where it began,
 what the attacker did, and what they can reach next.
+
+Branding: the logo lives in `assets/` with a transparent background
+(`ask-logo.png`, plus `ask-logo-light.png` with white text for dark
+headers), animated with a gentle float + flame flicker in the /app
+header and the showcase topbar. Favicons: `favicon.ico` (16/32/48),
+`favicon-16.png`, `favicon-32.png`, `favicon-48.png`,
+`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and
+`site.webmanifest`.
 
 **No demo data in this project.** You bring your own `.log` file.
 Use only synthetic or authorised logs — never real production

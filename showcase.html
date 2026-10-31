@@ -4,8 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="light" />
-<link rel="icon" href="data:," />
-<title>Kill Chain — Attack Path Reconstruction</title>
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<title>ASK — Analyse Secure Kill · Kill Chain Attack Path Reconstruction</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,700;0,800;0,900;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -50,6 +53,10 @@
 
   /* ---------- top bar ---------- */
   .topbar{position:sticky;top:0;z-index:60;background:var(--cream);border-bottom:2px solid var(--ink)}
+  .ask-logo{height:42px;width:auto;vertical-align:middle;animation:askFloat 5s ease-in-out infinite,askFlicker 3.2s ease-in-out infinite}
+  @keyframes askFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-5px) rotate(1deg)}}
+  @keyframes askFlicker{0%,100%{filter:brightness(1)}50%{filter:brightness(1.06) saturate(1.12)}}
+  @media(prefers-reduced-motion:reduce){.ask-logo{animation:none}}
   .topbar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:58px}
   .mark{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:0}
   .mark-glyph{width:28px;height:28px;flex:none;position:relative}
@@ -451,9 +458,9 @@
 
 <header class="topbar">
   <div class="wrap topbar-in">
-    <a class="mark" href="#top" aria-label="Kill Chain — back to top">
-      <span class="mark-glyph" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="mark-txt">kill chain<span>.</span></span>
+    <a class="mark" href="#top" aria-label="ASK — back to top">
+      <img class="ask-logo" src="/assets/ask-logo.png" alt="ASK — Analyse Secure Kill logo" width="38" height="42">
+      <span class="mark-txt">ASK<span>.</span></span>
     </a>
     <nav class="nav" aria-label="Sections">
       <a href="#incidents">incidents</a>

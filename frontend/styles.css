@@ -1,4 +1,9 @@
-/* Kill Chain dashboard — spacious, not cramped. No external fonts, no images. */
+/* ASK dashboard — spacious, not cramped. No external fonts. Logo is the only image. */
+.brand{display:flex;align-items:center;gap:16px}
+.ask-logo{height:72px;width:auto;animation:askFloat 5s ease-in-out infinite,askFlicker 3.2s ease-in-out infinite}
+@keyframes askFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
+@keyframes askFlicker{0%,100%{filter:drop-shadow(0 0 0 rgba(240,168,50,0)) brightness(1)}50%{filter:drop-shadow(0 0 14px rgba(240,168,50,.45)) brightness(1.08) saturate(1.12)}}
+@media(prefers-reduced-motion:reduce){.ask-logo{animation:none}}
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0e13;color:#f4efe6;line-height:1.5}
 header{padding:28px 32px;border-bottom:4px solid #e1251b;display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
