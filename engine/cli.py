@@ -112,8 +112,11 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
     incidents = graph_mod.link_detections(all_detections)
     stored = []
     for idx, dets in enumerate(incidents, start=1):
-        hosts = sorted({d["host"] for d in dets})
-        users = sorted({d["user"] for d in dets})
+        # Filter blanks: a Fortinet-style log with no user must not
+        # store "" as a host/user — that "" rendered as an empty black
+        # pill in the Attack path section.
+        hosts = sorted({d["host"] for d in dets if d["host"]})
+        users = sorted({d["user"] for d in dets if d["user"]})
         first, last = dets[0], dets[-1]
         title = (f"{first.get('technique_name') or first.get('technique_id', '')} "
                  f"path on {first['host']}"

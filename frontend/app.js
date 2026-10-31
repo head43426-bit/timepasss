@@ -40,14 +40,17 @@ async function selectIncident(id) {
   // backend with NetworkX, not drawn by hand). Nodes are placed on a
   // circle in first-seen order so every edge is visible at once.
   renderGraph(path);
-  document.getElementById("path").innerHTML = path.hosts.map(function(h) {
-    return "<span class=node>" + esc(h) + "</span>";
-  }).join("<span class=arrow>&rarr;</span>") || "<p>Unknown host path.</p>";
+  var pathHosts = (path.hosts || []).filter(function(h) { return h; });
+  document.getElementById("path").innerHTML = pathHosts.length > 1
+    ? pathHosts.map(function(h) { return "<span class=node>" + esc(h) + "</span>"; }).join("<span class=arrow>&rarr;</span>")
+    : pathHosts.length === 1
+      ? "<span class=node>" + esc(pathHosts[0]) + "</span><p class='hint'>Single host — no host-to-host path in this incident. All steps happened on this one host, so there is no chain of hosts to draw.</p>"
+      : "<p>Unknown host path.</p>";
   document.getElementById("next").innerHTML = (next.next_reach && next.next_reach.length)
     ? "<ul>" + next.next_reach.map(function(n) {
         return "<li><b>" + esc(n.host) + "</b> (" + n.confidence + "%) — " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
       }).join("") + "</ul>"
-    : "<p>No next system could be identified from the supplied topology, so no next target is guessed. To get next-reach predictions, run the CLI with a topology file.</p>";
+    : "<p>No next system is guessed here: no topology was supplied with this upload, so there is no list of other hosts or admin rights to check against. The attacker is not assumed to reach anything beyond what the logs actually show.</p>";
   document.getElementById("report").textContent = state.report;
   document.getElementById("copyBtn").disabled = false;
   document.getElementById("hindiBtn").disabled = false;
@@ -60,6 +63,19 @@ function renderGraph(path) {
   var graph = path.graph || { nodes: [], edges: [] };
   var nodes = graph.nodes || [], edges = graph.edges || [];
   if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
+  // Single node and no edges is not a path to draw: a huge empty box
+  // with one square in it just looks broken. Say so plainly, compactly.
+  var realEdges = edges.filter(function(e) { return posCheck(e); });
+  function posCheck(e) { return nodes.some(function(n) { return n.id === e.from; }) && nodes.some(function(n) { return n.id === e.to; }); }
+  if (nodes.length === 1 || !realEdges.length) {
+    var only = nodes[0];
+    box.innerHTML = "<p><span class=node>" + esc(only.id) + "</span> <small>(" + esc(only.type) + ")</small></p>" +
+      "<p class='hint'>No connections to draw: this incident has " +
+      (nodes.length === 1 ? "only this one host" : nodes.length + " nodes") +
+      " and no host-to-host or user-to-host move in the logs. " +
+      "All " + fmtNum(path.detection_count) + " steps happened on the host above — see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
+    return;
+  }
   var W = 1100, H = 440, cx = W / 2, cy = H / 2, R = 170;
   var pos = {};
   nodes.forEach(function(n, i) {
@@ -80,9 +96,12 @@ function renderGraph(path) {
     var shape = n.type === "host"
       ? "<rect x='" + (p.x - 34) + "' y='" + (p.y - 26) + "' width='68' height='52' rx='8' class='gnode host'/>"
       : "<circle cx='" + p.x + "' cy='" + p.y + "' r='30' class='gnode user'/>";
+    // Labels go BELOW the shape, not inside it: a long hostname
+    // (e.g. FGT60FTK00000000) is wider than a 68px square, so inside
+    // labels overflowed and looked detached from the node.
     svg += "<g class='gnode-wrap' data-node='" + esc(n.id) + "' tabindex='0' role='button' aria-label='Show steps for " + esc(n.id) + "'>" +
-      shape + "<text x='" + p.x + "' y='" + (p.y + 4) + "' class='nlabel'>" + esc(n.id) + "</text>" +
-      "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='ntype'>" + esc(n.type) + "</text></g>";
+      shape + "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='nlabel'>" + esc(n.id) + "</text>" +
+      "<text x='" + p.x + "' y='" + (p.y + 66) + "' class='ntype'>" + esc(n.type) + "</text></g>";
   });
   svg += "</svg><p class='hint'>■ host &nbsp; ● user &nbsp; — arrow = NetworkX edge, label = MITRE technique. Click a node or an edge label.</p>";
   box.innerHTML = svg;
@@ -130,11 +149,19 @@ function showStep(path, i) {
     el.classList.toggle("sel", parseInt(el.getAttribute("data-i"), 10) === i);
     el.setAttribute("aria-pressed", parseInt(el.getAttribute("data-i"), 10) === i ? "true" : "false");
   });
+  // Never show a blank User/Source, and never repeat the action as
+  // the detail ("Phishing Attempts — Phishing Attempts /").
+  var what = (step.action || "").trim();
+  var det = (step.detail || "").trim();
+  if (det && det !== what) {
+    if (what && det.indexOf(what) === 0) det = det.slice(what.length).replace(/^[\s\/\-:]+/, "");
+    what = what ? what + (det ? " — " + det : "") : det;
+  }
   document.getElementById("stepDetail").innerHTML =
     "<b>Step " + (i + 1) + " — " + esc(step.kill_chain_stage) + "</b><br>" +
     esc(step.technique_id) + " — " + esc(step.technique_name) + " (" + step.confidence + "% confidence, " + esc(step.severity) + ")<br>" +
-    esc(step.action) + " — " + esc(step.detail) + "<br><small>Time: " + esc(step.time) + " &middot; Host: " + esc(step.host) +
-    " &middot; User: " + esc(step.user) + " &middot; Source: " + esc(step.source) + "<br>Why this flagged: " + esc(step.reason) + "</small>";
+    esc(what || "No action text in the log") + "<br><small>Time: " + esc(step.time) + " &middot; Host: " + esc(step.host || "Unknown") +
+    " &middot; User: " + esc(step.user || "Unknown") + " &middot; Source: " + esc(step.source || "Unknown") + "<br>Why this flagged: " + esc(step.reason) + "</small>";
   document.getElementById("stepDetail").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 

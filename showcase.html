@@ -470,13 +470,8 @@
       <a href="#report">report</a>
       <a href="/app" style="color:#f0a832">upload real logs →</a>
     </nav>
-    <span class="pill">synthetic data <b>only</b></span>
   </div>
 </header>
-
-<div class="marquee" aria-hidden="true">
-  <div class="marquee-track" id="marqueeTrack"></div>
-</div>
 
 <main id="top">
   <!-- HERO -->
@@ -486,7 +481,7 @@
     <h1><span class="h-left">One attack<em>.</em></span><span class="h-right">One <em>story.</em></span></h1>
     <div class="hero-sub">
       <div class="hero-copy">
-        <p>Security tools raise alerts one at a time — a failed login here, a big upload there. <strong>Kill Chain finds the attack hidden inside a pile of logs</strong>, labels every step with its MITRE technique and kill-chain stage, links the steps into one path, and says what the attacker can reach next.</p>
+        <p>Security tools raise alerts one at a time, a failed login here, a big upload there. <strong>ASK finds the attack hidden inside a pile of logs</strong>, labels every step with its MITRE technique and kill-chain stage, links the steps into one path, and says what the attacker can reach next.</p>
         <div class="hero-cta">
           <a class="btn" href="#incidents">Open the worst incident →</a>
           <a class="btn ghost" href="#stream">Run the concealed-attack stream</a>
@@ -598,7 +593,7 @@
       <h2>incidents<em>.</em></h2>
       <span class="idx">04 cases · worst first · hover to preview</span>
     </div>
-    <p class="sec-note">Every row is one reconstructed attack, sorted worst-first — 96, 94, 88, 81. <b>Hovering turns the row black and shows a preview beside your cursor</b> — click to open the full timeline, graph and narrative below. Risk is worst-first, as the report bonus requires.</p>
+    <p class="sec-note">Every row is one reconstructed attack, sorted worst first: 96, 94, 88, 81. Hovering turns the row black and shows a preview beside your cursor. Click to open the full timeline, graph and narrative below.</p>
     <div class="index" id="indexList" role="group" aria-label="Incident list"></div>
     <div id="preview" aria-hidden="true"></div>
 
@@ -808,7 +803,7 @@
       <h2>the report<em>.</em></h2>
       <span class="idx">plain english · हिन्दी · copy / download</span>
     </div>
-    <p class="sec-note">The report the engine writes for the selected incident — <b>no jargon first</b>, evidence second. Switch language, copy it, or download it as Markdown. The Hindi text is a sample rendering of the same report.</p>
+    <p class="sec-note">The report the engine writes for the selected incident. <b>No jargon first</b>, evidence second. Switch language, copy it, or download it as Markdown. The Hindi text is a sample rendering of the same report.</p>
     <div class="report">
       <div class="report-main">
         <div class="r-k" id="reportKicker">Incident 01 · Phish → Domain Admin</div>
@@ -830,13 +825,6 @@
 
   <footer class="wrap">
     <p class="foot-big"><a href="#incidents">start with the worst incident <em>→</em></a></p>
-    <div class="foot-meta">
-      <span><b>Kill Chain</b> — attack path reconstruction</span>
-      <span>CyberForge Hackathon 2026 · AI in Cybersecurity</span>
-      <span>synthetic data only</span>
-      <span>MITRE labels illustrative</span>
-      <span>Python · DuckDB · NetworkX</span>
-    </div>
   </footer>
 </main>
 
@@ -985,16 +973,6 @@
   function $(s, r){ return (r||document).querySelector(s); }
   function $all(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-
-  /* ---------- marquee ---------- */
-  var words = ["detect","label","connect","explain","look ahead","stream 15 GB without loading it","mitre att&ck","kill chain","duckdb","networkx","sigma rules","one story"];
-  var track = $("#marqueeTrack");
-  var half = "";
-  words.forEach(function(w,i){
-    var cls = i % 2 === 0 ? "a" : "b";
-    half += '<span class="'+cls+'">'+esc(w)+'</span><span class="d">✦</span>';
-  });
-  track.innerHTML = half + half;
 
   /* ---------- hero step cycler ---------- */
   var heroSteps = INCIDENTS[3].steps.slice(0,5);

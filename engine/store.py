@@ -167,10 +167,12 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
         } for d in timeline],
         "graph": {
             "nodes": sorted(nodes.values(), key=lambda n: (n["type"], n["id"])),
+            # Skip edges from/to a blank node (Fortinet logs with no
+            # user stored a "" -> host edge; that is not a real move).
             "edges": [{
                 "from": e[0], "to": e[1], "kind": e[2],
                 "technique_id": e[3], "time": e[4],
-            } for e in edges],
+            } for e in edges if e[0] and e[1]],
         },
     }
 
