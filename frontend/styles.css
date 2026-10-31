@@ -163,6 +163,12 @@ code { background: var(--surface-2); color: var(--accent); border: 1px solid var
 .drop { border: 3px dashed var(--accent); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: var(--accent-soft); color: var(--text); font-size: 15px; }
 .drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+/* Run stats card (2026-11-01): 2-column grid of measured stats. */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.stat-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.stat-box b { display: block; font-size: 20px; color: var(--accent); }
+.stat-box span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat-box small { display: block; font-size: 11px; color: var(--muted); }
 /* Sarvam card buttons (2026-11-01): Copy on top, Generate below it,
    stacked full-width, so the order is unmistakable. */
 .btn-stack { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }

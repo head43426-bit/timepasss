@@ -91,6 +91,68 @@ def _fmt_eta(seconds):
     return f"about {seconds // 3600}h {(seconds % 3600) // 60}m left"
 
 
+# RUN STATS (2026-11-01): the numbers the dashboard's Run stats
+# card shows. last_run comes from the last /upload or /sample run
+# (processing time, peak memory, lines/sec) and is stored in a
+# <db>.stats.json file next to the database, so it survives a server
+# restart. evaluation comes ONLY from Load Sample: its planted
+# attacks are known (the generator wrote them), so detection %,
+# correct-label %, attack-path % and false-alarm % can be computed
+# honestly against ground truth (engine/evaluate.py). A plain upload
+# has no ground truth, so after an upload those four stats are
+# cleared and shown as 'not available' - inventing them from the
+# detections alone would be guessing, not measuring.
+RUN_STATS = {"last_run": None, "evaluation": None, "evaluation_basis": ""}
+
+
+def _run_stats_path(db_path):
+    return db_path + ".stats.json"
+
+
+def _load_run_stats(db_path):
+    global RUN_STATS
+    try:
+        with open(_run_stats_path(db_path), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and "last_run" in data:
+            RUN_STATS = {"last_run": data.get("last_run"),
+                         "evaluation": data.get("evaluation"),
+                         "evaluation_basis": data.get("evaluation_basis", "")}
+    except Exception:
+        pass
+
+
+def _save_run_stats(db_path):
+    try:
+        with open(_run_stats_path(db_path), "w", encoding="utf-8") as f:
+            json.dump(RUN_STATS, f, indent=2)
+    except Exception:
+        pass
+
+
+def _record_run(db_path, summary, kind):
+    RUN_STATS["last_run"] = {
+        "kind": kind,
+        "filename": summary.get("filename", ""),
+        "events": summary.get("events", 0),
+        "detections": summary.get("detections", 0),
+        "incidents": summary.get("incidents", 0),
+        "seconds": summary.get("seconds", 0),
+        "peak_rss_mb": summary.get("peak_rss_mb", 0),
+        "events_per_second": summary.get("events_per_second", 0),
+    }
+    if kind != "sample":
+        RUN_STATS["evaluation"] = None
+        RUN_STATS["evaluation_basis"] = ""
+    _save_run_stats(db_path)
+
+
+def _record_evaluation(db_path, evaluation, basis):
+    RUN_STATS["evaluation"] = evaluation
+    RUN_STATS["evaluation_basis"] = basis
+    _save_run_stats(db_path)
+
+
 def _set_progress(**kw):
     with PROGRESS_LOCK:
         PROGRESS.update(kw)
@@ -205,6 +267,10 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 return self._send_file(os.path.join(ROOT, rel))
             if parts == ["progress"]:
                 return self._send_json(_progress_snapshot())
+            if parts == ["run-stats"]:
+                if RUN_STATS["last_run"] is None and RUN_STATS["evaluation"] is None:
+                    _load_run_stats(db_path)
+                return self._send_json(dict(RUN_STATS))
             with LOCK:
                 if parts == ["db", "stats"]:
                     tables = [t[0] for t in holder.con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'").fetchall()]
@@ -326,6 +392,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     except Exception:
                         pass
                     holder.con = store.connect(db_path, fresh=True)
+                # Clearing the DB invalidates every stat tied to it.
+                global RUN_STATS
+                RUN_STATS = {"last_run": None, "evaluation": None, "evaluation_basis": ""}
+                try:
+                    os.unlink(_run_stats_path(db_path))
+                except OSError:
+                    pass
                 return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
             if urlparse(self.path).path == "/sample":
                 # LOAD SAMPLE (2026-11-01, changed behaviour, capped
@@ -371,7 +444,39 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         tmp_path = tmp.name
                         buf = []
                         written = 0
+                        # GROUND TRUTH (2026-11-01, for the Run stats
+                        # card): every 81 generated lines are one
+                        # planted attack chain - 70 benign, then the
+                        # same 11 attack steps. Collect the first 200
+                        # chains' attack lines as ground truth while
+                        # the file is being written, so no second
+                        # 250 MB pass is needed. 200 chains is enough
+                        # to evaluate (every chain has the same 11
+                        # techniques in the same order; the card says
+                        # it was evaluated on 200, not on all chains),
+                        # and collecting all ~25,000 chains would
+                        # only make the evaluation itself slow.
+                        # Pipe fields: time|host|user|ip|source|
+                        # action|detail|stage|technique|severity.
+                        _gt_attacks = []
+                        _gt_current = None
+                        _line_no = 0
                         for line in iter_sample_lines(_SAMPLE_BYTES):
+                            _pos = _line_no % 81
+                            _line_no += 1
+                            if _pos == 70 and len(_gt_attacks) < 200:
+                                _gt_current = {"id": "sample-chain-%d" % (len(_gt_attacks) + 1),
+                                               "title": "Sample attack chain",
+                                               "steps": []}
+                                _gt_attacks.append(_gt_current)
+                            elif _pos > 70 and _gt_current is not None:
+                                _f = line.split("|")
+                                if len(_f) >= 9:
+                                    _gt_current["steps"].append({
+                                        "technique_id": _f[8],
+                                        "technique_name": _f[8],
+                                        "kill_chain_stage": _f[7],
+                                        "host": _f[1], "user": _f[2]})
                             buf.append(line)
                             written += len(line) + 1
                             if len(buf) >= 1000:
@@ -439,6 +544,33 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         LOCK.release()
                     summary["filename"] = filename
                     summary["appended"] = True
+                    _record_run(db_path, summary, "sample")
+                    # Evaluate against the planted ground truth
+                    # collected during generation. A failure here
+                    # must never fail the run itself - the incidents
+                    # are already stored, so only the stats are lost.
+                    _gt_full = [a for a in _gt_attacks if a["steps"]]
+                    if _gt_full:
+                        _gt_path = None
+                        try:
+                            with tempfile.NamedTemporaryFile(mode="w", suffix=".gt.json", delete=False, dir=_db_dir, encoding="utf-8") as _gtf:
+                                _gt_path = _gtf.name
+                                json.dump({"attacks": _gt_full}, _gtf)
+                            from engine.evaluate import evaluate as _evaluate
+                            _ev = _evaluate(db_path, _gt_path)
+                            _ev["evaluated_attacks"] = len(_gt_full)
+                            summary["evaluation"] = _ev
+                            _record_evaluation(
+                                db_path, _ev,
+                                "First %d planted sample attacks (ground truth from the generated sample file)" % len(_gt_full))
+                        except Exception as _ev_exc:
+                            summary["evaluation_error"] = str(_ev_exc)
+                        finally:
+                            if _gt_path:
+                                try:
+                                    os.unlink(_gt_path)
+                                except OSError:
+                                    pass
                     from engine import sysstats as _ss_sample
                     _total_s = round(time.time() - started, 1)
                     _set_progress(stage="done",
@@ -745,6 +877,7 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                 finally:
                     LOCK.release()
                 summary["filename"] = filename
+                _record_run(db_path, summary, "upload")
                 # TOTAL TIME (2026-11-01): elapsed was tracked all along
                 # but the frontend never showed it - the done line just
                 # said 'incidents are ready'. Now the total time is in

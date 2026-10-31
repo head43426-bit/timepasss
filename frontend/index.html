@@ -96,6 +96,22 @@
   <!-- RIGHT: Data, Sarvam brief, look-ahead, paths -->
   <aside class="col col-right">
     <section class="card">
+      <h2>Run stats</h2>
+      <p class="hint">Measured from real runs, not estimates. Accuracy stats need planted ground truth, so they only appear after Load Sample - a plain upload has no ground truth to check against, and those four show "not available" until then.</p>
+      <div class="stats-grid">
+        <div class="stat-box"><b id="statDetection">—</b><span>Detection %</span><small>planted steps found</small></div>
+        <div class="stat-box"><b id="statLabels">—</b><span>Correct labels %</span><small>right technique, same host</small></div>
+        <div class="stat-box"><b id="statAttackPath">—</b><span>Attack path</span><small id="statAttackPathNote">attacks rebuilt in order</small></div>
+        <div class="stat-box"><b id="statFalse">—</b><span>False alarms %</span><small>incidents matching no attack</small></div>
+        <div class="stat-box"><b id="statTime">—</b><span>Processing time</span><small id="statTimeNote">last run</small></div>
+        <div class="stat-box"><b id="statMemory">—</b><span>Memory</span><small>peak, main process</small></div>
+        <div class="stat-box"><b id="statInvest">—</b><span>Investigation speed</span><small>time to open an incident</small></div>
+        <div class="stat-box"><b id="statLines">—</b><span>Lines / sec</span><small id="statLinesNote">last run</small></div>
+      </div>
+      <p class="hint" id="statBasis">No run yet. Upload a log or run Load Sample to fill these in.</p>
+    </section>
+
+    <section class="card">
       <h2>Flow Log Data <span class="row-count" id="flowRowCount">0 rows</span></h2>
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
         <strong>Drop your .log file here</strong><br>or click to choose a file

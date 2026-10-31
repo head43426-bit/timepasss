@@ -97,7 +97,84 @@ async function loadIncidents() {
   });
 }
 
+// RUN STATS (2026-11-01): the card at the top of the right column.
+// Definitions, so no number is a mystery:
+//  - Detection %: planted attack steps whose technique appears in the
+//    best-matching incident, out of all planted steps (evaluate.py).
+//  - Correct labels %: of planted steps matched to a detection on the
+//    same host, the share whose technique also matches.
+//  - Attack path: planted attacks whose steps appear in ONE incident
+//    in the correct order, shown as a fraction plus words - 'full of
+//    them' when every attack rebuilt, 'about half of them' near half.
+//  - False alarms %: incidents that are the best match for no attack,
+//    out of all incidents (lower is better).
+//  - Processing time: last run's total seconds, shown in minutes.
+//  - Memory: last run's peak RSS, shown in GB (main process only -
+//    parallel workers are separate processes, so it is a lower bound).
+//  - Investigation speed: time to open an incident (the three
+//    detail fetches plus rendering), measured in the browser with
+//    performance.now(), shown in ms, or seconds when over 1 s.
+//  - Lines / sec: last run's processing speed.
+// Accuracy stats exist only after Load Sample, because only its
+// planted attacks are known ground truth; after a plain upload they
+// show 'not available' instead of a guessed number.
+function fmtPct(v) { return (v === undefined || v === null) ? "—" : (Math.round(v * 10) / 10) + "%"; }
+function fmtMins(sec) {
+  if (sec === undefined || sec === null) return "—";
+  var m = sec / 60;
+  return (m >= 0.1 ? m.toFixed(2) : m.toFixed(3)) + " mins";
+}
+function fmtGB(mb) {
+  if (mb === undefined || mb === null) return "—";
+  return (mb / 1024).toFixed(2) + " GB";
+}
+function fmtDur(ms) {
+  if (ms < 1000) return Math.round(ms) + " ms";
+  return (ms / 1000).toFixed(2) + " s";
+}
+function attackPathWords(ev) {
+  if (!ev || !ev.attacks) return "—";
+  if (ev.rebuilt_attacks === ev.attacks) return "full of them";
+  var frac = ev.rebuilt_attacks / ev.attacks;
+  if (frac >= 0.4 && frac <= 0.6) return "about half of them";
+  return ev.rebuilt_attacks + " of " + ev.attacks;
+}
+async function loadStats() {
+  var set = function(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
+  try {
+    var s = await (await fetch("/run-stats")).json();
+    var ev = s.evaluation, run = s.last_run;
+    if (ev) {
+      set("statDetection", fmtPct(ev.detection));
+      set("statLabels", fmtPct(ev.correct_labels));
+      set("statAttackPath", fmtPct(ev.attack_path) + " - " + attackPathWords(ev));
+      set("statAttackPathNote", (ev.rebuilt_attacks || 0) + " of " + (ev.attacks || 0) + " attacks rebuilt in order");
+      set("statFalse", fmtPct(ev.false_alarms) + (ev.false_incidents !== undefined ? " (" + ev.false_incidents + " incidents)" : ""));
+    } else {
+      set("statDetection", "not available");
+      set("statLabels", "not available");
+      set("statAttackPath", "not available");
+      set("statAttackPathNote", "needs Load Sample ground truth");
+      set("statFalse", "not available");
+    }
+    if (run) {
+      set("statTime", fmtMins(run.seconds));
+      set("statTimeNote", "last run: " + (run.kind || "") + (run.filename ? " - " + run.filename : ""));
+      set("statMemory", fmtGB(run.peak_rss_mb));
+      set("statLines", run.events_per_second ? fmtNum(Math.round(run.events_per_second)) + " / sec" : "—");
+      set("statLinesNote", "last run: " + fmtNum(run.events || 0) + " lines, " + fmtNum(run.detections || 0) + " detections");
+    }
+    var basis = document.getElementById("statBasis");
+    if (basis) {
+      if (ev && s.evaluation_basis) basis.textContent = "Accuracy basis: " + s.evaluation_basis + ".";
+      else if (run) basis.textContent = "Accuracy stats need Load Sample ground truth. Processing time, memory and lines/sec are from the last " + (run.kind || "run") + ".";
+      else basis.textContent = "No run yet. Upload a log or run Load Sample to fill these in.";
+    }
+  } catch (e) { /* server down: leave the dashes */ }
+}
+
 async function selectIncident(id) {
+  var _t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   var path = await (await fetch("/incidents/" + id + "/path")).json();
   var rep = await (await fetch("/incidents/" + id + "/report")).json();
   var next = await (await fetch("/incidents/" + id + "/next")).json();
@@ -174,6 +251,12 @@ async function selectIncident(id) {
   var pdf = document.getElementById("pdfBtn");
   if (pdf) pdf.disabled = false;
   if (path.timeline.length) showStep(path, 0);
+  // Investigation speed: how long this incident took to open, from
+  // the first detail fetch to the rendered detail (not the click
+  // animation or the scroll that follows).
+  var _t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  var _inv = document.getElementById("statInvest");
+  if (_inv) _inv.textContent = fmtDur(_t1 - _t0);
   document.getElementById("detailSection").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -837,6 +920,7 @@ function handleFile(file) {
     document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s - " + data.events + " lines, " + data.detections +
       " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
     await loadIncidents();
+    await loadStats();
     if (state.incidents.length) selectIncident(state.incidents[0].id);
   };
   xhr.onerror = function() {
@@ -866,6 +950,7 @@ function runServerJob(endpoint, infoText) {
     document.getElementById("fileinfo").textContent = (data.events || 0) + " lines, " + (data.detections || 0) +
       " detections, " + (data.incidents || 0) + " incidents, in " + (data.seconds || 0) + "s.";
     await loadIncidents();
+    await loadStats();
     // LIVE MODE (2026-11-01 fix): after an append, show the NEWEST
     // incident, not the first in DB order. The old code selected
     // state.incidents[0], which is the oldest incident - so after
@@ -885,6 +970,7 @@ var sampleBtn = document.getElementById("sampleBtn");
 if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Generating about 250 MB of synthetic log and appending it to the existing data - this takes a couple of minutes, the progress bar above tracks it…"); });
 
 loadIncidents();
+loadStats();
 
 // Left-panel search: hide incident buttons that do not match, without
 // re-rendering the list (re-rendering on every keystroke used to
