@@ -1,69 +1,177 @@
-/* ASK dashboard — CLEAN LIGHT UI (2026-11-01, user demand: use the
-   clean inspiration image, light-blue side panels). Spacious, not
-   cramped. No external fonts. Logo is the only image. */
-.brand{display:flex;align-items:center;gap:16px}
-.ask-logo{height:72px;width:auto;animation:askFloat 5s ease-in-out infinite,askFlicker 3.2s ease-in-out infinite}
-@keyframes askFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
-@keyframes askFlicker{0%,100%{filter:drop-shadow(0 0 0 rgba(240,168,50,0)) brightness(1)}50%{filter:drop-shadow(0 0 14px rgba(37,99,235,.35)) brightness(1.08) saturate(1.12)}}
-@media(prefers-reduced-motion:reduce){.ask-logo{animation:none}}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background-color:#f8f6f0;background-image:radial-gradient(#d8d2c2 1px,transparent 1px);background-size:18px 18px;color:#111;line-height:1.5}
-header{padding:28px 32px;background:#fff;border-bottom:4px solid #bfdbfe;display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
-h1{margin:0;font-size:34px;letter-spacing:-.02em;text-transform:uppercase}
-h1 span{color:#2563eb}
-h2{margin:0 0 16px;font-size:22px;text-transform:uppercase}
-h3{margin:32px 0 12px;font-size:17px}
-.tag{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#2563eb}
-main{max-width:1180px;margin:0 auto;padding:32px 24px 48px;display:flex;flex-direction:column;gap:32px}
-.card{background:#fff;color:#111;border:1px solid #dbeafe;border-radius:14px;padding:32px;box-shadow:0 2px 12px rgba(37,99,235,.08)}
-.card.dark{background:#dbeafe;color:#111}
-p{font-size:15px}
-code{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;padding:2px 6px;border-radius:4px;font-size:13px}
-.drop{border:3px dashed #2563eb;border-radius:14px;padding:40px 24px;text-align:center;cursor:pointer;background:#eff6ff;color:#111;font-size:17px}
-.drop:focus-visible{outline:4px solid #2563eb;outline-offset:3px}
-.progress{height:12px;background:#dbeafe;border-radius:6px;overflow:hidden;margin:20px 0}
-#bar{height:100%;width:0;background:#2563eb;transition:width .2s}
-.warn{background:#eff6ff;color:#111;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;font-size:14px}
-.stats{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 24px}
-.stat{background:#dbeafe;color:#111;border-radius:10px;padding:16px 20px;min-width:150px}
-.stat b{display:block;font-size:28px;color:#2563eb}
-.stat span{font-size:11px;text-transform:uppercase;letter-spacing:.1em}
-.inc{width:100%;text-align:left;background:#fff;color:#111;border:1px solid #bfdbfe;border-left:8px solid #2563eb;border-radius:10px;padding:18px 20px;margin:12px 0;cursor:pointer;font-size:15px}
-.inc:hover,.inc.sel{outline:3px solid #2563eb}
-.inc small{color:#555}
-.hint{color:#555}
-/* Conveyor belt — roomy packages, each one a real pressable button */
-.belt{display:flex;gap:20px;overflow-x:auto;padding:28px 8px;border-top:6px repeating-linear-gradient(45deg,#93c5fd 0 16px,#fff 16px 32px);border-bottom:6px repeating-linear-gradient(45deg,#93c5fd 0 16px,#fff 16px 32px);scroll-padding:20px}
-.pkg{min-width:290px;max-width:320px;background:#fff;color:#111;border:3px solid #bfdbfe;border-radius:12px;padding:22px;text-align:left;cursor:pointer;font-size:15px}
-.pkg:hover{border-color:#2563eb}
-.pkg:focus-visible{outline:4px solid #2563eb;outline-offset:3px}
-.pkg.sel{border-color:#2563eb;box-shadow:0 0 0 3px #2563eb inset}
-.pkg b{display:block;color:#2563eb;font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
-.pkg .press{display:inline-block;margin-top:16px;background:#2563eb;color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px}
-.pkg.sel .press{background:#93c5fd;color:#111}
-.step-detail{border:1px solid #bfdbfe;border-radius:12px;padding:24px;font-size:16px;background:#eff6ff}
-.step-detail b{color:#2563eb}
-.path{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.path .node{background:#fff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px}
-.path .arrow{color:#2563eb;font-size:20px}
-.btn{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:15px}
-.btn.ghost{background:#fff;color:#111;border:1px solid #bfdbfe}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-pre{white-space:pre-wrap;word-break:break-word;background:#fff;color:#111;border:1px solid #bfdbfe;padding:20px;border-radius:10px;font-size:14px;line-height:1.6}
-details{margin-top:20px}
-@media(max-width:700px){header,main,.card{padding:20px 16px}h1{font-size:26px}.pkg{min-width:260px}}
+/* ASK dashboard — light / dark theme, smooth theme change.
+   Layout matches the reference screenshots: top nav (ASK, Overview,
+   Incident Workspace, GitHub, theme button), then a 3-column
+   workspace: triage queue | graph canvas | data + brief + look-ahead.
+   No external fonts. Colours live in variables so the theme toggle
+   only swaps variables, and the transition below smooths that swap. */
+:root, [data-theme="light"] {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-2: #f5f5f4;
+  --text: #111111;
+  --muted: #57534e;
+  --border: #e7e5e4;
+  --accent: #00a66a;
+  --accent-soft: #ecfdf5;
+  --amber: #d97706;
+  --canvas-bg: #fafaf9;
+  --dot: #d6d3d1;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .06);
+}
+[data-theme="dark"] {
+  --bg: #0c0c0c;
+  --surface: #18181b;
+  --surface-2: #27272a;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --accent: #34d399;
+  --accent-soft: #064e3b;
+  --amber: #f59e0b;
+  --canvas-bg: #18181b;
+  --dot: #3f3f46;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .4);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+/* Smooth theme change: only colours/shadows animate, never layout. */
+body, nav.topnav, .card, .col, .inc, .btn, .gh, .drop, .stat, pre, .step-detail, .path-banner, .canvas-banner {
+  transition: background-color .35s ease, color .35s ease, border-color .35s ease, box-shadow .35s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
+}
 
-/* NetworkX graph map — REDESIGN (2026-11-01): light, clean, like the
-inspiration image, not the old dark circle pile. Node boxes are drawn
-inline (fill/stroke set in JS by severity), so CSS here only sets text
-and the dotted-paper background. */
-.graph-svg{display:block;background-color:#f8f6f0;background-image:radial-gradient(#d8d2c2 1px,transparent 1px);background-size:18px 18px}
-.gedge{stroke:#f0a832;stroke-width:2}
-.elabel{fill:#333;font-family:ui-monospace,Menlo,monospace;font-size:11px;text-anchor:middle;paint-order:stroke;stroke:#f8f6f0;stroke-width:4px;stroke-linejoin:round}
-.gnode-wrap{cursor:pointer}
-.gnode-wrap:hover rect,.gnode-wrap.sel rect{stroke-width:5}
-.gnode-wrap:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
-.nlabel{fill:#111;font-size:13px;font-weight:700;pointer-events:none}
-.ntype{fill:#555;font-size:11px;text-transform:uppercase;pointer-events:none}
-.nsev{font-size:11px;font-weight:800;pointer-events:none}
-.step-link{margin:6px 6px 0 0}
+/* Top nav — shared with the landing page */
+nav.topnav {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 28px;
+  padding: 14px 24px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; text-decoration: none; color: var(--text); }
+.brand img { height: 28px; width: auto; }
+.nav-links { display: flex; gap: 24px; margin-right: auto; }
+.nav-links a { text-decoration: none; font-size: 14px; color: var(--muted); }
+.nav-links a.active { color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+.nav-actions { display: flex; gap: 10px; align-items: center; }
+.gh {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 8px; padding: 6px 12px; font-size: 13px; text-decoration: none; cursor: pointer;
+}
+.gh:hover { border-color: var(--accent); }
+
+/* 3-column workspace */
+.workspace {
+  max-width: 1680px; margin: 0 auto; padding: 20px 24px 48px;
+  display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 16px; align-items: start;
+}
+.col { min-width: 0; }
+.col-left, .col-right { display: flex; flex-direction: column; gap: 16px; }
+.col-center { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: -.01em; }
+h3 { margin: 28px 0 10px; font-size: 16px; }
+p { font-size: 15px; }
+.hint { color: var(--muted); font-size: 13px; }
+.plain { color: var(--muted); font-size: 14px; }
+code { background: var(--surface-2); color: var(--accent); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.card { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+
+/* Mode + zoom bar, like the reference canvas header */
+.modebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.mode-label { font-family: ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: .12em; color: var(--muted); }
+.mode-btn {
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background-color .25s ease, color .25s ease, border-color .25s ease;
+}
+.mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mode-spacer { flex: 1; }
+.zoom-btn {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 13px;
+}
+.zoom-label { font-family: ui-monospace, Menlo, monospace; font-size: 13px; min-width: 48px; text-align: center; }
+.canvas-banner {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--amber);
+}
+.path-banner {
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; margin: 12px 0;
+}
+
+/* Queue */
+.search-wrap input {
+  width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; font-size: 13px;
+}
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 90px; }
+.stat b { display: block; font-size: 22px; color: var(--accent); }
+.stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.inc {
+  width: 100%; text-align: left; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 6px solid var(--accent);
+  border-radius: 10px; padding: 14px 16px; margin: 10px 0; cursor: pointer; font-size: 14px;
+}
+.inc:hover, .inc.sel { outline: 2px solid var(--accent); }
+.inc small { color: var(--muted); }
+
+/* Graph canvas — dotted paper, like the reference */
+#graphMap { overflow: auto; max-height: 720px; border: 1px solid var(--border); border-radius: 12px; background: var(--canvas-bg); }
+.graph-svg {
+  display: block;
+  background-color: var(--canvas-bg);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.gedge { stroke: #f0a832; stroke-width: 2; }
+.elabel { fill: #333; font-family: ui-monospace, Menlo, monospace; font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--canvas-bg); stroke-width: 4px; stroke-linejoin: round; }
+.gnode-wrap { cursor: pointer; }
+.gnode-wrap:hover rect, .gnode-wrap.sel rect { stroke-width: 5; }
+.gnode-wrap:focus-visible { outline: 3px solid #f0a832; outline-offset: 3px; }
+.nlabel { fill: #111; font-size: 13px; font-weight: 700; pointer-events: none; }
+.ntype { fill: #555; font-size: 11px; text-transform: uppercase; pointer-events: none; }
+.nsev { font-size: 11px; font-weight: 800; pointer-events: none; }
+.step-link { margin: 6px 6px 0 0; }
+
+/* Right column */
+.drop { border: 3px dashed var(--accent); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: var(--accent-soft); color: var(--text); font-size: 15px; }
+.drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+.btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background-color .25s ease, opacity .25s ease; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn.danger { background: #7f1d1d; }
+.btn.corridor { width: 100%; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.progress { height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; margin: 16px 0; }
+#bar { height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
+.warn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+.lang-label { display: block; font-size: 13px; margin: 10px 0; }
+.lang-label select { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin-left: 6px; }
+pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 16px; border-radius: 10px; font-size: 13px; line-height: 1.6; }
+.step-detail { border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-size: 15px; background: var(--surface-2); }
+.step-detail b { color: var(--accent); }
+.path { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.path .node { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; }
+.path .arrow { color: var(--accent); font-size: 20px; }
+.pkg { min-width: 260px; max-width: 320px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 12px; padding: 18px; text-align: left; cursor: pointer; font-size: 14px; }
+.pkg:hover, .pkg.sel { border-color: var(--accent); }
+.pkg b { display: block; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.pkg .press { display: inline-block; margin-top: 12px; background: var(--accent); color: #fff; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 13px; }
+details { margin-top: 16px; }
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+  nav.topnav { padding: 12px 16px; gap: 12px; }
+}

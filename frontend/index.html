@@ -1,115 +1,154 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ASK — Analyse Secure Kill · Kill Chain Dashboard</title>
+<title>ASK — Analyse Secure Kill</title>
 <link rel="icon" href="/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Apply the saved theme before first paint, so switching pages
+  // does not flash the other theme. Same key as the landing page.
+  try {
+    var t = localStorage.getItem("ask_theme");
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+  } catch (e) {}
+</script>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <img class="ask-logo" src="/assets/ask-icon.png" alt="ASK — Analyse Secure Kill logo" width="72" height="79">
-    <div>
-      <h1>ASK <span>Dashboard</span></h1>
-      <p class="tag">Analyse &middot; Secure &middot; Kill the chain &middot; Your log files only &middot; No demo data</p>
-    </div>
+<nav class="topnav">
+  <a class="brand" href="/"><img src="/assets/ask-icon.png" alt="ASK logo">ASK</a>
+  <div class="nav-links">
+    <a href="/">Overview</a>
+    <a class="active" href="/app">Incident Workspace</a>
   </div>
-  <p class="tag"><a href="/" style="color:#2563eb">← Home</a> &nbsp;·&nbsp; <a href="#story" style="color:#2563eb">How ASK works</a></p>
-</header>
+  <div class="nav-actions">
+    <a class="gh" href="https://github.com/head43426-bit/mitigata-ask">GitHub</a>
+    <button id="themeBtn" type="button" class="gh">Dark mode</button>
+  </div>
+</nav>
 
-<main>
-  <section class="card upload-card">
-    <h2>Upload your log file</h2>
-    <p>Drop a <code>.log</code> or <code>.txt</code> file here, or pick one. The backend (Python + DuckDB + NetworkX) processes it — the browser only sends the file you choose.</p>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
-      <strong>Drop your .log file here</strong><br>or click to choose a file
-      <input type="file" id="file" accept=".log,.txt" hidden>
+<main class="workspace">
+  <!-- LEFT: Incident Triage Queue -->
+  <aside class="col col-left">
+    <h2>Incident Triage Queue</h2>
+    <p class="hint"><span id="activeCount">0 active</span> &middot; worst risk first</p>
+    <div class="search-wrap">
+      <input id="incidentSearch" type="search" placeholder="Filter CVE, host, or stage..." aria-label="Filter incidents">
     </div>
-    <div style="margin: 16px 0 0;">
-      <button id="demoBtn" type="button" class="btn">Demo</button>
-    </div>
-    <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
-    <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs — never real production logs or credentials.</p>
-    <p id="backendStatus" class="warn" hidden></p>
-    <div id="liveTells" hidden>
-      <h3 style="margin-top:12px">🔍 Live finds — what we're finding right now</h3>
-      <p class="hint">This slab changes as the file is read. Each card is an attack found so far, what gave it away, why it matters, and how it helps you.</p>
-      <div id="liveTellsList"></div>
-    </div>
-    <div style="margin: 12px 0;">
-      <button id="clearBtn" type="button" style="background: #2a1515; color: #ff8888; border: 1px solid #772222; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">🗑 Clear Database</button>
-      <span id="clearStatus" style="font-size: 12px; margin-left: 8px; color: #888;"></span>
-    </div>
-    <details>
-      <summary>What formats does it accept?</summary>
-      <ul>
-        <li>JSON lines: <code>{"time":"...","host":"WS-01","user":"priya","action":"...","detail":"..."}</code></li>
-        <li>Pipe: <code>time|host|user|source|action|detail|stage|mitre|severity</code></li>
-        <li>Plain lines are searched for attack words.</li>
-      </ul>
-      <p>5+ failed logins for the same user on the same host become one brute-force detection. A single failed login never flags. Flagged lines link into incidents by host, user, IP and time.</p>
-    </details>
-  </section>
-
-  <section class="card dark">
-    <h2>Incidents, worst first</h2>
-    <p class="hint" id="liveStatus">Live status loading…</p>
-    <p class="hint" id="liveNote"></p>
-    <p class="hint">Every incident below shows its own risk score (0–100, worst first). The score is the weighted formula from the story section — severity weights + distinct kill-chain stages + exfiltration/credential bonuses — not a guess.</p>
     <div class="stats" id="stats"></div>
     <div id="incidents"><p>No incidents yet. Upload a log to see them here.</p></div>
-  </section>
+    <p class="hint" id="liveStatus">Live status loading…</p>
+    <p class="hint" id="liveNote"></p>
+  </aside>
 
-  <section class="card dark" id="detailSection">
-    <h2>Incident detail</h2>
-    <div id="detail"><p>Pick an incident above, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
+  <!-- CENTER: Attack graph canvas + detail -->
+  <section class="col col-center" id="detailSection">
+    <div class="modebar" role="group" aria-label="Graph mode">
+      <span class="mode-label">MODE:</span>
+      <button type="button" class="mode-btn active" data-mode="kill">Kill Chain</button>
+      <button type="button" class="mode-btn" data-mode="quantum">Quantum Walk</button>
+      <span class="mode-spacer"></span>
+      <button type="button" class="zoom-btn" id="zoomOut" aria-label="Zoom out">−</button>
+      <span class="zoom-label" id="zoomLabel">100%</span>
+      <button type="button" class="zoom-btn" id="zoomIn" aria-label="Zoom in">+</button>
+      <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
+    </div>
+
+    <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
+    <p class="plain" id="modePlain">Kill Chain graph, in plain words: each box is a computer (IP). An arrow means traffic went from one computer to another. Amber arrows are attack steps, in order: first access, then running code, then stealing passwords, then moving sideways, then reaching the target. Follow the amber arrows to read the attack story.</p>
+    <div class="path-banner" id="pathBanner" hidden></div>
+
+    <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
 
     <h3>Attack graph map — built by NetworkX</h3>
-    <p class="hint">Nodes are the real hosts and users from the backend NetworkX graph, connected by its edges. Click a node to see its steps, or click an edge label to open that step. Hosts are squares, users are circles.</p>
-    <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"></div>
-
-    <h3>Step detail</h3>
-    <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
+    <p class="hint">Nodes are the real hosts and users from the backend NetworkX graph, connected by its edges. Click a node to see its steps. Hosts are squares, users are circles. Scroll inside the box to pan; use the zoom controls above.</p>
+    <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"><p class="hint">Topology canvas empty — Awaiting flow telemetry. Upload a log or load the sample on the right.</p></div>
 
     <h3>Attack path</h3>
     <div id="path" class="path"></div>
 
-    <h3>What the attacker could reach next</h3>
-    <div id="next"></div>
+    <h3>Step detail</h3>
+    <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
 
     <h3>Protect — what to do now</h3>
     <p class="hint">ASK cannot block an attack itself — it has no agent on your hosts. These are the concrete actions for each technique found in this incident, worst first. Do them in order.</p>
     <div id="protect"></div>
-
-    <h3>Report</h3>
-    <p>
-      <button class="btn" id="copyBtn" disabled>Copy English report</button>
-      <button class="btn ghost" id="hindiBtn" disabled>Show Hindi version</button>
-    </p>
-    <pre id="report">No incident selected yet.</pre>
-    <p class="warn" id="hindiNote" hidden>Hindi here is a fixed template — it is NOT a live Sarvam translation. For a real Sarvam Hindi report, run the backend with SARVAM_API_KEY set in a private .env.</p>
   </section>
 
-  <section class="card dark" id="story">
-    <h2>How ASK works — the story, in plain words</h2>
-    <p>ASK is <strong>Analyse · Secure · Kill</strong>: it reads your log, finds the attack, links it into one chain, and tells you what to do next. No demo data, no guessed hosts, no real production logs unless you choose to upload them. Here is every step, in order:</p>
-    <ol>
-      <li><strong>1. Ingest, streaming, memory-safe.</strong> Your file is received in 1 MB chunks and read line by line. Benign lines are counted and dropped immediately — only flagged lines ever reach the database. That is why a multi-GB file runs on a 4 GB machine, and why it is fast: no line is parsed twice, no whole file is ever held in RAM. Uploads use 8 workers (capped by your cores and RAM), the file is split into many small byte-range chunks and processed in parallel, then replayed into one incident list — progress updates after every small chunk, not after a million lines.</li>
-      <li><strong>2. Detect and label (Agent 1 in spirit).</strong> Every line is checked against Sigma-style rules in <code>rules/*.yml</code> — plain config files, not code, so you can add a rule without touching the engine. A match stamps a MITRE ATT&amp;CK technique (for example T1566.001 Phishing, T1204.002 Malicious File, T1071.001 Web Protocols) and a kill-chain stage (Reconnaissance → Initial Access → Execution → Persistence → Privilege Escalation → Credential Access → Lateral Movement → Collection → Command and Control → Exfiltration). A single failed login never flags; brute force needs 50+ failures plus a success for the same user and host.</li>
-      <li><strong>3. Link into one incident (Agent 2).</strong> Flagged lines that share a real machine (srcip if present, else host), a user, or a pivot (current source was a previous destination, or vice versa) within 48 hours join the same incident. That is the whole linking rule — and it deliberately does <em>not</em> link on the firewall's own name: in Fortinet logs every line carries the same firewall host, so linking on it would merge unrelated attacks into one giant incident. A blank user never links either, for the same reason. Unrelated attacks stay separate incidents.</li>
-      <li><strong>4. Graph (NetworkX).</strong> Real IPs and domains become nodes, moves become edges — never the firewall name alone. A DNS line draws <code>internal host → nytimes.com</code>, a firewall move draws <code>srcip → dstip</code>. Only edges evidenced by a single log line are drawn (user → source, source → destination); ASK never invents a path edge between two unrelated sources just because they happened one after another. When an incident has no move at all, the graph draws source → technique instead, so there is still a map to look at. Hosts/IPs/domains are squares, users are circles, techniques are diamonds. Large graphs are capped at the 250 most-connected nodes so the browser tab never hangs.</li>
-      <li><strong>5. Risk scoring (Agent 3, JEV-style validation).</strong> A transparent weighted formula, not a black box: severity weights (Critical 40, High 25, Medium 10, Low 3) plus 3 points per distinct kill-chain stage, plus 15 for exfiltration and 10 for credential access or privilege escalation, capped at 100. Merged-alert counts are kept separately, so a flood of 271,896 detections is reported as grouped counts, never as a wall of steps. Low-confidence matches are dropped by the rule threshold, which is the false-positive filter.</li>
-      <li><strong>6. Look ahead (Agent 4, QAOA-inspired — honestly classical).</strong> Two predictions, and they are kept separate so neither pretends to be the other. <em>Next hosts</em> come only from a topology you supply: admin rights score 50, same subnet 25, with the reason shown for every host. <em>Next stages</em> come from the kill chain itself: after the deepest stage reached, the following stages are listed as what to watch for. The blast-radius optimiser then scores how much of your topology is compromised or one hop away. A true Qiskit statevector QAOA simulation grows as 2<sup>n</sup> and would never run on 4 GB — so ASK runs the same combinatorial idea classically (greedy + score), which gives the same ranking on real graphs and actually finishes.</li>
-      <li><strong>7. Report (Agent 5).</strong> A plain-English narrative — where it began, what the attacker did in order, what they could reach next, what to block first — plus a Hindi version. Hindi is a real Sarvam API translation only when <code>SARVAM_API_KEY</code> is set; otherwise it is clearly labelled a template, never presented as a translation. If Sarvam is slow or rate-limited, the local fallback is the template, not a hallucinated translation.</li>
-      <li><strong>8. Live mode.</strong> Run the server with <code>--watch your.log</code> and new lines are tailed, detected and linked into incidents as they arrive — the incident list below refreshes on its own while a watch is running.</li>
-    </ol>
-    <p class="hint">What ASK does <em>not</em> do: it does not invent a host, a user, or a next target that is not in your logs or topology; it does not block or stop an attack (it describes it, so you can); it does not send your logs anywhere — the file stays on the machine running the server.</p>
-  </section>
+  <!-- RIGHT: Data, Sarvam brief, look-ahead, paths -->
+  <aside class="col col-right">
+    <section class="card">
+      <h2>Flow Log Data</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
+        <strong>Drop your .log file here</strong><br>or click to choose a file
+        <input type="file" id="file" accept=".log,.txt" hidden>
+      </div>
+      <div class="btn-row">
+        <button id="demoBtn" type="button" class="btn">Demo</button>
+        <button id="sampleBtn" type="button" class="btn ghost">Load Sample</button>
+        <button id="tinyBtn" type="button" class="btn ghost">Tiny Demo (5 rows)</button>
+      </div>
+      <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
+      <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs — never real production logs or credentials.</p>
+      <p id="backendStatus" class="warn" hidden></p>
+      <div id="liveTells" hidden>
+        <h3>Live finds — what we're finding right now</h3>
+        <p class="hint">This slab changes as the file is read. Each card is an attack found so far, what gave it away, why it matters, and how it helps you.</p>
+        <div id="liveTellsList"></div>
+      </div>
+      <div class="btn-row">
+        <button id="clearBtn" type="button" class="btn danger">Clear Database</button>
+        <span id="clearStatus" class="hint"></span>
+      </div>
+      <details>
+        <summary>What formats does it accept?</summary>
+        <ul>
+          <li>JSON lines: <code>{"time":"...","host":"WS-01","user":"priya","action":"...","detail":"..."}</code></li>
+          <li>Pipe: <code>time|host|user|source|action|detail|stage|mitre|severity</code></li>
+          <li>Plain lines are searched for attack words.</li>
+        </ul>
+        <p>5+ failed logins for the same user on the same host become one brute-force detection. A single failed login never flags. Flagged lines link into incidents by host, user, IP and time.</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Sarvam AI Forensic Brief</h2>
+      <p class="hint" id="briefStatus">No incident selected yet. Pick an incident, then choose a report language.</p>
+      <label class="lang-label">Report language:
+        <select id="reportLang" aria-label="Report language">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="ta">Tamil</option>
+          <option value="te">Telugu</option>
+          <option value="ml">Malayalam</option>
+        </select>
+      </label>
+      <pre id="report">No incident selected yet.</pre>
+      <p class="warn" id="reportWarning" hidden></p>
+      <p class="btn-row">
+        <button class="btn" id="copyBtn" disabled>Copy report</button>
+        <button class="btn ghost" id="pdfBtn" disabled>Generate PDF</button>
+      </p>
+      <p class="hint">Generate PDF opens the report in a print view — choose “Save as PDF” there. That is how Hindi, Tamil, Telugu and Malayalam text prints correctly, using your system fonts.</p>
+    </section>
+
+    <section class="card">
+      <h2>Quantum Next-Hop Look-Ahead</h2>
+      <p class="hint">Classical look-ahead from the observed graph — frontier hosts already contacted, not guessed targets, and not a Qiskit simulation.</p>
+      <div id="next"><p>Awaiting active threat vectors to compute look-ahead.</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Attack Paths — Ranked</h2>
+      <div id="attackPaths"><p>Load data to see ranked attack paths.</p></div>
+      <p><button id="corridorBtn" type="button" class="btn corridor" disabled>No Active Threat Corridor</button></p>
+      <p class="hint" id="corridorNote">Quarantine here is a dashboard simulation only — no real host is isolated and no firewall rule is changed.</p>
+    </section>
+  </aside>
 </main>
 
 <script src="app.js"></script>

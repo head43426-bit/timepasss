@@ -149,22 +149,38 @@ def _hindi_template(incident: Dict, next_list: List[Dict]) -> str:
         f"यह एक टेम्पलेट रिपोर्ट है, असली अनुवाद नहीं।")
 
 
-def hindi_report(incident: Dict, next_list: List[Dict]) -> Dict:
-    """Return {hindi, source, warning}. Source is 'sarvam' only when the
-    Sarvam API actually returned a translation."""
+LANG_CODES = {"en": "en-IN", "hi": "hi-IN", "ta": "ta-IN", "te": "te-IN", "ml": "ml-IN"}
+LANG_NAMES = {"en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu", "ml": "Malayalam"}
+
+
+def translate_report(incident: Dict, next_list: List[Dict], lang: str) -> Dict:
+    """Return {text, source, warning} for the requested language.
+
+    English is generated locally, never translated. Other languages go
+    through Sarvam Translate only when SARVAM_API_KEY is set. Without
+    a key, or if Sarvam fails, the English report is returned with an
+    explicit warning that it was NOT translated -- a fake Tamil /
+    Telugu / Malayalam template is never invented, because this
+    codebase only ever had a real Hindi template.
+    """
+    lang = (lang or "en").lower()
+    if lang not in LANG_CODES:
+        lang = "en"
     english = english_report(incident, next_list)
+    if lang == "en":
+        return {"text": english, "source": "local", "warning": ""}
     key = os.environ.get("SARVAM_API_KEY", "").strip()
     if not key:
-        return {"hindi": _hindi_template(incident, next_list),
-                "source": "mock_template",
-                "warning": ("No SARVAM_API_KEY is set, so this is a Hindi "
-                            "template built from the incident fields, NOT a "
-                            "real Sarvam translation.")}
+        return {"text": english, "source": "not_translated",
+                "warning": (f"No SARVAM_API_KEY is set, so this is the English "
+                            f"report, NOT a {LANG_NAMES[lang]} translation. "
+                            f"Add the key to a private .env file (see README) "
+                            f"and restart the server for a real translation.")}
     try:
         payload = json.dumps({
             "input": english,
             "source_language_code": "en-IN",
-            "target_language_code": "hi-IN",
+            "target_language_code": LANG_CODES[lang],
             "mode": "formal",
         }).encode("utf-8")
         request = urllib.request.Request(
@@ -175,10 +191,27 @@ def hindi_report(incident: Dict, next_list: List[Dict]) -> Dict:
             data = json.loads(response.read().decode("utf-8"))
         translated = data.get("translated_text") or ""
         if translated:
-            return {"hindi": translated, "source": "sarvam", "warning": ""}
+            return {"text": translated, "source": "sarvam", "warning": ""}
         raise ValueError("Sarvam response had no translated_text")
     except Exception as exc:  # network/auth/format failure -> labelled fallback
-        return {"hindi": _hindi_template(incident, next_list),
-                "source": "mock_template",
-                "warning": (f"Sarvam translation failed ({exc}); returning a "
-                            f"Hindi template instead, NOT a real translation.")}
+        return {"text": english, "source": "not_translated",
+                "warning": (f"Sarvam translation failed ({exc}); showing the "
+                            f"English report instead, NOT a {LANG_NAMES[lang]} "
+                            f"translation.")}
+
+
+def hindi_report(incident: Dict, next_list: List[Dict]) -> Dict:
+    """Backward-compatible wrapper: {hindi, source, warning} for Hindi.
+
+    Kept because GET /incidents/{id}/report?hindi=1 already returns
+    that shape. New code should use translate_report(..., "hi").
+    """
+    out = translate_report(incident, next_list, "hi")
+    if out["source"] == "sarvam":
+        return {"hindi": out["text"], "source": "sarvam", "warning": ""}
+    # Old callers expect a Hindi template when Sarvam is unavailable.
+    return {"hindi": _hindi_template(incident, next_list),
+            "source": "mock_template",
+            "warning": out["warning"] or ("No SARVAM_API_KEY is set, so this is a Hindi "
+                            "template built from the incident fields, NOT a "
+                            "real Sarvam translation.")}

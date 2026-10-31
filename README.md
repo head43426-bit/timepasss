@@ -135,3 +135,55 @@ docker compose up --build
 Hindi reports use the Sarvam API only when `SARVAM_API_KEY` is
 set in a private `.env`; without a key they are a clearly labelled
 template, never a claimed real translation.
+
+## New dashboard UI (2026-11-01)
+
+- The workspace at `/app` is now a 3-column layout like the reference
+  screenshots: Incident Triage Queue (left), attack graph canvas
+  (centre, Kill Chain / Quantum Walk toggle, pan + zoom), and Flow
+  Log Data / Sarvam Brief / Quantum Next-Hop / Attack Paths (right).
+  The header now says **ASK**, not "ASK Dashboard". The "How ASK
+  works — the story, in plain words" section was removed from `/app`.
+  No emojis are used in the dashboard UI.
+- **Dark / light theme:** the button beside GitHub on both `/` and
+  `/app` toggles the theme, saves it in the browser
+  (`localStorage: ask_theme`), and the change animates over 0.35s
+  (colours only, never layout). Default is light, matching the
+  reference screenshots.
+- **Graph canvas:** nodes are laid out left-to-right by role
+  (Users → Sources → Pivots → Destinations), coloured by worst
+  severity, capped at the 60 most-connected nodes by default with a
+  "Show all" button, with technique / severity / search filters and
+  zoom controls in the centre header. Quantum Walk mode shows only
+  the frontier subgraph (frontier hosts + the hosts that reached
+  them) — it is classical look-ahead from the observed graph, not a
+  Qiskit simulation and not invented probabilities.
+- **Load Sample / Tiny Demo:** `/app` now has Load Sample (runs the
+  repo's `sample_attack.log` through the same pipeline) and Tiny
+  Demo (5 synthetic rows: 1 benign ingress, 3 attack steps,
+  1 benign DNS), alongside Upload and Demo. Both are server-side
+  endpoints (`POST /sample`, `POST /tiny`), not browser data.
+
+## Sarvam API key — exact location, and report languages + PDF
+
+1. Copy `.env.example` to a file named exactly `.env` in the repo
+   root (the same folder as `main.py` — NOT in `frontend/`).
+2. Put only this line in it, with your real key:
+   `SARVAM_API_KEY=your-key-here`
+   Never commit `.env` — it is already in `.gitignore`.
+3. **Restart the server** (Ctrl+C, then `./run.sh` / `run.bat` /
+   `python main.py serve …` again). The server reads `.env` once at
+   startup; reloading the page alone does not load a new key.
+4. In `/app`, pick an incident, then use the Report language
+   dropdown in the Sarvam AI Forensic Brief panel: **English, Hindi,
+   Tamil, Telugu, Malayalam**. English is generated locally.
+   The other four go through Sarvam Translate (`en-IN` → `hi-IN` /
+   `ta-IN` / `te-IN` / `ml-IN`) only when the key is set; without a
+   key, or if Sarvam fails, the panel shows the English report with
+   an explicit warning that it was NOT translated — no fake
+   Tamil/Telugu/Malayalam template is ever invented.
+5. **Generate PDF** opens the current report in a print view — choose
+   "Save as PDF" there. That path uses your system fonts, so Hindi,
+   Tamil, Telugu and Malayalam print correctly. API: the same
+   translation is available as
+   `GET /incidents/{id}/report?lang=hi|ta|te|ml` (English: `?lang=en`).

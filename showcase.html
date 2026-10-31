@@ -20,40 +20,44 @@
 -->
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#fafaf9;color:#111;line-height:1.55}
+:root,[data-theme="light"]{--bg:#fafaf9;--surface:#fff;--text:#111;--muted:#57534e;--border:#e7e5e4;--accent:#00a66a}
+[data-theme="dark"]{--bg:#0c0c0c;--surface:#18181b;--text:#f4f4f5;--muted:#a1a1aa;--border:#27272a;--accent:#34d399}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+body,nav,.card,.gh,.btn{transition:background-color .35s ease,color .35s ease,border-color .35s ease}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 a{color:inherit}
-nav{position:sticky;top:0;background:#fafaf9;border-bottom:1px solid #e7e5e4;z-index:10}
+nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
 .nav-in{max-width:1020px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em;text-decoration:none}
 .brand img{height:28px;width:auto}
 .nav-links{display:flex;gap:24px;margin:0 auto 0 0}
 .nav-links a{text-decoration:none;font-size:14px;color:#57534e}
-.nav-links a.active{color:#111;border-bottom:2px solid #00a66a;padding-bottom:2px}
-.gh{border:1px solid #e7e5e4;background:#fff;border-radius:8px;padding:6px 12px;font-size:13px;text-decoration:none}
+.nav-links a.active{color:var(--text);border-bottom:2px solid #00a66a;padding-bottom:2px}
+.gh{border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:8px;padding:6px 12px;font-size:13px;text-decoration:none}
 .wrap{max-width:1020px;margin:0 auto;padding:64px 24px 32px}
 .eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#00a66a}
 h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
-.hero-p{max-width:620px;font-size:17px;color:#44403c;margin:0}
+.hero-p{max-width:620px;font-size:17px;color:var(--muted);margin:0}
 .btn{display:inline-block;margin-top:28px;background:#00a66a;color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px}
 .btn:hover{background:#008f5b}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;border-top:1px solid #e7e5e4;margin-top:56px;padding-top:28px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;border-top:1px solid var(--border);margin-top:56px;padding-top:28px}
 .stat b{display:block;font-size:24px;letter-spacing:-.02em}
 .stat b .green{color:#00a66a}.stat b .amber{color:#d97706}
-.stat span{font-size:13px;color:#78716c}
-.section{border-top:1px solid #e7e5e4;margin-top:64px;padding-top:48px}
+.stat span{font-size:13px;color:var(--muted)}
+.section{border-top:1px solid var(--border);margin-top:64px;padding-top:48px}
 .section h2{margin:8px 0 32px;font-size:26px;letter-spacing:-.02em}
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
 .card .ico{width:32px;height:32px;border-radius:8px;background:#ecfdf5;color:#00a66a;display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:16px}
 .card h3{margin:0 0 8px;font-size:16px}
-.card p{margin:0;font-size:14px;color:#57534e}
-.card .tags{display:flex;justify-content:space-between;margin-top:20px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a8a29e}
+.card p{margin:0;font-size:14px;color:var(--muted)}
+.card .tags{display:flex;justify-content:space-between;margin-top:20px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
 .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
 .step b{color:#00a66a;font-family:ui-monospace,Menlo,monospace;font-size:12px}
-.step p{margin:4px 0 0;font-size:14px;color:#57534e}
+.step p{margin:4px 0 0;font-size:14px;color:var(--muted)}
 .note{margin-top:48px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:14px}
-footer{border-top:1px solid #e7e5e4;margin-top:64px;padding:24px;max-width:1020px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#78716c}
-footer a{text-decoration:none}
+footer{border-top:1px solid var(--border);margin-top:64px;padding:24px;max-width:1020px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#78716c}
+footer{color:var(--muted)}footer a{text-decoration:none}
 @media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}}
 </style>
 </head>
@@ -65,7 +69,8 @@ footer a{text-decoration:none}
       <a class="active" href="/">Overview</a>
       <a href="/app">Incident Workspace</a>
     </div>
-    <a class="gh" href="https://github.com/head43426-bit/timepasss">GitHub</a>
+    <a class="gh" href="https://github.com/head43426-bit/mitigata-ask">GitHub</a>
+    <button id="themeBtn" type="button" class="gh">Dark mode</button>
   </div>
 </nav>
 
@@ -123,8 +128,25 @@ footer a{text-decoration:none}
   <a href="/app">Incident Workspace</a>
   <a href="/demo/">Browser demo</a>
   <a href="/dashboard.html">Single-file dashboard</a>
-  <a href="https://github.com/head43426-bit/timepasss">GitHub — timepasss</a>
+  <a href="https://github.com/head43426-bit/mitigata-ask">GitHub — mitigata-ask</a>
   <span style="margin-left:auto">ASK — Analyse · Secure · Kill</span>
 </footer>
+<script>
+  (function () {
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      try { localStorage.setItem("ask_theme", theme); } catch (e) {}
+      var btn = document.getElementById("themeBtn");
+      if (btn) btn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    }
+    var saved = null;
+    try { saved = localStorage.getItem("ask_theme"); } catch (e) {}
+    applyTheme(saved === "dark" ? "dark" : "light");
+    var btn = document.getElementById("themeBtn");
+    if (btn) btn.addEventListener("click", function () {
+      applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    });
+  })();
+</script>
 </body>
 </html>

@@ -1,5 +1,21 @@
 "use strict";
-var state = { incidents: [], selected: null, report: "", hindi: null };
+var state = { incidents: [], selected: null, report: "", hindi: null, graphMode: "kill" };
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try { localStorage.setItem("ask_theme", theme); } catch (e) {}
+  var btn = document.getElementById("themeBtn");
+  if (btn) btn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+}
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem("ask_theme"); } catch (e) {}
+  applyTheme(saved === "dark" ? "dark" : "light");
+  var btn = document.getElementById("themeBtn");
+  if (btn) btn.addEventListener("click", function() {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+})();
 
 function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
@@ -13,6 +29,8 @@ async function loadIncidents() {
     "<div class=stat><b>" + list.length + "</b><span>incidents</span></div>" +
     "<div class=stat><b>" + health.detections + "</b><span>detections</span></div>" +
     "<div class=stat><b>" + list.reduce(function(n, i) { return n + (i.merged_alerts || 0); }, 0) + "</b><span>raw alerts merged</span></div>";
+  var ac = document.getElementById("activeCount");
+  if (ac) ac.textContent = list.length + " active";
   document.getElementById("liveStatus").innerHTML = health.live_watch
     ? "● Live — watching " + esc(health.live_watch) + ". New log lines are detected and linked as they arrive, and this list refreshes every 5 seconds."
     : "○ Live off — start the server with --watch your.log to watch a live log file. Uploads still work normally.";
@@ -40,16 +58,18 @@ async function loadIncidents() {
   // per tier showing its count, plus All. List is sorted by risk
   // descending, then steps descending, so the worst incidents are
   // first instead of a flat 700-card wall in id order.
-  function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : s >= 40 ? "Medium" : "Low"; }
+  // Screenshot tiers: Critical / High / Elevated (Medium + Low are
+  // grouped as Elevated, so the queue stays at 4 buttons, not 5).
+  function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : "Elevated"; }
   var sorted = list.slice().sort(function(a, b) {
     return (b.risk_score - a.risk_score) || (b.detection_count - a.detection_count) || (a.id - b.id);
   });
-  var counts = { All: sorted.length, Critical: 0, High: 0, Medium: 0, Low: 0 };
+  var counts = { All: sorted.length, Critical: 0, High: 0, Elevated: 0 };
   sorted.forEach(function(i) { counts[tierOf(i.risk_score)] += 1; });
   if (!state.tierFilter) state.tierFilter = "All";
   window.setTierFilter = function(t) { state.tierFilter = t; loadIncidents(); };
   var shown = state.tierFilter === "All" ? sorted : sorted.filter(function(i) { return tierOf(i.risk_score) === state.tierFilter; });
-  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Medium", "Low"].map(function(t) {
+  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Elevated"].map(function(t) {
     var sel = state.tierFilter === t ? " style='background:#f0a832;color:#000;font-weight:bold'" : "";
     return "<button class=btn onclick=\"setTierFilter('" + t + "')\"" + sel + ">" + t + " (" + counts[t] + ")</button> ";
   }).join("") + "</div>";
@@ -68,6 +88,25 @@ async function selectIncident(id) {
   var rep = await (await fetch("/incidents/" + id + "/report")).json();
   var next = await (await fetch("/incidents/" + id + "/next")).json();
   state.selected = path; state.report = rep.report; state.hindi = rep.hindi || null;
+  path.next_reach = next.next_reach || [];
+  var banner = document.getElementById("pathBanner");
+  if (banner) {
+    banner.hidden = false;
+    banner.textContent = "Showing incident #" + path.id + " — risk " + path.risk_score + "/100 — " + (path.hosts || []).join(", ");
+  }
+  var ap = document.getElementById("attackPaths");
+  if (ap) {
+    var ranked = (next.next_reach || []).slice().sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
+    ap.innerHTML = ranked.length
+      ? "<ol>" + ranked.map(function(n, i) { return "<li><b>" + esc(n.host) + "</b> — watch score " + n.confidence + "/100 — " + esc(n.reason) + "</li>"; }).join("") + "</ol>"
+      : "<p>No frontier paths yet for this incident.</p>";
+  }
+  var cb = document.getElementById("corridorBtn");
+  if (cb) { cb.disabled = false; cb.textContent = "Execute Containment Isolator"; }
+  var cn = document.getElementById("corridorNote");
+  if (cn) cn.textContent = "Quarantine here is a dashboard simulation only — no real host is isolated and no firewall rule is changed.";
+  var bs = document.getElementById("briefStatus");
+  if (bs) bs.textContent = "Incident #" + path.id + " — " + esc(path.title);
   document.querySelectorAll(".inc").forEach(function(el) {
     el.classList.toggle("sel", parseInt(el.getAttribute("data-id"), 10) === id);
   });
@@ -113,9 +152,10 @@ async function selectIncident(id) {
         return "<li><b>" + esc(p.technique_id) + " — " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
       }).join("") + "</ol>"
     : "<p>No protection actions for this incident.</p>";
-  document.getElementById("report").textContent = state.report;
+  showReport();
   document.getElementById("copyBtn").disabled = false;
-  document.getElementById("hindiBtn").disabled = false;
+  var pdf = document.getElementById("pdfBtn");
+  if (pdf) pdf.disabled = false;
   if (path.timeline.length) showStep(path, 0);
   document.getElementById("detailSection").scrollIntoView({ behavior: "smooth" });
 }
@@ -145,6 +185,18 @@ function renderGraph(path) {
     gf.zoom = Math.min(2, Math.max(0.6, Math.round((gf.zoom + d) * 10) / 10));
     renderGraph(path);
   };
+  // Quantum Walk mode: show only the frontier subgraph — frontier
+  // hosts from /next plus the hosts that reached them. Nothing here
+  // is a guessed target or a simulated probability.
+  if (state.graphMode === "quantum" && path.next_reach && path.next_reach.length) {
+    var frontier = {};
+    path.next_reach.forEach(function(n) { frontier[n.host] = true; });
+    var keepEdge = allEdges.filter(function(e) { return frontier[e.to]; });
+    var keepNode = {};
+    keepEdge.forEach(function(e) { keepNode[e.from] = true; keepNode[e.to] = true; });
+    allNodes = allNodes.filter(function(n) { return keepNode[n.id]; });
+    allEdges = keepEdge;
+  }
   var nodeSet = {};
   allNodes.forEach(function(n) { nodeSet[n.id] = true; });
   var realEdges = allEdges.filter(function(e) { return nodeSet[e.from] && nodeSet[e.to]; });
@@ -235,7 +287,7 @@ function renderGraph(path) {
     if (nodeById[e.to] && nodeById[e.to].type === "user") col = "#2563eb";
     if (nodeById[e.to] && nodeById[e.to].type === "technique") col = "#7c3aed";
     svg += "<line x1='" + (a.x + BW) + "' y1='" + (a.y + BH / 2) + "' x2='" + b.x + "' y2='" + (b.y + BH / 2) + "' stroke='" + col + "' stroke-width='2' marker-end='url(#arr2)'/>";
-    if (fEdges.length <= 60 && e.technique_id) {
+    if (state.graphMode !== "quantum" && fEdges.length <= 60 && e.technique_id) {
       svg += "<text x='" + Math.round((a.x + BW + b.x) / 2) + "' y='" + Math.round((a.y + b.y) / 2 + BH / 2 - 4) + "' class='elabel'>" + esc(e.technique_id) + "</text>";
     }
   });
@@ -258,12 +310,14 @@ function renderGraph(path) {
   realEdges.forEach(function(e) { if (e.technique_id && techOpts.indexOf(e.technique_id) < 0) techOpts.push(e.technique_id); });
   var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest — the full step list and grouped report still cover everything.</p>" : "";
   var colNote = "<p class='hint'>Left to right: " + usedCols.map(function(i) { return colNames[i] + " (" + cols[i].length + ")"; }).join(" → ") + ".</p>";
+  var zl = document.getElementById("zoomLabel");
+  if (zl) zl.textContent = Math.round(gf.zoom * 100) + "%";
   box.innerHTML =
-    "<div style='background:#f4efe6;border:2px solid #333;border-radius:12px;padding:10px'>" +
+    "<div style='background:var(--canvas-bg);border:1px solid var(--border);border-radius:12px;padding:10px'>" +
     "<div style='margin-bottom:8px'>" +
     "<label>Technique: <select onchange=\"setGraphFilter('technique', this.value)\">" + techOpts.map(function(t) { return "<option" + (gf.technique === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") + "</select></label> " +
     "<label>Severity: <select onchange=\"setGraphFilter('severity', this.value)\">" + ["All", "Critical", "High", "Medium", "Low", "user", "technique"].map(function(t) { return "<option" + (gf.severity === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") + "</select></label> " +
-    "<label>Find host/domain: <input value='" + esc(gf.search) + "' placeholder='e.g. 10.10.' oninput=\"setGraphFilter('search', this.value)\" style='width:140px'></label> " +
+    "<label>Find host/domain: <input value='" + esc(gf.search) + "' placeholder='e.g. 10.10.' onchange=\"setGraphFilter('search', this.value)\" style='width:140px'> (press Enter)</label> " +
     "<button class=btn onclick=\"setGraphFilter('showAll', " + (gf.showAll ? "false" : "true") + ")\">" + (gf.showAll ? "Show top 60" : "Show all") + "</button> " +
     "<button class=btn onclick=\"setGraphZoom(0.2)\">Zoom +</button> " +
     "<button class=btn onclick=\"setGraphZoom(-0.2)\">Zoom −</button> " +
@@ -360,13 +414,14 @@ function renderAttackPathCanvas(path) {
     (destBoxes.length > 6 ? "Showing 6 of " + destBoxes.length + " destination groups. " : "") +
     "Full list: see the graph map and step list below. Click a box to see its steps.</p>";
   var cv = document.getElementById("attackCanvas");
+  var isDark = document.documentElement.getAttribute("data-theme") === "dark";
   var dpr = window.devicePixelRatio || 1;
   cv.width = W * dpr; cv.height = H * dpr;
   var ctx = cv.getContext("2d");
   ctx.scale(dpr, dpr);
   // Dotted-paper background, like the reference canvas.
-  ctx.fillStyle = "#f8f6f0"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = "#d8d2c2";
+  ctx.fillStyle = isDark ? "#18181b" : "#f8f6f0"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = isDark ? "#3f3f46" : "#d8d2c2";
   for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
   var BW = 230, BH = 68, cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 320, boxes: pivBoxes, name: "PIVOT" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
   if (!pivBoxes.length) cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
@@ -377,10 +432,10 @@ function renderAttackPathCanvas(path) {
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
     ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = "#111"; ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
     var lab = b.label.length > 26 ? b.label.slice(0, 25) + "…" : b.label;
     ctx.fillText(lab, x + 12, y + 24);
-    ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
+    ctx.fillStyle = isDark ? "#a1a1aa" : "#555"; ctx.font = "11px system-ui, sans-serif";
     var sub = (b.sub || "").length > 30 ? b.sub.slice(0, 29) + "…" : (b.sub || "");
     ctx.fillText(sub, x + 12, y + 42);
     ctx.fillStyle = stroke; ctx.font = "bold 11px system-ui, sans-serif";
@@ -396,7 +451,7 @@ function renderAttackPathCanvas(path) {
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 10, y2 - 4); ctx.lineTo(x2 - 10, y2 + 4); ctx.closePath(); ctx.fill();
   };
   cols.forEach(function(c) {
-    ctx.fillStyle = "#888"; ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillStyle = isDark ? "#a1a1aa" : "#888"; ctx.font = "bold 11px system-ui, sans-serif";
     ctx.fillText(c.name, c.x, 18);
     c.boxes.forEach(function(b, i) { drawBox(c.x, 26 + i * 92, b); });
   });
@@ -422,10 +477,11 @@ function renderAttackPathCanvas(path) {
 }
 
 function drawAttackStageRow(ctx, stages, path) {
+  var isDark = document.documentElement.getAttribute("data-theme") === "dark";
   var W = 1080, BH = 64, gap = 30;
   var BW = Math.min(200, Math.floor((W - 40 - (stages.length - 1) * gap) / Math.max(1, stages.length)));
-  ctx.fillStyle = "#f8f6f0"; ctx.fillRect(0, 0, W, 170);
-  ctx.fillStyle = "#d8d2c2";
+  ctx.fillStyle = isDark ? "#18181b" : "#f8f6f0"; ctx.fillRect(0, 0, W, 170);
+  ctx.fillStyle = isDark ? "#3f3f46" : "#d8d2c2";
   for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < 170; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
   var total = stages.length * (BW + gap) - gap;
   var x0 = Math.max(20, (W - total) / 2);
@@ -434,8 +490,8 @@ function drawAttackStageRow(ctx, stages, path) {
     var x = x0 + i * (BW + gap), y = 50;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
-    ctx.fillStyle = "#fff"; ctx.fill(); ctx.strokeStyle = "#e1251b"; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = "#111"; ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = "#e1251b"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
     ctx.fillText(s.length > 24 ? s.slice(0, 23) + "…" : s, x + 12, y + 28);
     ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
     ctx.fillText("Stage " + (i + 1) + " of " + stages.length, x + 12, y + 48);
@@ -506,14 +562,52 @@ function showStep(path, i) {
   document.getElementById("stepDetail").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-document.getElementById("copyBtn").addEventListener("click", function() {
-  if (state.report) navigator.clipboard.writeText(state.report).then(function() { alert("Report copied."); });
-});
-document.getElementById("hindiBtn").addEventListener("click", async function() {
+async function showReport() {
+  var langSel = document.getElementById("reportLang");
+  var lang = langSel ? langSel.value : "en";
+  var box = document.getElementById("report");
+  var warn = document.getElementById("reportWarning");
   if (!state.selected) return;
-  var rep = await (await fetch("/incidents/" + state.selected.id + "/report?hindi=1")).json();
-  document.getElementById("hindiNote").hidden = false;
-  document.getElementById("report").textContent = (rep.hindi && rep.hindi.hindi) ? rep.hindi.hindi : "Hindi template not available.";
+  if (lang === "en") {
+    box.textContent = state.report;
+    if (warn) warn.hidden = true;
+    return;
+  }
+  try {
+    var rep = await (await fetch("/incidents/" + state.selected.id + "/report?lang=" + lang)).json();
+    var tr = rep.translated || {};
+    box.textContent = tr.text || state.report;
+    if (warn) {
+      if (tr.warning) { warn.hidden = false; warn.textContent = tr.warning; }
+      else if (tr.source === "sarvam") { warn.hidden = false; warn.textContent = "Report — by Sarvam AI (" + lang + ")."; }
+      else warn.hidden = true;
+    }
+  } catch (e) {
+    box.textContent = state.report;
+    if (warn) { warn.hidden = false; warn.textContent = "Translation could not be loaded — showing the English report."; }
+  }
+}
+var reportLangSel = document.getElementById("reportLang");
+if (reportLangSel) reportLangSel.addEventListener("change", showReport);
+document.getElementById("copyBtn").addEventListener("click", function() {
+  var txt = document.getElementById("report").textContent;
+  if (txt) navigator.clipboard.writeText(txt).then(function() { alert("Report copied."); });
+});
+var pdfBtn = document.getElementById("pdfBtn");
+if (pdfBtn) pdfBtn.addEventListener("click", function() {
+  if (!state.selected) return;
+  var langSel = document.getElementById("reportLang");
+  var lang = langSel ? langSel.options[langSel.selectedIndex].text : "English";
+  var txt = document.getElementById("report").textContent;
+  var w = window.open("", "_blank");
+  if (!w) { alert("Allow pop-ups for this page, then try Generate PDF again."); return; }
+  w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>ASK Incident Report</title>" +
+    "<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.6}h1{font-size:22px}</style></head><body>" +
+    "<h1>ASK — Incident #" + state.selected.id + " report (" + esc(lang) + ")</h1>" +
+    "<p>" + esc(state.selected.title || "") + "</p><pre style='white-space:pre-wrap'>" + esc(txt) + "</pre>" +
+    "<p>Generated from the ASK dashboard. Choose Save as PDF in the print dialog.</p>" +
+    "<script>window.onload = function(){ window.print(); };<" + "/script></body></html>");
+  w.document.close();
 });
 
 var drop = document.getElementById("drop"), fileInput = document.getElementById("file");
@@ -670,6 +764,35 @@ function handleFile(file) {
   xhr.send(file);
 }
 
+// Load Sample / Tiny Demo: POST /sample or /tiny, server runs that
+// small file through the same pipeline, then the list refreshes.
+function runServerJob(endpoint, infoText) {
+  document.getElementById("bar").style.width = "5%";
+  document.getElementById("fileinfo").textContent = infoText;
+  var poll = setInterval(function() {
+    fetch("/progress").then(function(r) { return r.json(); }).then(function(p) { showBackendStatus(p, null); }).catch(function() {});
+  }, 1000);
+  fetch(endpoint, { method: "POST" }).then(function(r) { return r.json(); }).then(async function(data) {
+    clearInterval(poll);
+    document.getElementById("bar").style.width = "100%";
+    if (data.error) {
+      document.getElementById("fileinfo").textContent = "Error: " + data.error;
+      return;
+    }
+    document.getElementById("fileinfo").textContent = (data.events || 0) + " lines, " + (data.detections || 0) +
+      " detections, " + (data.incidents || 0) + " incidents, in " + (data.seconds || 0) + "s.";
+    await loadIncidents();
+    if (state.incidents.length) selectIncident(state.incidents[0].id);
+  }).catch(function() {
+    clearInterval(poll);
+    document.getElementById("fileinfo").textContent = "Failed — the server could not be reached.";
+  });
+}
+var sampleBtn = document.getElementById("sampleBtn");
+if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Loading the repo sample log…"); });
+var tinyBtn = document.getElementById("tinyBtn");
+if (tinyBtn) tinyBtn.addEventListener("click", function() { runServerJob("/tiny", "Loading the tiny demo (5 rows, synthetic)…"); });
+
 /* Demo button (2026-11-01): POST /demo, server generates ~100 MB
    synthetic log and processes it like an upload. Polls /progress
    the same way handleFile does. */
@@ -717,6 +840,59 @@ if (demoBtn) {
 }
 
 loadIncidents();
+
+// Left-panel search: hide incident buttons that do not match, without
+// re-rendering the list (re-rendering on every keystroke used to
+// steal focus from the search box).
+var incidentSearch = document.getElementById("incidentSearch");
+if (incidentSearch) {
+  incidentSearch.addEventListener("input", function() {
+    var q = incidentSearch.value.toLowerCase();
+    document.querySelectorAll(".inc").forEach(function(el) {
+      el.style.display = !q || el.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
+    });
+  });
+}
+
+// Mode toggle: Kill Chain (full graph) vs Quantum Walk (frontier
+// subgraph only — see renderGraph). No invented probabilities.
+document.querySelectorAll(".mode-btn").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    document.querySelectorAll(".mode-btn").forEach(function(b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    state.graphMode = btn.getAttribute("data-mode");
+    var banner = document.getElementById("modeBanner");
+    var plain = document.getElementById("modePlain");
+    if (state.graphMode === "quantum") {
+      if (banner) banner.textContent = "QUANTUM WALK: Classical look-ahead from the observed graph — frontier hosts, not a Qiskit simulation";
+      if (plain) plain.textContent = "Quantum Walk graph, in plain words: the same computers, but now only the frontier is shown — hosts already contacted that the attacker could move to next, with the hosts they were reached from. It answers one question: where will the attacker go next, from what we actually observed?";
+    } else {
+      if (banner) banner.textContent = "KILL CHAIN ANALYSIS: Tracking MITRE ATT&CK progression & lateral traversal";
+      if (plain) plain.textContent = "Kill Chain graph, in plain words: each box is a computer (IP). An arrow means traffic went from one computer to another. Amber arrows are attack steps, in order: first access, then running code, then stealing passwords, then moving sideways, then reaching the target. Follow the amber arrows to read the attack story.";
+    }
+    if (state.selected) renderGraph(state.selected);
+  });
+});
+
+// Center zoom controls (graph zoom lives in renderGraph's state).
+function zoomStep(d) { if (window.setGraphZoom) window.setGraphZoom(d); }
+var zIn = document.getElementById("zoomIn");
+if (zIn) zIn.addEventListener("click", function() { zoomStep(0.2); });
+var zOut = document.getElementById("zoomOut");
+if (zOut) zOut.addEventListener("click", function() { zoomStep(-0.2); });
+var zReset = document.getElementById("zoomReset");
+if (zReset) zReset.addEventListener("click", function() { if (window.setGraphFilter) window.setGraphFilter("zoom", 1); });
+
+// Corridor button: dashboard simulation only, never a real isolation.
+var corridorBtn = document.getElementById("corridorBtn");
+if (corridorBtn) {
+  corridorBtn.addEventListener("click", function() {
+    corridorBtn.textContent = "Attack Path Severed & Quarantined";
+    corridorBtn.disabled = true;
+    var note = document.getElementById("corridorNote");
+    if (note) note.textContent = "Incident marked contained in this dashboard only. No real host was isolated and no firewall rule was changed.";
+  });
+}
 
 const clearBtn = document.getElementById("clearBtn");
 const clearStatus = document.getElementById("clearStatus");

@@ -29,6 +29,33 @@ from urllib.parse import parse_qs, urlparse
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
+
+def _load_dotenv():
+    """Load repo-root .env into os.environ, without logging any value.
+
+    Only keys not already set in the environment are added, and empty
+    values are ignored. This is what makes SARVAM_API_KEY work from a
+    private .env file: the server reads it at startup, so a page reload
+    alone never loads a key -- restart the server after editing .env.
+    """
+    env_path = os.path.join(ROOT, ".env")
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and value and key not in os.environ:
+                    os.environ[key] = value
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
+
 from engine import graph as graph_mod  # noqa: E402
 from engine import mitre as mitre_mod  # noqa: E402
 from engine import report as report_mod  # noqa: E402
@@ -251,6 +278,11 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                            "merged_alerts": inc["merged_alerts"]}
                     if query.get("hindi") == ["1"]:
                         out["hindi"] = report_mod.hindi_report(inc, inc["next_reach"])
+                    _lang = (query.get("lang") or [""])[0].lower()
+                    if _lang in ("en", "hi", "ta", "te", "ml"):
+                        _tr = report_mod.translate_report(inc, inc["next_reach"], _lang)
+                        out["lang"] = _lang
+                        out["translated"] = _tr
                     return self._send_json(out)
                 if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "next":
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None
@@ -295,6 +327,53 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         pass
                     holder.con = store.connect(db_path, fresh=True)
                 return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
+            if urlparse(self.path).path in ("/sample", "/tiny"):
+                # Load Sample / Tiny Demo (dashboard buttons): run a
+                # small, labelled-synthetic file through the exact same
+                # cli_run pipeline as an upload -- no browser round-trip
+                # of the file, no invented incidents. /sample loads the
+                # repo's sample_attack.log; /tiny writes 5 lines
+                # (1 benign ingress, 3 attack steps, 1 benign DNS) and
+                # runs those. Both replace the current DB, like /upload.
+                try:
+                    _db_dir = os.path.dirname(os.path.abspath(db_path)) or "."
+                    if urlparse(self.path).path == "/sample":
+                        _src = os.path.join(ROOT, "sample_attack.log")
+                        if not os.path.isfile(_src):
+                            return self._send_json({"error": "sample_attack.log not found in the repo"}, 404)
+                        _tmp = None
+                        _run_path = _src
+                    else:
+                        _lines = [
+                            "2026-11-01T08:00:00Z|workstation-01|alice|10.10.40.156|network|net_connect|Inbound HTTPS connection|Normal|None|Low",
+                            "2026-11-01T08:05:00Z|workstation-01|alice|10.10.40.156|sysmon|powershell_exec|powershell -enc SQBFAFgAAB executed encoded command|Execution|T1059.001|High",
+                            "2026-11-01T08:10:00Z|workstation-01|alice|10.10.20.11|edr|kerberoasting|Kerberoasting request for service ticket|Credential Access|T1558.003|High",
+                            "2026-11-01T08:15:00Z|workstation-01|alice|10.10.0.20|edr|c2_connect|Periodic C2 beacon to external server|Command and Control|T1071.001|High",
+                            "2026-11-01T08:20:00Z|workstation-01|alice|10.10.40.156|network|dns|DNS query resolved for example.com|Normal|None|Low",
+                        ]
+                        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, dir=_db_dir, encoding="utf-8") as _tf:
+                            _tf.write("\n".join(_lines) + "\n")
+                            _tmp = _tf.name
+                        _run_path = _tmp
+                    with LOCK:
+                        try:
+                            holder.con.close()
+                        except Exception:
+                            pass
+                        _summary = cli_run(_run_path, db_path, rules_dir, chunk_size=20000)
+                        holder.con = store.connect(db_path)
+                    if _tmp:
+                        try:
+                            os.unlink(_tmp)
+                        except OSError:
+                            pass
+                    return self._send_json(_summary)
+                except Exception as exc:
+                    try:
+                        holder.con = store.connect(db_path)
+                    except Exception:
+                        pass
+                    return self._send_json({"error": str(exc)}, 500)
             if urlparse(self.path).path == "/demo":
                 # DEMO BUTTON (2026-11-01): server generates ~100 MB of
                 # synthetic log (engine/demo.py, same pattern as
