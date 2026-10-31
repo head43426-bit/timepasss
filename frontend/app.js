@@ -563,12 +563,28 @@ function showBackendStatus(p, file) {
   if (slab && (p.stage === "uploading" || p.stage === "reading" || p.stage === "linking" || p.stage === "storing" || p.stage === "done")) {
     slab.hidden = false;
     if (p.top_techniques && p.top_techniques.length) {
+      // ONE FLOWING PARAGRAPH (2026-11-01, user demand: 'heading as
+      // phishing, what it is, and how to prevent it, in a flow, not
+      // a full stop after each line'). Heading = the short technique
+      // name only ('Phishing', not 'Phishing: Spearphishing
+      // Attachment (T1566.001)'). Then why + how joined with commas
+      // into one paragraph: internal full stops become commas, the
+      // help's first word is lowercased, and there is no line break
+      // or label between the parts. Example: 'Phishing — the attacker
+      // got in, everything after this is damage control, not
+      // prevention, block the sender domain, quarantine the
+      // attachment, reset the password of anyone who opened it, and
+      // turn on attachment sandboxing for mail.'
       list.innerHTML = p.top_techniques.map(function(t) {
-        return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(t.technique_name) + " (" + esc(t.technique_id) + ")</b> — " +
-          esc(t.kill_chain_stage) + " · ×" + fmtNum(t.count) + "<br>" +
-          "<b>Tell (what gave it away):</b> a log line containing “" + esc(t.tell) + "”.<br>" +
-          "<b>Why it matters:</b> " + esc(t.why) + "<br>" +
-          "<b>How it helps you:</b> " + esc(t.help) + "</div>";
+        var shortName = (t.technique_name || "").split(":")[0].trim() || t.technique_name;
+        var flow = function(s) {
+          s = (s || "").replace(/\.\s+/g, ", ").replace(/\.$/, "");
+          return s.split(", ").map(function(part) {
+            return part.charAt(0).toLowerCase() + part.slice(1);
+          }).join(", ");
+        };
+        return "<div class='card dark' style='margin:8px 0;padding:12px'><b>" + esc(shortName) + "</b> — " +
+          flow(t.why) + ", " + flow(t.help) + ".</div>";
       }).join("");
     } else if (p.stage === "uploading") {
       list.innerHTML = "<p class='hint'>Still receiving your file — no lines have been checked yet, so no finds to show. As soon as reading starts, the attacks found so far will appear here, one card per attack.</p>";

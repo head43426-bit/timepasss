@@ -30,6 +30,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 from engine import graph as graph_mod  # noqa: E402
+from engine import mitre as mitre_mod  # noqa: E402
 from engine import report as report_mod  # noqa: E402
 from engine import store  # noqa: E402
 from engine.api import LOCK, _apply_detection, _incident_with_extras  # noqa: E402
@@ -255,8 +256,17 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                                             "next_frontier_total": inc.get("next_frontier_total", 0),
                                             "blast_basis": inc.get("blast_basis", ""),
                                             "blast_breakdown": inc.get("blast_breakdown")})
+                # Slim MITRE index (lookup only, lazy — see engine/mitre.py).
+                if parts == ["mitre"]:
+                    return self._send_json(mitre_mod.coverage(
+                        os.path.join(ROOT, "rules")))
+                if len(parts) == 2 and parts[0] == "mitre":
+                    _t = mitre_mod.lookup(parts[1].upper())
+                    if not _t:
+                        return self._send_json({"error": "technique not in MITRE index"}, 404)
+                    return self._send_json(_t)
                 # Custom 404 page for browsers, JSON only for API calls.
-                if parts and parts[0] not in ("health", "incidents", "progress", "db", "clear", "upload"):
+                if parts and parts[0] not in ("health", "incidents", "progress", "db", "clear", "upload", "mitre"):
                     _p404 = os.path.join(FRONTEND, "404.html")
                     if os.path.isfile(_p404):
                         with open(_p404, "rb") as _f:
