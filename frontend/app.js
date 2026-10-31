@@ -540,7 +540,11 @@ function showBackendStatus(p, file) {
   if (p.cpu_percent !== undefined && p.cpu_percent !== null) sys += " · CPU " + p.cpu_percent + "%";
   if (p.ram_total_mb) sys += " · RAM " + (p.ram_used_mb / 1024).toFixed(1) + "/" + (p.ram_total_mb / 1024).toFixed(1) + " GB (" + p.ram_percent + "%)";
   if (p.ask_rss_mb) sys += " · ASK (main) " + p.ask_rss_mb + " MB";
-  if (p.stage === "uploading" && p.bytes_total > 0) {
+  if (p.stage === "generating" && p.bytes_total > 0) {
+    var pct = Math.min(100, Math.round(100 * p.bytes_received / p.bytes_total));
+    bar.style.width = pct + "%";
+    el.textContent = p.stage_text + " · " + fmtNum(p.bytes_received) + " of " + fmtNum(p.bytes_total) + " bytes (" + pct + "%)" + sys + ".";
+  } else if (p.stage === "uploading" && p.bytes_total > 0) {
     var pct = Math.min(100, Math.round(100 * p.bytes_received / p.bytes_total));
     bar.style.width = pct + "%";
     el.textContent = p.stage_text + " · " + fmtNum(p.bytes_received) + " of " + fmtNum(p.bytes_total) + " bytes (" + pct + "%)" + sys + ".";
@@ -664,6 +668,52 @@ function handleFile(file) {
     document.getElementById("fileinfo").textContent = "Upload failed — the server could not be reached.";
   };
   xhr.send(file);
+}
+
+/* Demo button (2026-11-01): POST /demo, server generates ~100 MB
+   synthetic log and processes it like an upload. Polls /progress
+   the same way handleFile does. */
+var demoBtn = document.getElementById("demoBtn");
+if (demoBtn) {
+  demoBtn.addEventListener("click", async function() {
+    demoBtn.disabled = true;
+    document.getElementById("bar").style.width = "5%";
+    document.getElementById("fileinfo").textContent = "Generating demo (synthetic, about 100 MB) on the backend…";
+    var pollFails = 0;
+    var poll = setInterval(function() {
+      fetch("/progress").then(function(r) { return r.json(); }).then(function(p) {
+        pollFails = 0;
+        showBackendStatus(p, null);
+      }).catch(function() {
+        pollFails += 1;
+        if (pollFails >= 3) {
+          var el2 = document.getElementById("backendStatus");
+          el2.hidden = false;
+          el2.textContent = "Server not responding — check the server window (run.bat / run.sh) and restart it if needed, then try Demo again.";
+        }
+      });
+    }, 1000);
+    try {
+      var res = await fetch("/demo", { method: "POST" });
+      var data = await res.json();
+      clearInterval(poll);
+      document.getElementById("bar").style.width = "100%";
+      if (data.error) {
+        document.getElementById("fileinfo").textContent = "Demo error: " + data.error;
+      } else {
+        document.getElementById("fileinfo").textContent = "Demo (synthetic) — " + data.events + " lines, " + data.detections +
+          " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
+        document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s — " + data.events + " lines, " + data.detections +
+          " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
+        await loadIncidents();
+        if (state.incidents.length) selectIncident(state.incidents[0].id);
+      }
+    } catch (e) {
+      clearInterval(poll);
+      document.getElementById("fileinfo").textContent = "Demo failed — the server could not be reached.";
+    }
+    demoBtn.disabled = false;
+  });
 }
 
 loadIncidents();

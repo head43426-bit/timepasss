@@ -295,6 +295,123 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         pass
                     holder.con = store.connect(db_path, fresh=True)
                 return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
+            if urlparse(self.path).path == "/demo":
+                # DEMO BUTTON (2026-11-01): server generates ~100 MB of
+                # synthetic log (engine/demo.py, same pattern as
+                # sample_attack.log — no real logs, no download, no
+                # browser round-trip of 100 MB) and then runs it
+                # through the exact same processing as /upload
+                # (parallel_run / cli_run, same rules, same DB).
+                # Progress reuses /progress, so the page's elapsed /
+                # CPU / RAM line works unchanged.
+                from engine.demo import TARGET_BYTES, iter_demo_lines
+                started = time.time()
+                filename = "demo-100mb.log (synthetic)"
+                _db_dir = os.path.dirname(os.path.abspath(db_path)) or "."
+                tmp_path = None
+                try:
+                    _set_progress(stage="generating",
+                                  stage_text="Generating demo — synthetic, about 100 MB",
+                                  filename=filename, bytes_received=0,
+                                  bytes_total=TARGET_BYTES, events=0,
+                                  detections=0, estimated_total_events=0,
+                                  events_per_second=0, elapsed_seconds=0,
+                                  eta_seconds=None, done=False, error="")
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, dir=_db_dir, encoding="utf-8") as tmp:
+                        tmp_path = tmp.name
+                        buf = []
+                        written = 0
+                        for line in iter_demo_lines(TARGET_BYTES):
+                            buf.append(line)
+                            written += len(line) + 1
+                            if len(buf) >= 1000:
+                                tmp.write("\n".join(buf) + "\n")
+                                buf = []
+                                _set_progress(bytes_received=written,
+                                              elapsed_seconds=round(time.time() - started, 1))
+                        if buf:
+                            tmp.write("\n".join(buf) + "\n")
+                    length = os.path.getsize(tmp_path)
+                    est_total = 0
+                    try:
+                        with open(tmp_path, "rb") as f:
+                            sample = [next(f) for _ in range(200)]
+                        if sample:
+                            avg = sum(len(l) for l in sample) / len(sample)
+                            if avg > 0:
+                                est_total = int(length / avg)
+                    except Exception:
+                        est_total = 0
+                    _set_progress(estimated_total_events=est_total)
+
+                    def _on_progress_demo(events, detections, stage, top=None):
+                        elapsed = max(time.time() - started, 0.001)
+                        eps = events / elapsed if stage == "reading" else 0
+                        eta = None
+                        if stage == "reading" and eps > 0 and est_total > events:
+                            eta = (est_total - events) / eps
+                        texts = {"reading": "Step 2 of 4 — Reading",
+                                 "linking": "Step 3 of 4 — Linking",
+                                 "storing": "Step 4 of 4 — Saving"}
+                        _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
+                                   events=events, detections=detections,
+                                   events_per_second=round(eps, 1),
+                                   elapsed_seconds=round(elapsed, 1),
+                                   eta_seconds=round(eta) if eta is not None else None)
+                        if top is not None:
+                            _kw["top_techniques"] = top
+                        _set_progress(**_kw)
+
+                    _queue_started = time.time()
+                    while not LOCK.acquire(blocking=False):
+                        _wait = int(time.time() - _queue_started)
+                        _set_progress(stage="queued",
+                                      stage_text=f"Queued — demo file is ready and waiting for the previous upload to finish. Waiting {_wait}s so far.",
+                                      elapsed_seconds=round(time.time() - started, 1))
+                        time.sleep(1)
+                    try:
+                        _set_progress(stage="reading", stage_text="Step 2 of 4 — Reading")
+                        try:
+                            holder.con.close()
+                        except Exception:
+                            pass
+                        from engine.parallel import cpu_friendly_workers as _workers_demo
+                        _workers_n = _workers_demo(6)
+                        if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
+                            _set_progress(stage_text=f"Step 2 of 4 — Reading ({_workers_n} workers)")
+                            summary = parallel_run(tmp_path, db_path, rules_dir,
+                                                   workers=_workers_n, on_progress=_on_progress_demo)
+                        else:
+                            summary = cli_run(tmp_path, db_path, rules_dir,
+                                              chunk_size=20000, on_progress=_on_progress_demo)
+                        holder.con = store.connect(db_path)
+                    finally:
+                        LOCK.release()
+                    summary["filename"] = filename
+                    from engine import sysstats as _ss_demo
+                    _total_s = round(time.time() - started, 1)
+                    _set_progress(stage="done",
+                                  stage_text=f"Done in {_ss_demo.fmt_duration(_total_s)} — demo incidents are ready below.",
+                                  events=summary.get("events", 0),
+                                  detections=summary.get("detections", 0),
+                                  elapsed_seconds=_total_s, eta_seconds=0, done=True)
+                    return self._send_json(summary)
+                except Exception as exc:
+                    _set_progress(stage="error", stage_text=f"Failed: {exc}", done=True, error=str(exc))
+                    try:
+                        holder.con = store.connect(db_path)
+                    except Exception:
+                        pass
+                    try:
+                        return self._send_json({"error": str(exc)}, 500)
+                    except Exception:
+                        return None
+                finally:
+                    if tmp_path:
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
             if urlparse(self.path).path != "/upload":
                 return self._send_json({"error": "not found"}, 404)
             length = int(self.headers.get("Content-Length") or 0)
