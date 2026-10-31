@@ -154,6 +154,16 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
             nodes.setdefault(det[2], {"id": det[2], "type": "host"})
         if det[3]:
             nodes.setdefault(det[3], {"id": det[3], "type": "user"})
+    # Edge endpoints are nodes too: dstip hosts and technique nodes
+    # from the fallback graph are not in the timeline's host/user
+    # columns, and without them their edges would be dropped by the
+    # frontend for having no position.
+    tech_ids = {det[8] for det in timeline if det[8]}
+    for e in edges:
+        for endpoint in (e[0], e[1]):
+            if endpoint and endpoint not in nodes:
+                nodes[endpoint] = {"id": endpoint,
+                                   "type": "technique" if endpoint in tech_ids else "host"}
     return {
         "id": row[0], "title": row[1], "start_time": row[2], "end_time": row[3],
         "hosts": json.loads(row[4] or "[]"), "users": json.loads(row[5] or "[]"),

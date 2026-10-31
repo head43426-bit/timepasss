@@ -63,16 +63,27 @@ function renderGraph(path) {
   var graph = path.graph || { nodes: [], edges: [] };
   var nodes = graph.nodes || [], edges = graph.edges || [];
   if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
-  // Single node and no edges is not a path to draw: a huge empty box
-  // with one square in it just looks broken. Say so plainly, compactly.
+  // Old DBs (built before the technique fallback) have a single host
+  // and no edges: build the host -> technique graph here from the
+  // timeline summary, so those incidents get a real graph too without
+  // re-running the whole log. New runs already store these edges.
   var realEdges = edges.filter(function(e) { return posCheck(e); });
   function posCheck(e) { return nodes.some(function(n) { return n.id === e.from; }) && nodes.some(function(n) { return n.id === e.to; }); }
-  if (nodes.length === 1 || !realEdges.length) {
+  if (!realEdges.length && path.timeline_summary && path.timeline_summary.length) {
+    var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]);
+    if (hostId) {
+      path.timeline_summary.forEach(function(s) {
+        nodes.push({ id: s.technique_id, type: "technique", name: s.technique_name, count: s.count });
+        edges.push({ from: hostId, to: s.technique_id, kind: "technique", technique_id: s.technique_id, time: "" });
+      });
+      realEdges = edges;
+    }
+  }
+  if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
+  if (!realEdges.length) {
     var only = nodes[0];
     box.innerHTML = "<p><span class=node>" + esc(only.id) + "</span> <small>(" + esc(only.type) + ")</small></p>" +
-      "<p class='hint'>No connections to draw: this incident has " +
-      (nodes.length === 1 ? "only this one host" : nodes.length + " nodes") +
-      " and no host-to-host or user-to-host move in the logs. " +
+      "<p class='hint'>No connections to draw: this incident has only this one host and no host-to-host or user-to-host move in the logs. " +
       "All " + fmtNum(path.detection_count) + " steps happened on the host above — see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
     return;
   }
@@ -95,13 +106,17 @@ function renderGraph(path) {
     var p = pos[n.id];
     var shape = n.type === "host"
       ? "<rect x='" + (p.x - 34) + "' y='" + (p.y - 26) + "' width='68' height='52' rx='8' class='gnode host'/>"
-      : "<circle cx='" + p.x + "' cy='" + p.y + "' r='30' class='gnode user'/>";
+      : n.type === "technique"
+        ? "<polygon points='" + p.x + "," + (p.y - 30) + " " + (p.x + 34) + "," + p.y + " " + p.x + "," + (p.y + 30) + " " + (p.x - 34) + "," + p.y + "' class='gnode technique'/>"
+        : "<circle cx='" + p.x + "' cy='" + p.y + "' r='30' class='gnode user'/>";
     // Labels go BELOW the shape, not inside it: a long hostname
     // (e.g. FGT60FTK00000000) is wider than a 68px square, so inside
     // labels overflowed and looked detached from the node.
+    var nLabel = n.type === "technique" && n.name ? n.name + " (" + n.id + ")" : n.id;
+    var nSub = n.type === "technique" && n.count ? n.type + " · ×" + fmtNum(n.count) : n.type;
     svg += "<g class='gnode-wrap' data-node='" + esc(n.id) + "' tabindex='0' role='button' aria-label='Show steps for " + esc(n.id) + "'>" +
-      shape + "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='nlabel'>" + esc(n.id) + "</text>" +
-      "<text x='" + p.x + "' y='" + (p.y + 66) + "' class='ntype'>" + esc(n.type) + "</text></g>";
+      shape + "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='nlabel'>" + esc(nLabel) + "</text>" +
+      "<text x='" + p.x + "' y='" + (p.y + 66) + "' class='ntype'>" + esc(nSub) + "</text></g>";
   });
   svg += "</svg><p class='hint'>■ host &nbsp; ● user &nbsp; — arrow = NetworkX edge, label = MITRE technique. Click a node or an edge label.</p>";
   box.innerHTML = svg;
@@ -123,7 +138,7 @@ function showNodeSteps(path, nodeId) {
     el.classList.toggle("sel", el.getAttribute("data-node") === nodeId);
   });
   var steps = path.timeline.map(function(s, i) { return { s: s, i: i }; }).filter(function(x) {
-    return x.s.host === nodeId || x.s.user === nodeId;
+    return x.s.host === nodeId || x.s.user === nodeId || x.s.technique_id === nodeId;
   });
   if (!steps.length) {
     document.getElementById("stepDetail").innerHTML = "<p>No steps on " + esc(nodeId) + ".</p>";

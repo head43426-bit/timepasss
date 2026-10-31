@@ -48,14 +48,34 @@ def risk_score(detections: List[Dict]) -> float:
 
 def build_graph(detections: List[Dict]) -> nx.DiGraph:
     """Hosts + users as nodes; detections as user->host edges, plus a
-    host->host edge for each consecutive distinct host in time order."""
+    host->host edge for each consecutive distinct host in time order,
+    plus a real src->dst host-to-host edge when a detection carries a
+    destination IP (firewall logs: srcip -> dstip). Blank hosts/users
+    are never nodes: a "" node is what made single-host graphs lie.
+    If, after all that, the graph still has no edges (one host, no
+    user, no destination — the Fortinet phishing/malware flood), fall
+    back to a host -> technique graph, so there is still a real graph
+    to draw: the host in the centre, one node per technique it was
+    hit with."""
     graph = nx.DiGraph()
     for det in detections:
-        graph.add_node(det["host"], type="host")
-        graph.add_node(det["user"], type="user")
-        graph.add_edge(det["user"], det["host"], kind="event",
-                       technique_id=det.get("technique_id", ""),
-                       time=det.get("time", ""))
+        host, user = det.get("host", ""), det.get("user", "")
+        if host:
+            graph.add_node(host, type="host")
+        if user:
+            graph.add_node(user, type="user")
+            if host:
+                graph.add_edge(user, host, kind="event",
+                               technique_id=det.get("technique_id", ""),
+                               time=det.get("time", ""))
+        dst = det.get("dst_ip", "")
+        if dst and dst != host:
+            graph.add_node(dst, type="host")
+            src = det.get("ip", "") or host
+            if src:
+                graph.add_edge(src, dst, kind="path",
+                               technique_id=det.get("technique_id", ""),
+                               time=det.get("time", ""))
     ordered = sorted(detections, key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
     prev_host = None
     for det in ordered:
@@ -64,6 +84,18 @@ def build_graph(detections: List[Dict]) -> nx.DiGraph:
                            technique_id=det.get("technique_id", ""),
                            time=det.get("time", ""))
         prev_host = det["host"]
+    if graph.number_of_edges() == 0 and detections:
+        host = detections[0].get("host", "")
+        if host:
+            seen = []
+            for det in detections:
+                tid = det.get("technique_id", "")
+                if tid and tid not in seen:
+                    seen.append(tid)
+            for tid in seen:
+                graph.add_node(tid, type="technique")
+                graph.add_edge(host, tid, kind="technique",
+                               technique_id=tid, time="")
     return graph
 
 

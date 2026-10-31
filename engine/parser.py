@@ -73,6 +73,10 @@ def _normalise(raw: Dict) -> Dict:
         "host": str(pick("host", "hostname", "device")),
         "user": str(pick("user", "username", "account")),
         "ip": str(pick("ip", "src_ip", "source_ip")),
+        # Destination IP is the real host-to-host target in firewall
+        # logs (srcip -> dstip). It used to be dropped, which is why
+        # every Fortinet detection collapsed onto the firewall host.
+        "dst_ip": str(pick("dst_ip", "dstip", "destination_ip")),
         "source": str(pick("source", "src", "system")),
         "action": str(pick("action", "event", "event_type")),
         "detail": str(pick("detail", "message", "description", "msg")),

@@ -135,6 +135,7 @@ class Detector:
             "host": event.get("host", ""),
             "user": event.get("user", ""),
             "ip": event.get("ip", ""),
+            "dst_ip": event.get("dst_ip", ""),
             "source": event.get("source", ""),
             "action": event.get("action", ""),
             "detail": event.get("detail", ""),

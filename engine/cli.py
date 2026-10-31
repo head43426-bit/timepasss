@@ -118,12 +118,16 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
         hosts = sorted({d["host"] for d in dets if d["host"]})
         users = sorted({d["user"] for d in dets if d["user"]})
         first, last = dets[0], dets[-1]
+        # Start/end from the first/last detection WITH a time: a
+        # detection with an empty time used to make end_time (and the
+        # report's "ended on" / "last") print blank.
+        times = [d.get("time", "") for d in dets if d.get("time", "")]
         title = (f"{first.get('technique_name') or first.get('technique_id', '')} "
                  f"path on {first['host']}"
                  if dets else f"Incident {idx}")
         record = {
             "id": idx, "title": title,
-            "start_time": first.get("time", ""), "end_time": last.get("time", ""),
+            "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
             "hosts": hosts, "users": users,
             "risk_score": graph_mod.risk_score(dets),
             "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),

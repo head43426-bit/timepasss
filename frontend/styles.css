@@ -62,5 +62,7 @@ details{margin-top:20px}
 .gnode-wrap:hover .gnode,.gnode-wrap.sel .gnode{stroke:#fff;stroke-width:3}
 .gnode-wrap:focus-visible{outline:4px solid #f0a832;outline-offset:3px}
 .nlabel{fill:#f4efe6;font-size:13px;font-weight:700;text-anchor:middle;pointer-events:none}
+.gnode.technique{fill:#3a2a10;stroke:#f0a832}
+.elabel{paint-order:stroke;stroke:#0b0e13;stroke-width:5px;stroke-linejoin:round}
 .ntype{fill:#999;font-size:11px;text-anchor:middle;text-transform:uppercase;pointer-events:none}
 .step-link{margin:6px 6px 0 0}

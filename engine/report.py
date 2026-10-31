@@ -29,9 +29,15 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
     host_text = ", ".join(hosts) if hosts else "unknown hosts"
     user_text = (f"with user accounts {', '.join(users)}" if users
                  else "with no user account recorded in the logs")
+    # Fall back to the timeline's first/last non-empty time when the
+    # stored start/end is blank (old DBs, or a last detection with no
+    # time) — never print "ended on ." again.
+    _times = [d.get("time", "") for d in timeline if d.get("time", "")]
+    _start = incident.get("start_time") or (_times[0] if _times else "an unknown time")
+    _end = incident.get("end_time") or (_times[-1] if _times else "an unknown time")
     lines = [
-        f"This incident began on {incident.get('start_time', 'an unknown time')} "
-        f"and ended on {incident.get('end_time', 'an unknown time')}. "
+        f"This incident began on {_start} "
+        f"and ended on {_end}. "
         f"It involved {host_text}, {user_text}.",
     ]
     if timeline:
@@ -56,7 +62,10 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
                                    "last": d.get("time", "")}
                     order.append(key)
                 groups[key]["count"] += 1
-                groups[key]["last"] = d.get("time", "")
+                if d.get("time", ""):
+                    if not groups[key]["first"]:
+                        groups[key]["first"] = d.get("time", "")
+                    groups[key]["last"] = d.get("time", "")
             summary = "; ".join(
                 f"{name} ({stage}, {tid}) — {groups[k]['count']:,} times, "
                 f"first {groups[k]['first']}, last {groups[k]['last']}"
