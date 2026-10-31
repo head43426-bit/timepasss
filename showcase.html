@@ -779,16 +779,6 @@
       <div class="slot"><div class="s-num">Slot 04</div><h3>Sigma YAML<span> · rules</span></h3><p>Detection rules as config. Add a rule, restart, detection changes.</p></div>
     </div>
 
-    <div class="tbl-wrap">
-    <table aria-label="Data set tiers">
-      <thead><tr><th>Tier</th><th>Size</th><th>What it tests</th><th>Multiplier</th></tr></thead>
-      <tbody>
-        <tr><td>Core</td><td><span class="tier-num">15 <em>GB</em></span></td><td>Bigger than a typical laptop's memory — must stream and process in chunks.</td><td class="mono">1.0×</td></tr>
-        <tr><td>Advanced</td><td><span class="tier-num">30 <em>GB</em></span></td><td>Needs parallel processing and compact storage to finish in time.</td><td class="mono">1.3×</td></tr>
-        <tr><td>Extreme</td><td><span class="tier-num">50 <em>GB</em></span></td><td>Full scale — a multi-core machine or cloud instance is expected.</td><td class="mono">1.6×</td></tr>
-      </tbody>
-    </table>
-    </div>
 
     <div class="tbl-wrap">
     <table aria-label="Targets versus measured results">
@@ -806,28 +796,6 @@
     </div>
     <p style="font-family:var(--mono);font-size:11.5px;color:var(--dim);margin:12px 2px 0;line-height:1.6">* AGAINST PLANTED SYNTHETIC GROUND TRUTH. THE 15 GB FIGURE IS AN EXTRAPOLATION FROM MEASURED THROUGHPUT (~22,100 EVENTS/SEC), LABELLED AS SUCH IN THE README — NO 15/30/50 GB FILE WAS GENERATED OR PROCESSED HERE.</p>
 
-    <div class="api-list" aria-label="API">
-      <div><code>GET /health</code><p>Engine up, rules loaded, store ready.</p><span class="tag">FR-7</span></div>
-      <div><code>GET /incidents</code><p>All incidents, risk-ranked, worst on top, with merged-alert counts.</p><span class="tag">B-1 · B-3</span></div>
-      <div><code>GET /incidents/{id}/path</code><p>Time-ordered timeline plus the host/user graph for one incident.</p><span class="tag">FR-5</span></div>
-      <div><code>GET /incidents/{id}/report</code><p>Plain-English report; Hindi via the Sarvam API when a key is set, mock template clearly labelled when it is not.</p><span class="tag">B-2</span></div>
-      <div><code>GET /incidents/{id}/next</code><p>What the attacker could reach next, from topology and privileges only.</p><span class="tag">FR-6</span></div>
-      <div><code>LIVE MODE</code><p>New log lines update the path within seconds — a 2-second polling tailer, no restart.</p><span class="tag">B-5</span></div>
-    </div>
-
-    <div style="margin-top:34px;border-top:1px solid var(--line)">
-      <div class="bonus"><span class="bid">B-1</span><div><h3>Risk ranking</h3><p>Every incident scored from severity, stage coverage and exfiltration. Worst on top, always.</p></div></div>
-      <div class="bonus"><span class="bid">B-2</span><div><h3>Plain-English report, plus Hindi</h3><p>Auto-written narrative in plain English, with Hindi through the Sarvam API. The key comes from the environment only; without one, the mock fallback says so.</p></div></div>
-      <div class="bonus"><span class="bid">B-3</span><div><h3>Merged-alert counts</h3><p>How many raw alerts were merged into each incident — shown on every row above.</p></div></div>
-      <div class="bonus"><span class="bid">B-4</span><div><h3>Rules as config</h3><p>Sigma-style YAML in <span class="mono" style="color:var(--ink)">rules/</span>. Add a rule, restart, detection changes. Remove it, it stops. Proven in verification.</p></div></div>
-      <div class="bonus"><span class="bid">B-5</span><div><h3>Live mode</h3><p>New lines land in the path within seconds. The demo stream above is the same idea, in the browser.</p></div></div>
-    </div>
-
-    <div class="honest">
-      <h3>Honest limits, stated in the open.</h3>
-      <p>Detection is keyword rules plus a severity fallback — a cleverly worded real attack could miss every keyword. Host-continuity and credential-chain links are documented heuristics, not proven identity matches, which is why their kind is shown on every edge. Next-reach guesses come only from the small synthetic topology. MITRE labels are illustrative mappings, not a certified live feed. And the 100% scores are against planted synthetic ground truth — not real-world performance.</p>
-      <p>Sarvam was tested in mock mode only (no key). Dockerfile / Compose are written but not run-tested here. No login, cloud deployment, or attack blocking — per the PRD's non-goals.</p>
-    </div>
   </section>
 
   <!-- REPORT -->
