@@ -23,118 +23,74 @@ SARVAM_URL = "https://api.sarvam.ai/translate"
 
 
 def english_report(incident: Dict, next_list: List[Dict]) -> str:
+    """Short brief, exactly 6 lines (2026-11-01, user demand: short
+    and simple, 5-6 lines only). The old brief repeated the whole
+    technique list with first/last times, the next-host list with
+    reasons, the blast-radius breakdown AND the full protection list,
+    so the Sarvam card ran to a full page - and the protection list
+    is already shown in full in the centre column's 'Protect' section,
+    so repeating it here added nothing. Each line below is one fact;
+    the <pre> in the dashboard keeps the line breaks, and Sarvam
+    Translate (the only thing Sarvam does in this project - it does
+    not write the brief) translates this short text as-is.
+    """
     timeline = incident.get("timeline", [])
     hosts = [h for h in incident.get("hosts", []) if h]
     users = [u for u in incident.get("users", []) if u]
-    host_text = ", ".join(hosts) if hosts else "unknown hosts"
-    user_text = (f"with user accounts {', '.join(users)}" if users
-                 else "with no user account recorded in the logs")
+
+    def _short_list(items, limit=5):
+        if not items:
+            return None
+        if len(items) <= limit:
+            return ", ".join(items)
+        return ", ".join(items[:limit]) + f" and {len(items) - limit} more"
+
+    host_text = _short_list(hosts) or "unknown hosts"
+    user_text = _short_list(users) or "no user account recorded in the logs"
     # Fall back to the timeline's first/last non-empty time when the
     # stored start/end is blank (old DBs, or a last detection with no
     # time) - never print "ended on ." again.
     _times = [d.get("time", "") for d in timeline if d.get("time", "")]
     _start = incident.get("start_time") or (_times[0] if _times else "an unknown time")
     _end = incident.get("end_time") or (_times[-1] if _times else "an unknown time")
-    lines = [
-        f"This incident began on {_start} "
-        f"and ended on {_end}. "
-        f"It involved {host_text}, {user_text}.",
-    ]
-    if incident.get("timeline_sampled") and incident.get("timeline_summary"):
-        # Large incident: counts come from DuckDB's GROUP BY, not from
-        # the 400-row sample - the sample's counts would be wrong.
-        summary = "; ".join(
-            f"{s['technique_name']} ({s['kill_chain_stage']}, {s['technique_id']})"
-            f" - {s['count']:,} times, first {s['first']}, last {s['last']}"
-            for s in incident["timeline_summary"])
-        lines.append(
-            f"What the attacker did, in order (distinct techniques, "
-            f"first-seen order): {summary}.")
-        lines.append(
-            f"The remaining steps repeat these same techniques - "
-            f"{incident.get('detection_count', 0):,} steps in total are not listed one by one, "
-            f"because that list is unreadable and adds no new information.")
+    # Techniques, in first-seen order, with counts. Large incidents:
+    # counts come from DuckDB's GROUP BY in timeline_summary, not
+    # from the 400-row sample - the sample's counts would be wrong.
+    _techs = []
+    if incident.get("timeline_summary"):
+        for s in incident["timeline_summary"]:
+            _techs.append(f"{s['technique_name']} ({s['technique_id']}) x{s['count']:,}")
     elif timeline:
-        # Group repeated steps: a 118,043-step flood of the same two
-        # techniques must never be printed step by step. Summarise by
-        # technique, in first-seen order, with counts and time ranges.
-        # Small incidents (50 steps or fewer) still list every step.
-        if len(timeline) <= 50:
-            steps = "; ".join(
-                f"{d.get('time', '')}: {d.get('technique_name', d.get('technique_id', ''))} "
-                f"({d.get('kill_chain_stage', '')}) on {d.get('host', '')}"
-                for d in timeline)
-            lines.append(f"What the attacker did, in order: {steps}.")
-        else:
-            groups = {}
-            order = []
-            for d in timeline:
-                key = (d.get("kill_chain_stage", ""), d.get("technique_id", ""),
-                       d.get("technique_name", ""))
-                if key not in groups:
-                    groups[key] = {"count": 0, "first": d.get("time", ""),
-                                   "last": d.get("time", "")}
-                    order.append(key)
-                groups[key]["count"] += 1
-                if d.get("time", ""):
-                    if not groups[key]["first"]:
-                        groups[key]["first"] = d.get("time", "")
-                    groups[key]["last"] = d.get("time", "")
-            summary = "; ".join(
-                f"{name} ({stage}, {tid}) - {groups[k]['count']:,} times, "
-                f"first {groups[k]['first']}, last {groups[k]['last']}"
-                for (stage, tid, name) in order
-                for k in [(stage, tid, name)])
-            lines.append(
-                f"What the attacker did, in order (distinct techniques, "
-                f"first-seen order): {summary}.")
-            lines.append(
-                f"The remaining steps repeat these same techniques - "
-                f"{len(timeline):,} steps in total are not listed one by one, "
-                f"because that list is unreadable and adds no new information.")
-    else:
-        lines.append("No detections were recorded for this incident.")
-    lines.append(
-        f"The incident merged {incident.get('merged_alerts', 0):,} raw alerts "
-        f"into {incident.get('detection_count', 0):,} detections, "
-        f"with a risk score of {incident.get('risk_score', 0)} out of 100.")
+        _seen = {}
+        for d in timeline:
+            key = (d.get("technique_id", ""), d.get("technique_name", ""))
+            _seen[key] = _seen.get(key, 0) + 1
+        for (tid, name), count in _seen.items():
+            _techs.append(f"{name or tid} ({tid}) x{count:,}")
+    tech_text = _short_list(_techs, limit=8) or "no techniques recorded"
     if next_list:
-        nxt = "; ".join(f"{n['host']} ({n['reason']})" for n in next_list)
+        _nxt_hosts = [n["host"] for n in next_list]
         _total = incident.get("next_frontier_total", len(next_list))
         _extra = f" (and {_total - len(next_list)} more like this)" if _total > len(next_list) else ""
-        lines.append(f"What the attacker could reach next - hosts already contacted, not yet used as a stepping stone, from the {incident.get('next_basis', 'observed graph')}: {nxt}{_extra}. These are hosts to watch for outbound movement, not guessed new targets.")
+        next_text = f"Watch next: {_short_list(_nxt_hosts, limit=5)}{_extra}."
     else:
-        lines.append(
-            "No next host to watch: every destination in this incident was "
-            "already used as a stepping stone, or there are no host-to-host "
-            "edges at all, so no frontier destination exists to list. No "
-            "new target is guessed.")
-    # Stage look-ahead: always available, even with no topology.
-    _next_stages = incident.get("next_stages", [])
-    if _next_stages:
-        _st = "; ".join(s["stage"] for s in _next_stages)
-        lines.append(
-            f"Looking ahead in the kill chain, the next stages to watch "
-            f"for are: {_st}. These are stages, not guessed hosts.")
-    if incident.get("blast_radius") is not None:
-        _br = incident.get("blast_breakdown")
-        _br_txt = (f" (Reach {_br['reach']}, Spread {_br['spread']}, "
-                   f"Depth {_br['depth']}, Severity {_br['severity']}; "
-                   f"{_br['dst_count']} destinations, {_br['src_count']} sources, "
-                   f"{_br['stage_count']} stages)" if _br else "")
-        lines.append(
-            f"Blast radius from the {incident.get('blast_basis', 'observed graph')}: "
-            f"{incident['blast_radius']} out of 100{_br_txt}.")
+        next_text = "No frontier host to watch: no new target is guessed."
     _prot = incident.get("protections", [])
     if _prot:
-        _p = "; ".join(f"{p['technique_id']}: {p['action']}" for p in _prot)
-        lines.append(
-            f"Protect - what to do now, per technique found (ASK itself "
-            f"cannot block an attack; it has no agent on your hosts, so "
-            f"these are the actions for you to take): {_p}.")
-    lines.append(
-        "This report describes the attack only; it does not block or stop it.")
-    return " ".join(lines)
+        first_action = _prot[0].get("action", "") or _prot[0].get("technique_name", "")
+        do_text = (f"Do this first: {first_action} "
+                   f"Full list: see Protect - what to do now, in the centre column.")
+    else:
+        do_text = "This report describes the attack only; it does not block or stop it."
+    lines = [
+        f"Attack on {host_text}, {_start} to {_end}. Risk {incident.get('risk_score', 0)}/100.",
+        f"Users involved: {user_text}.",
+        f"Techniques, in order: {tech_text}.",
+        f"Scale: {incident.get('detection_count', 0):,} detections from {incident.get('merged_alerts', 0):,} raw alerts.",
+        next_text,
+        do_text,
+    ]
+    return "\n".join(lines)
 
 
 def _hindi_template(incident: Dict, next_list: List[Dict]) -> str:

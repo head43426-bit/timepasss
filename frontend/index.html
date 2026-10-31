@@ -81,7 +81,6 @@
       <span class="legend-item"><i class="dot dot-technique"></i>Technique</span>
       <span class="legend-spacer"></span>
       <span>Selected Node: <b id="selectedNodeLabel">None</b></span>
-      <button type="button" class="btn ghost" id="severBtn" disabled>Sever &amp; Isolate</button>
     </div>
 
     <h3>Attack path</h3>
@@ -141,10 +140,10 @@
       </label>
       <pre id="report">No incident selected yet.</pre>
       <p class="warn" id="reportWarning" hidden></p>
-      <p class="btn-row">
+      <div class="btn-stack">
+        <button class="btn" id="copyBtn" disabled>Copy report</button>
         <button class="btn ghost" id="pdfBtn" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span id="pdfLabel">Generate Threat Report (PDF) - English (US)</span></button>
-        <button class="btn" id="copyBtn" disabled style="margin-left:auto">Copy report</button>
-      </p>
+      </div>
     </section>
 
     <section class="card">
@@ -154,6 +153,19 @@
     </section>
   </aside>
 </main>
+
+<!-- Containment popup (2026-11-01): the single containment button
+     is a dashboard simulation only, so clicking it must say exactly
+     what it did and did not do, instead of just changing its label.
+     The popup closes with Close, the X, or a click on the backdrop. -->
+<div class="modal-backdrop" id="containModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="containModalTitle">
+    <button type="button" class="modal-close" id="containModalClose" aria-label="Close">×</button>
+    <h3 id="containModalTitle">Containment simulated - nothing real was isolated</h3>
+    <div id="containModalBody"></div>
+    <p><button type="button" class="btn" id="containModalOk">Close</button></p>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

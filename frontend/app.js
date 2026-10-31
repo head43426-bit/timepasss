@@ -127,8 +127,6 @@ async function selectIncident(id) {
   if (br) br.textContent = "Risk " + path.risk_score + "/100";
   var sn = document.getElementById("selectedNodeLabel");
   if (sn) sn.textContent = "None";
-  var sv = document.getElementById("severBtn");
-  if (sv) { sv.disabled = true; sv.textContent = "Sever & Isolate"; }
   // Flow Log Data table: real timeline steps only (first 20 shown).
   // Columns are Time / Src IP-or-Host / Technique / Stage / Flag -
   // the backend timeline has no destination port/protocol per step,
@@ -278,20 +276,38 @@ function renderGraph(path) {
   var colNames = ["Users", "Sources", "Pivots (moved through)", "Destinations"];
   var usedCols = [];
   cols.forEach(function(c, i) { if (c.length) usedCols.push(i); });
-  var BW = 170, BH = 64, CW = 210, RH = 84;
-  var maxRows = Math.max.apply(null, usedCols.map(function(i) { return cols[i].length; }));
-  var W = usedCols.length * CW + 20, H = maxRows * RH + 20;
+  // GRAPH LAYOUT (2026-11-01, user demand: 'display the canvas and
+  // the graph properly, easy to understand'). The old layout put a
+  // whole role column in one stack, so a fan-out incident with 60
+  // destinations became a 5,000 px tall column of tiny boxes that
+  // had to be scrolled through. Now each column wraps after 12
+  // rows into a new sub-column, so the canvas grows wider (and the
+  // pan control moves it) instead of endlessly taller. Column
+  // headers are drawn, so it is clear which column is users,
+  // sources, pivots or destinations.
+  var BW = 170, BH = 64, CW = 210, RH = 84, MAX_ROWS = 12, HEAD = 26;
+  var subCols = [];
+  usedCols.forEach(function(ci) {
+    for (var s = 0; s < cols[ci].length; s += MAX_ROWS) {
+      subCols.push({ role: ci, cont: s > 0, nodes: cols[ci].slice(s, s + MAX_ROWS) });
+    }
+  });
+  var rowsShown = Math.max.apply(null, subCols.map(function(sc) { return sc.nodes.length; }));
+  var W = subCols.length * CW + 20, H = HEAD + 20 + rowsShown * RH;
   var pos = {};
-  usedCols.forEach(function(ci, colPos) {
-    cols[ci].forEach(function(n, r) {
-      pos[n.id] = { x: 10 + colPos * CW, y: 10 + r * RH };
+  subCols.forEach(function(sc, colPos) {
+    sc.nodes.forEach(function(n, r) {
+      pos[n.id] = { x: 10 + colPos * CW, y: HEAD + 10 + r * RH };
     });
   });
   var nodeById = {};
   fNodes.forEach(function(n) { nodeById[n.id] = n; });
   var seenEdge = {};
   var svg = "<svg width='" + Math.round(W * gf.zoom) + "' height='" + Math.round(H * gf.zoom) + "' viewBox='0 0 " + W + " " + H + "' class='graph-svg' role='img' aria-label='Attack graph, left to right by role'>" +
-    "<defs><marker id='arr2' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#00a66a'/></marker></defs>";
+    "<defs><marker id='arr2' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#00a66a'/></marker></defs>" +
+    subCols.map(function(sc, colPos) {
+      return "<text x='" + (10 + colPos * CW + 2) + "' y='20' class='colhead'>" + esc(colNames[sc.role]) + (sc.cont ? " (cont.)" : "") + "</text>";
+    }).join("");
   fEdges.forEach(function(e) {
     var key = e.from + ">" + e.to + "|" + (e.technique_id || "");
     if (seenEdge[key]) return; seenEdge[key] = true;
@@ -324,6 +340,13 @@ function renderGraph(path) {
   var techOpts = ["All"];
   realEdges.forEach(function(e) { if (e.technique_id && techOpts.indexOf(e.technique_id) < 0) techOpts.push(e.technique_id); });
   var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest - the full step list and grouped report still cover everything.</p>" : "";
+  // Fan-out, not a chain: one source touching many destinations in
+  // parallel is the shape live-mode sample incidents take (no pivot
+  // connects the destinations), and reading it as a chain is the
+  // misunderstanding the old tall column invited. Say so plainly.
+  if (!cols[2].length && cols[3].length >= 20) {
+    capNote += "<p class='hint'>Fan-out, not a chain: the destinations shown here were each contacted in parallel - they are not hops one after another. The Attack path section below shows the stage order instead.</p>";
+  }
   var colNote = "";
   var zl = document.getElementById("zoomLabel");
   if (zl) zl.textContent = Math.round(gf.zoom * 100) + "%";
@@ -499,35 +522,68 @@ function renderAttackPathCanvas(path) {
 }
 
 function drawAttackStageRow(ctx, stages, path) {
+  // STAGE ROW (2026-11-01 fix, live mode): the old version squeezed
+  // all stages into ONE row, so an 11-stage incident got 67 px boxes
+  // with unreadable truncated names - that is the 'attack path not
+  // showing properly' the user saw after Load Sample. Now stages
+  // wrap after 5 boxes into a second/third row at full readable
+  // size, with an arrow down to the next row, and each box shows how
+  // many steps that stage has (from the timeline summary when the
+  // incident is sampled, else counted from the timeline).
   var isDark = document.documentElement.getAttribute("data-theme") === "dark";
   var W = 1080, BH = 64, gap = 30;
-  var BW = Math.min(200, Math.floor((W - 40 - (stages.length - 1) * gap) / Math.max(1, stages.length)));
-  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, 170);
-  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
-  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < 170; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
-  var total = stages.length * (BW + gap) - gap;
-  var x0 = Math.max(20, (W - total) / 2);
-  var rects = [];
-  stages.forEach(function(s, i) {
-    var x = x0 + i * (BW + gap), y = 50;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
-    ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillText(s.length > 24 ? s.slice(0, 23) + "…" : s, x + 12, y + 28);
-    ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText("Stage " + (i + 1) + " of " + stages.length, x + 12, y + 48);
-    rects.push({ x: x, y: y, w: BW, h: BH, id: s });
-    if (i < stages.length - 1) {
-      ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + BW, y + BH / 2); ctx.lineTo(x + BW + gap, y + BH / 2); ctx.stroke();
-      ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath(); ctx.moveTo(x + BW + gap, y + BH / 2); ctx.lineTo(x + BW + gap - 10, y + BH / 2 - 4); ctx.lineTo(x + BW + gap - 10, y + BH / 2 + 4); ctx.closePath(); ctx.fill();
-    }
-  });
+  var perRow = stages.length <= 6 ? stages.length : 5;
+  var rows = Math.max(1, Math.ceil(stages.length / perRow));
+  var BW = Math.min(200, Math.floor((W - 40 - (perRow - 1) * gap) / Math.max(1, perRow)));
+  var maxChars = Math.max(10, Math.floor((BW - 24) / 7));
+  var H = 50 + rows * 92 - 28 + 20;
   var cv = document.getElementById("attackCanvas");
+  if (cv) { cv.width = W; cv.height = H; }
+  var counts = {};
+  (path.timeline_summary || []).forEach(function(s) { counts[s.kill_chain_stage] = (counts[s.kill_chain_stage] || 0) + (s.count || 0); });
+  if (!Object.keys(counts).length) (path.timeline || []).forEach(function(s) { counts[s.kill_chain_stage] = (counts[s.kill_chain_stage] || 0) + 1; });
+  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
+  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
+  var rects = [];
+  var drawArrowR = function(x1, y1, x2, y2) {
+    ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 10, y2 - 4); ctx.lineTo(x2 - 10, y2 + 4); ctx.closePath(); ctx.fill();
+  };
+  for (var row = 0; row < rows; row++) {
+    var rowStages = stages.slice(row * perRow, (row + 1) * perRow);
+    var total = rowStages.length * (BW + gap) - gap;
+    var x0 = Math.max(20, (W - total) / 2);
+    rowStages.forEach(function(s, j) {
+      var i = row * perRow + j;
+      var x = x0 + j * (BW + gap), y = 50 + row * 92;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
+      ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
+      ctx.fillText(s.length > maxChars ? s.slice(0, maxChars - 1) + "…" : s, x + 12, y + 28);
+      ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
+      ctx.fillText("Stage " + (i + 1) + " of " + stages.length + (counts[s] ? " · " + fmtNum(counts[s]) + " steps" : ""), x + 12, y + 48);
+      rects.push({ x: x, y: y, w: BW, h: BH, id: s });
+      if (j < rowStages.length - 1) drawArrowR(x + BW, y + BH / 2, x + BW + gap, y + BH / 2);
+      else if (row < rows - 1) {
+        // Down-arrow to the first box of the next row.
+        var nextRow = stages.slice((row + 1) * perRow, (row + 2) * perRow);
+        var nextTotal = nextRow.length * (BW + gap) - gap;
+        var nextX0 = Math.max(20, (W - nextTotal) / 2);
+        var midY = y + BH + 14; // middle of the 28 px gap between rows
+        var nextTop = y + 92; // top edge of the next row's boxes
+        ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.moveTo(x + BW / 2, y + BH); ctx.lineTo(x + BW / 2, midY); ctx.lineTo(nextX0 + BW / 2, midY); ctx.lineTo(nextX0 + BW / 2, nextTop); ctx.stroke();
+        ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath();
+        ctx.moveTo(nextX0 + BW / 2, nextTop); ctx.lineTo(nextX0 + BW / 2 - 4, nextTop - 10); ctx.lineTo(nextX0 + BW / 2 + 4, nextTop - 10); ctx.closePath(); ctx.fill();
+      }
+    });
+  }
   state.attackRects = rects;
-  cv.addEventListener("click", function(ev) {
+  if (cv) cv.addEventListener("click", function(ev) {
     var r = cv.getBoundingClientRect();
-    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (170 / r.height);
+    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (H / r.height);
     rects.forEach(function(rc) {
       if (x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h) {
         var idx = (path.timeline || []).findIndex(function(s) { return s.kill_chain_stage === rc.id; });
@@ -543,8 +599,6 @@ function showNodeSteps(path, nodeId) {
   });
   var sn = document.getElementById("selectedNodeLabel");
   if (sn) sn.textContent = nodeId;
-  var sv = document.getElementById("severBtn");
-  if (sv) { sv.disabled = false; sv.textContent = "Sever & Isolate"; }
   var steps = path.timeline.map(function(s, i) { return { s: s, i: i }; }).filter(function(x) {
     return x.s.host === nodeId || x.s.user === nodeId || x.s.technique_id === nodeId;
   });
@@ -917,27 +971,51 @@ if (flowFilter) {
     });
   });
 }
-var severBtn = document.getElementById("severBtn");
-if (severBtn) {
-  severBtn.addEventListener("click", function() {
-    var node = document.getElementById("selectedNodeLabel");
-    severBtn.textContent = "Severed & Quarantined";
-    severBtn.disabled = true;
-    var note = document.getElementById("corridorNote");
-    if (note) note.textContent = "Node " + (node ? node.textContent : "") + " marked quarantined in this dashboard only. No real host was isolated and no firewall rule was changed.";
-  });
-}
-
-// Corridor button: dashboard simulation only, never a real isolation.
+// CONTAINMENT (2026-11-01, user demand): there is ONE containment
+// button now, in the Attack Paths card. The old centre-column
+// "Sever & Isolate" button (one selected node) and this button
+// (the whole attack path) did the same thing - a dashboard-only
+// simulation - so the single-node one is removed; keeping both
+// only invited the question 'what is the difference'. Clicking the
+// one remaining button does exactly this, and nothing more:
+//  - its label becomes "Attack Path Severed & Quarantined" and it
+//    disables itself, so it cannot be pressed twice;
+//  - the incident banner above the graph is marked contained, in
+//    this dashboard view only;
+//  - a popup (below) states that plainly, with a Close button.
+// It does NOT isolate any real machine, change any firewall rule,
+// block any traffic, call any backend API, or change the database:
+// reloading, or picking another incident, shows the original data.
 var corridorBtn = document.getElementById("corridorBtn");
+function closeContainModal() {
+  var m = document.getElementById("containModal");
+  if (m) m.hidden = true;
+}
 if (corridorBtn) {
   corridorBtn.addEventListener("click", function() {
     var cl2 = document.getElementById("corridorLabel"); if (cl2) cl2.textContent = "Attack Path Severed & Quarantined";
     corridorBtn.disabled = true;
-    var note = document.getElementById("corridorNote");
-    if (note) note.textContent = "Incident marked contained in this dashboard only. No real host was isolated and no firewall rule was changed.";
+    var banner = document.getElementById("pathBanner");
+    var sel = state.selected;
+    if (banner && sel) banner.textContent = "Showing incident #" + sel.id + " - attack path severed & quarantined (dashboard simulation only) - risk " + sel.risk_score + "/100 - " + (sel.hosts || []).join(", ");
+    var body = document.getElementById("containModalBody");
+    if (body) {
+      var hosts = sel ? (sel.hosts || []).join(", ") : "this incident";
+      body.innerHTML =
+        "<p><b>What just happened, in this dashboard only:</b> the attack path for incident " + (sel ? "#" + sel.id : "") + " (" + esc(hosts) + ") is marked severed &amp; quarantined, and the button above is now disabled so it cannot be pressed twice.</p>" +
+        "<p><b>What did NOT happen:</b> no real machine was isolated, no firewall rule was changed, no network traffic was blocked, no backend call was made, and the database was not changed. Reloading the page, or picking another incident, shows the original data.</p>" +
+        "<p><b>Why there is only one button now:</b> the old 'Sever &amp; Isolate' button (one selected node) and this button (the whole attack path) were the same simulation at two scopes. The single-node one is removed, so there is nothing left to compare - this button is the only containment action, and it is a demo marking, not a real isolation.</p>";
+    }
+    var modal = document.getElementById("containModal");
+    if (modal) modal.hidden = false;
   });
 }
+var containClose = document.getElementById("containModalClose");
+if (containClose) containClose.addEventListener("click", closeContainModal);
+var containOk = document.getElementById("containModalOk");
+if (containOk) containOk.addEventListener("click", closeContainModal);
+var containBackdrop = document.getElementById("containModal");
+if (containBackdrop) containBackdrop.addEventListener("click", function(e) { if (e.target === containBackdrop) closeContainModal(); });
 
 const clearBtn = document.getElementById("clearBtn");
 const clearStatus = document.getElementById("clearStatus");

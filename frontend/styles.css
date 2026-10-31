@@ -149,12 +149,13 @@ code { background: var(--surface-2); color: var(--accent); border: 1px solid var
   background-size: 18px 18px;
 }
 .gedge { stroke: #00a66a; stroke-width: 2; }
-.elabel { fill: #111; font-family: ui-monospace, Menlo, monospace; font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--canvas-bg); stroke-width: 4px; stroke-linejoin: round; }
+.elabel { fill: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--canvas-bg); stroke-width: 4px; stroke-linejoin: round; }
 .gnode-wrap { cursor: pointer; }
 .gnode-wrap:hover rect, .gnode-wrap.sel rect { stroke-width: 5; }
 .gnode-wrap:focus-visible { outline: 3px solid #00a66a; outline-offset: 3px; }
-.nlabel { fill: #111; font-size: 13px; font-weight: 700; pointer-events: none; }
-.ntype { fill: #57534e; font-size: 11px; text-transform: uppercase; pointer-events: none; }
+.nlabel { fill: var(--text); font-size: 13px; font-weight: 700; pointer-events: none; }
+.ntype { fill: var(--muted); font-size: 11px; text-transform: uppercase; pointer-events: none; }
+.colhead { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
 .nsev { font-size: 11px; font-weight: 800; pointer-events: none; }
 .step-link { margin: 6px 6px 0 0; }
 
@@ -162,6 +163,15 @@ code { background: var(--surface-2); color: var(--accent); border: 1px solid var
 .drop { border: 3px dashed var(--accent); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: var(--accent-soft); color: var(--text); font-size: 15px; }
 .drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+/* Sarvam card buttons (2026-11-01): Copy on top, Generate below it,
+   stacked full-width, so the order is unmistakable. */
+.btn-stack { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.btn-stack .btn { width: 100%; text-align: center; }
+/* Containment popup: backdrop + centred card, theme-aware. */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal-backdrop[hidden] { display: none; }
+.modal { position: relative; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); max-width: 560px; width: 100%; max-height: 80vh; overflow: auto; padding: 24px; }
+.modal-close { position: absolute; top: 10px; right: 14px; border: 0; background: transparent; color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
 .btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background-color .25s ease, opacity .25s ease; }
 .btn:hover { filter: brightness(1.08); }
 .btn.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
