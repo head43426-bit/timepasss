@@ -234,10 +234,8 @@ def next_stages(reached_stages: List[str]) -> List[Dict]:
 
 
 def blast_radius_score(compromised_hosts: List[str], topology: Dict) -> int:
-    """Blast-radius optimiser, classical (QAOA-style combinatorial
-    optimisation, run greedily - a Qiskit statevector simulation
-    explodes at 2^n and would never run on a 4 GB machine, so it is
-    deliberately NOT used here). Score = how much of the supplied
+    """Blast-radius optimiser, classical combinatorial
+    optimisation, run greedily. Score = how much of the supplied
     topology is already compromised or one hop away, 0-100."""
     host_subnet = topology.get("host_subnet", {})
     if not host_subnet:

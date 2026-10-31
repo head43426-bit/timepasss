@@ -140,8 +140,8 @@ template, never a claimed real translation.
 
 - The workspace at `/app` is now a 3-column layout like the reference
   screenshots: Incident Triage Queue (left), attack graph canvas
-  (centre, Kill Chain / Quantum Walk toggle, pan + zoom), and Flow
-  Log Data / Sarvam Brief / Quantum Next-Hop / Attack Paths (right).
+  (centre, Kill Chain graph, pan + zoom), and Flow
+  Log Data / Sarvam Brief / Attack Paths (right).
   The header now says **ASK**, not "ASK Dashboard". The "How ASK
   works - the story, in plain words" section was removed from `/app`.
   No emojis are used in the dashboard UI.
@@ -154,10 +154,8 @@ template, never a claimed real translation.
   (Users → Sources → Pivots → Destinations), coloured by worst
   severity, capped at the 60 most-connected nodes by default with a
   "Show all" button, with technique / severity / search filters and
-  zoom controls in the centre header. Quantum Walk mode shows only
-  the frontier subgraph (frontier hosts + the hosts that reached
-  them) - it is classical look-ahead from the observed graph, not a
-  Qiskit simulation and not invented probabilities.
+  zoom controls in the centre header. The graph always shows the
+  full Kill Chain, with no invented probabilities.
 - **Load Sample / Tiny Demo:** `/app` now has Load Sample (runs the
   repo's `sample_attack.log` through the same pipeline) and Tiny
   Demo (5 synthetic rows: 1 benign ingress, 3 attack steps,

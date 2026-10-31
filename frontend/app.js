@@ -161,30 +161,11 @@ async function selectIncident(id) {
   // Attack path canvas: see renderAttackPathCanvas - the old
   // flat arrow list invented a chain between unrelated nodes.
   renderAttackPathCanvas(path);
-  // NEXT + BLAST (2026-11-01 fix): the old text said 'no topology was
-  // supplied' and 'blast radius from the supplied topology: 0/100'
-  // for every web upload, because both numbers only read a topology
-  // that a web upload never supplies. Now the backend falls back to
-  // the observed graph: next = destinations already contacted but
-  // not yet used as a stepping stone (hosts to watch, not guessed
-  // targets), blast = Reach + Spread + Depth + Severity from the
-  // observed graph, with its basis stated plainly.
-  var nextHtml = (next.next_reach && next.next_reach.length)
-    ? "<p>Hosts to watch next, from the " + esc(next.next_basis || "observed graph") + " - already contacted, not yet used as a stepping stone (watch them for outbound movement; these are not guessed new targets):</p><ul>" + next.next_reach.map(function(n) {
-        return "<li><b>" + esc(n.host) + "</b> (watch score " + n.confidence + "/100) - " + esc(n.reason) + ". Block it by: " + esc(n.block) + ".</li>";
-      }).join("") + "</ul>" + ((next.next_frontier_total || 0) > next.next_reach.length ? "<p>And " + fmtNum(next.next_frontier_total - next.next_reach.length) + " more frontier destinations like this - see the graph map, Destinations column.</p>" : "")
-    : "<p>No frontier host to watch: every destination in this incident was already used as a stepping stone, or there are no host-to-host edges at all. No new target is guessed.</p>";
-  if (next.next_stages && next.next_stages.length) {
-    nextHtml += "<p><b>Looking ahead in the kill chain</b> (stages, not guessed hosts): " +
-      next.next_stages.map(function(s) { return esc(s.stage); }).join(" → ") +
-      ". Watch for these stages next on the compromised host(s).</p>";
-  }
-  if (next.blast_radius !== undefined && next.blast_radius !== null) {
-    var br = next.blast_breakdown;
-    nextHtml += "<p>Blast radius, from the " + esc(next.blast_basis || "observed graph") + ": <b>" + next.blast_radius + "/100</b>" +
-      (br ? " - Reach " + br.reach + " (destinations: " + fmtNum(br.dst_count) + ") + Spread " + br.spread + " (sources: " + fmtNum(br.src_count) + ") + Depth " + br.depth + " (stages: " + br.stage_count + ") + Severity " + br.severity + " (worst: " + esc(br.worst_severity) + ")." : ".") + "</p>";
-  }
-  document.getElementById("next").innerHTML = nextHtml;
+  // The next-hop card was removed with the rest of the look-ahead
+  // panel (2026-11-01): its frontier hosts still feed the Attack
+  // Paths card above through next.next_reach, but there is no
+  // separate next-hop panel on the page any more, so nothing here
+  // writes to a removed element.
   document.getElementById("protect").innerHTML = (rep.protections && rep.protections.length)
     ? "<ol>" + rep.protections.map(function(p) {
         return "<li><b>" + esc(p.technique_id) + " - " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
@@ -224,8 +205,8 @@ function renderGraph(path) {
     gf.zoom = Math.min(2, Math.max(0.6, Math.round((gf.zoom + d) * 10) / 10));
     renderGraph(path);
   };
-  // Kill Chain is the only graph mode (2026-11-01): the old Quantum
-  // Walk frontier subgraph is gone, so the full graph is always
+  // Kill Chain is the only graph mode (2026-11-01): the old
+  // frontier subgraph is gone, so the full graph is always
   // shown, filtered only by the technique / severity / search
   // controls below and capped at the 60 most-connected nodes.
   var nodeSet = {};
