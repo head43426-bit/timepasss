@@ -74,21 +74,39 @@ def peak_rss_mb() -> float:
 
 def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
         chunk_size: int = 5000, ground_truth_path: str = None,
-        on_progress=None) -> dict:
+        on_progress=None, fresh: bool = True) -> dict:
     """on_progress(events, detections, stage) is called after each batch
     (stage "reading") and again for "linking" / "storing", so a caller
-    (e.g. the dashboard) can show plain-words progress and an ETA."""
+    (e.g. the dashboard) can show plain-words progress and an ETA.
+
+    fresh=True (default, uploads) wipes the DB first. fresh=False
+    (Load Sample append, 2026-11-01) keeps every existing row and
+    continues both id counters past the current maxima, so new
+    detections and incidents never collide with existing ones.
+    The linker itself is fresh per run, so appended detections link
+    among themselves into NEW incidents - existing incident rows,
+    their detection lists and their graphs are never rewritten."""
     started = time.time()
     rules = load_rules(rules_dir)
     detector = Detector(rules)
-    con = store.connect(db_path, fresh=True)
+    con = store.connect(db_path, fresh=fresh)
     if topology_path:
         with open(topology_path, "r", encoding="utf-8") as handle:
             store.load_topology(con, json.load(handle))
     total_lines = 0
     detection_count = 0
-    next_id = 1
-    incident_count = 0
+    if fresh:
+        next_id = 1
+        incident_count = 0
+    else:
+        try:
+            _row = con.execute("SELECT MAX(id) FROM detections").fetchone()
+            next_id = (_row[0] or 0) + 1
+            _row = con.execute("SELECT MAX(id) FROM incidents").fetchone()
+            incident_count = _row[0] or 0
+        except Exception:
+            next_id = 1
+            incident_count = 0
     linker = graph_mod.StreamingLinker()
     # Live tells: counts + the giveaway phrase per technique, for the
     # dynamic slab shown while the upload runs. Updated per batch, so
@@ -189,6 +207,14 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
     if ground_truth_path:
         summary["evaluation"] = evaluate_fn(db_path, ground_truth_path)
     return summary
+
+
+def run_append(log_path: str, db_path: str, rules_dir: str,
+               chunk_size: int = 5000, on_progress=None) -> dict:
+    """Append a log to an existing DB: same pipeline as run(), but
+    fresh=False, so nothing already stored is wiped or rewritten."""
+    return run(log_path, db_path, rules_dir, chunk_size=chunk_size,
+               on_progress=on_progress, fresh=False)
 
 
 def main(argv=None) -> int:

@@ -327,46 +327,170 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         pass
                     holder.con = store.connect(db_path, fresh=True)
                 return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
-            if urlparse(self.path).path in ("/sample", "/tiny"):
-                # Load Sample / Tiny Demo (dashboard buttons): run a
-                # small, labelled-synthetic file through the exact same
-                # cli_run pipeline as an upload -- no browser round-trip
-                # of the file, no invented incidents. /sample loads the
-                # repo's sample_attack.log; /tiny writes 5 lines
-                # (1 benign ingress, 3 attack steps, 1 benign DNS) and
-                # runs those. Both replace the current DB, like /upload.
+            if urlparse(self.path).path == "/sample":
+                # LOAD SAMPLE (2026-11-01, changed behaviour): it no
+                # longer loads the small sample_attack.log and no
+                # longer wipes the DB. It generates about 500 MB of
+                # synthetic log from generate_logs.py
+                # (engine/sample_gen.py, streamed to a temp file next
+                # to the DB, never held in RAM) and APPENDS it with
+                # cli run_append (fresh=False): existing detections
+                # and incidents keep their ids and graphs, and the new
+                # detections link among themselves into new incidents.
+                # Progress reuses /progress like /demo, so the bar
+                # tracks generation then processing. When this POST
+                # returns, the page reloads the list; the dashboard's
+                # 5-second /health refresh also picks the new counts
+                # up afterwards (live mode). Expect a few minutes for
+                # the full 500 MB run.
+                from engine.sample_gen import TARGET_BYTES as _SAMPLE_BYTES, iter_sample_lines
+                from engine.cli import run_append as _run_append
+                started = time.time()
+                filename = "sample-500mb.log (synthetic, from generate_logs.py)"
+                try:
+                    _before_incidents = len(store.list_incidents(holder.con))
+                except Exception:
+                    _before_incidents = 0
+                # Scratch file goes in the repo dir (real disk), NOT
+                # next to the DB: a DB in /tmp (a 512 MB tmpfs here)
+                # cannot hold a 500 MB temp file, and that exact
+                # failure was hit in testing. The file is deleted
+                # after processing either way.
+                _db_dir = ROOT
+                tmp_path = None
+                try:
+                    _set_progress(stage="generating",
+                                  stage_text="Generating sample - synthetic, about 500 MB, from generate_logs.py",
+                                  filename=filename, bytes_received=0,
+                                  bytes_total=_SAMPLE_BYTES, events=0,
+                                  detections=0, estimated_total_events=0,
+                                  events_per_second=0, elapsed_seconds=0,
+                                  eta_seconds=None, done=False, error="")
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, dir=_db_dir, encoding="utf-8") as tmp:
+                        tmp_path = tmp.name
+                        buf = []
+                        written = 0
+                        for line in iter_sample_lines(_SAMPLE_BYTES):
+                            buf.append(line)
+                            written += len(line) + 1
+                            if len(buf) >= 1000:
+                                tmp.write("\n".join(buf) + "\n")
+                                buf = []
+                                _set_progress(bytes_received=written,
+                                              elapsed_seconds=round(time.time() - started, 1))
+                        if buf:
+                            tmp.write("\n".join(buf) + "\n")
+                    length = os.path.getsize(tmp_path)
+                    est_total = 0
+                    try:
+                        with open(tmp_path, "rb") as f:
+                            sample = [next(f) for _ in range(200)]
+                        if sample:
+                            avg = sum(len(l) for l in sample) / len(sample)
+                            if avg > 0:
+                                est_total = int(length / avg)
+                    except Exception:
+                        est_total = 0
+                    _set_progress(estimated_total_events=est_total)
+
+                    def _on_progress_sample(events, detections, stage, top=None):
+                        elapsed = max(time.time() - started, 0.001)
+                        eps = events / elapsed if stage == "reading" else 0
+                        eta = None
+                        if stage == "reading" and eps > 0 and est_total > events:
+                            eta = (est_total - events) / eps
+                        texts = {"reading": "Step 2 of 4 - Reading",
+                                 "linking": "Step 3 of 4 - Linking",
+                                 "storing": "Step 4 of 4 - Saving"}
+                        _kw = dict(stage=stage, stage_text=texts.get(stage, stage),
+                                   events=events, detections=detections,
+                                   events_per_second=round(eps, 1),
+                                   elapsed_seconds=round(elapsed, 1),
+                                   eta_seconds=round(eta) if eta is not None else None)
+                        if top is not None:
+                            _kw["top_techniques"] = top
+                        _set_progress(**_kw)
+
+                    _queue_started = time.time()
+                    while not LOCK.acquire(blocking=False):
+                        _wait = int(time.time() - _queue_started)
+                        _set_progress(stage="queued",
+                                      stage_text=f"Queued - sample file is ready and waiting for the previous upload to finish. Waiting {_wait}s so far.",
+                                      elapsed_seconds=round(time.time() - started, 1))
+                        time.sleep(1)
+                    try:
+                        _set_progress(stage="reading", stage_text="Step 2 of 4 - Reading")
+                        try:
+                            holder.con.close()
+                        except Exception:
+                            pass
+                        summary = _run_append(tmp_path, db_path, rules_dir,
+                                              chunk_size=20000, on_progress=_on_progress_sample)
+                        holder.con = store.connect(db_path)
+                        # run_append's incident counter starts at the
+                        # old max id, so report only the incidents this
+                        # run actually added, matching events/detections.
+                        try:
+                            summary["incidents"] = max(0, len(store.list_incidents(holder.con)) - _before_incidents)
+                        except Exception:
+                            pass
+                    finally:
+                        LOCK.release()
+                    summary["filename"] = filename
+                    summary["appended"] = True
+                    from engine import sysstats as _ss_sample
+                    _total_s = round(time.time() - started, 1)
+                    _set_progress(stage="done",
+                                  stage_text=f"Done in {_ss_sample.fmt_duration(_total_s)} - appended sample incidents are ready below.",
+                                  events=summary.get("events", 0),
+                                  detections=summary.get("detections", 0),
+                                  elapsed_seconds=_total_s, eta_seconds=0, done=True)
+                    return self._send_json(summary)
+                except Exception as exc:
+                    _set_progress(stage="error", stage_text=f"Failed: {exc}", done=True, error=str(exc))
+                    try:
+                        holder.con = store.connect(db_path)
+                    except Exception:
+                        pass
+                    try:
+                        return self._send_json({"error": str(exc)}, 500)
+                    except Exception:
+                        return None
+                finally:
+                    if tmp_path:
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+            if urlparse(self.path).path == "/tiny":
+                # Tiny Demo endpoint, kept for API compatibility. Its
+                # button was removed from the dashboard (2026-11-01).
+                # It still REPLACES the DB, like /upload - it is not
+                # an append, so do not use it expecting Load Sample
+                # behaviour.
                 try:
                     _db_dir = os.path.dirname(os.path.abspath(db_path)) or "."
-                    if urlparse(self.path).path == "/sample":
-                        _src = os.path.join(ROOT, "sample_attack.log")
-                        if not os.path.isfile(_src):
-                            return self._send_json({"error": "sample_attack.log not found in the repo"}, 404)
-                        _tmp = None
-                        _run_path = _src
-                    else:
-                        _lines = [
-                            "2026-11-01T08:00:00Z|workstation-01|alice|10.10.40.156|network|net_connect|Inbound HTTPS connection|Normal|None|Low",
-                            "2026-11-01T08:05:00Z|workstation-01|alice|10.10.40.156|sysmon|powershell_exec|powershell -enc SQBFAFgAAB executed encoded command|Execution|T1059.001|High",
-                            "2026-11-01T08:10:00Z|workstation-01|alice|10.10.20.11|edr|kerberoasting|Kerberoasting request for service ticket|Credential Access|T1558.003|High",
-                            "2026-11-01T08:15:00Z|workstation-01|alice|10.10.0.20|edr|c2_connect|Periodic C2 beacon to external server|Command and Control|T1071.001|High",
-                            "2026-11-01T08:20:00Z|workstation-01|alice|10.10.40.156|network|dns|DNS query resolved for example.com|Normal|None|Low",
-                        ]
-                        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, dir=_db_dir, encoding="utf-8") as _tf:
-                            _tf.write("\n".join(_lines) + "\n")
-                            _tmp = _tf.name
-                        _run_path = _tmp
+                    _lines = [
+                        "2026-11-01T08:00:00Z|workstation-01|alice|10.10.40.156|network|net_connect|Inbound HTTPS connection|Normal|None|Low",
+                        "2026-11-01T08:05:00Z|workstation-01|alice|10.10.40.156|sysmon|powershell_exec|powershell -enc SQBFAFgAAB executed encoded command|Execution|T1059.001|High",
+                        "2026-11-01T08:10:00Z|workstation-01|alice|10.10.20.11|edr|kerberoasting|Kerberoasting request for service ticket|Credential Access|T1558.003|High",
+                        "2026-11-01T08:15:00Z|workstation-01|alice|10.10.0.20|edr|c2_connect|Periodic C2 beacon to external server|Command and Control|T1071.001|High",
+                        "2026-11-01T08:20:00Z|workstation-01|alice|10.10.40.156|network|dns|DNS query resolved for example.com|Normal|None|Low",
+                    ]
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, dir=_db_dir, encoding="utf-8") as _tf:
+                        _tf.write("\n".join(_lines) + "\n")
+                        _tmp = _tf.name
                     with LOCK:
                         try:
                             holder.con.close()
                         except Exception:
                             pass
-                        _summary = cli_run(_run_path, db_path, rules_dir, chunk_size=20000)
+                        _summary = cli_run(_tmp, db_path, rules_dir, chunk_size=20000)
                         holder.con = store.connect(db_path)
-                    if _tmp:
-                        try:
-                            os.unlink(_tmp)
-                        except OSError:
-                            pass
+                    try:
+                        os.unlink(_tmp)
+                    except OSError:
+                        pass
                     return self._send_json(_summary)
                 except Exception as exc:
                     try:

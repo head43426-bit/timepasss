@@ -42,12 +42,11 @@ h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
 .hero-p{max-width:620px;font-size:17px;color:var(--muted);margin:0}
 #brainAnim{width:280px;height:280px;margin:0 auto}
 #brainAnim svg{width:100%!important;height:100%!important}
-.brain-fallback{width:280px;height:280px;object-fit:contain;display:block;margin:0 auto}
 .btn{display:inline-block;margin-top:28px;background:#00a66a;color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px}
 .btn:hover{background:#008f5b}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;border-top:1px solid var(--border);margin-top:56px;padding-top:28px}
 .stat b{display:block;font-size:24px;letter-spacing:-.02em}
-.stat b .green{color:#00a66a}.stat b .amber{color:#d97706}
+.stat b .green{color:#00a66a}
 .stat span{font-size:13px;color:var(--muted)}
 .section{border-top:1px solid var(--border);margin-top:64px;padding-top:48px}
 .section h2{margin:8px 0 32px;font-size:26px;letter-spacing:-.02em}
@@ -63,7 +62,7 @@ h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
 .note{margin-top:48px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:14px}
 footer{border-top:1px solid var(--border);margin-top:64px;padding:24px;max-width:1020px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#78716c}
 footer{color:var(--muted)}footer a{text-decoration:none}
-@media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}.hero{grid-template-columns:1fr}#brainAnim,.brain-fallback{width:200px;height:200px}}
+@media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}.hero{grid-template-columns:1fr}#brainAnim{width:200px;height:200px}}
 
 /* Theme icon button: sun / moon SVGs (not emojis) cross-fade and
    rotate when the theme changes - the animation is the data-theme
@@ -98,17 +97,13 @@ footer{color:var(--muted)}footer a{text-decoration:none}
     </div>
     <div>
       <div id="brainAnim" aria-label="Brain network animation"></div>
-      <img id="brainFallback" class="brain-fallback" src="/assets/ask-icon.png" alt="ASK logo" hidden>
     </div>
   </div>
 
   <div class="stats">
     <div class="stat"><b>30,223 / sec</b><span>60,011-line synthetic log processed in 1.99 s in a local test run (11 detections, 1 incident)</span></div>
-    <div class="stat"><b class="green">25 rules</b><span>Sigma-style rules in rules/*.yml, covering 23 MITRE techniques</span></div>
-    <div class="stat"><b class="amber">706 techniques</b><span>MITRE ATT&CK techniques indexed for lookups, revoked/deprecated excluded</span></div>
-  </div>
-    <div class="stat"><b class="green">25 rules</b><span>Sigma-style rules · 23 MITRE techniques detected</span></div>
-    <div class="stat"><b class="amber">706 techniques</b><span>MITRE techniques indexed for lookups - ASK detects 23 of them</span></div>
+    <div class="stat"><b>25 rules</b><span>Sigma-style rules in rules/*.yml, covering 23 MITRE techniques</span></div>
+    <div class="stat"><b>706 techniques</b><span>MITRE ATT&CK techniques indexed for lookups, revoked/deprecated excluded</span></div>
   </div>
 
   <section class="section">
@@ -152,21 +147,32 @@ footer{color:var(--muted)}footer a{text-decoration:none}
     var btn = document.getElementById("themeBtn");
     if (btn) btn.addEventListener("click", function () {
       applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+      if (window.loadBrainAnimation) window.loadBrainAnimation();
     });
   })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 <script>
+  /* Brain animation, split by theme (2026-11-01, user files):
+     Brain.json (black nodes) for light, Brain(1).json (light nodes)
+     for dark, renamed network-light.json / network-dark.json.
+     Reloaded on every theme toggle so the animation always matches
+     the current theme. No logo fallback below it any more. */
   (function () {
     var box = document.getElementById("brainAnim");
-    var fb = document.getElementById("brainFallback");
-    function showFallback() { if (box) box.hidden = true; if (fb) fb.hidden = false; }
-    try {
-      if (window.lottie && box) {
-        var anim = window.lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: "/assets/network.json" });
-        anim.addEventListener("data_failed", showFallback);
-      } else { showFallback(); }
-    } catch (e) { showFallback(); }
+    var anim = null;
+    function loadBrainAnimation() {
+      if (!window.lottie || !box) return;
+      if (anim) { try { anim.destroy(); } catch (e) {} anim = null; }
+      box.innerHTML = "";
+      var path = document.documentElement.getAttribute("data-theme") === "dark"
+        ? "/assets/network-dark.json" : "/assets/network-light.json";
+      try {
+        anim = window.lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: path });
+      } catch (e) {}
+    }
+    window.loadBrainAnimation = loadBrainAnimation;
+    loadBrainAnimation();
   })();
 </script>
 </body>

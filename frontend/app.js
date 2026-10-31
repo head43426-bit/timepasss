@@ -31,12 +31,12 @@ async function loadIncidents() {
     "<div class=stat><b>" + list.reduce(function(n, i) { return n + (i.merged_alerts || 0); }, 0) + "</b><span>raw alerts merged</span></div>";
   var ac = document.getElementById("activeCount");
   if (ac) ac.textContent = list.length + " active";
-  document.getElementById("liveStatus").innerHTML = health.live_watch
-    ? "● Live - watching " + esc(health.live_watch) + ". New log lines are detected and linked as they arrive, and this list refreshes every 5 seconds."
-    : "○ Live off - start the server with --watch your.log to watch a live log file. Uploads still work normally.";
   // Live update: every 5 seconds, check only /health (one cheap count
   // query). If nothing changed, do nothing - no page reload, no
   // flicker, and the incident you are reading is never disturbed.
+  // No live-status text is shown on the page any more (2026-11-01):
+  // the list itself refreshes silently when the counts change, which
+  // is also how a finished Load Sample run appears.
   if (!state.liveTimer) {
     state.liveTimer = setInterval(async function() {
       try {
@@ -44,10 +44,6 @@ async function loadIncidents() {
         var sig = h.detections + "/" + h.incidents;
         if (sig !== state.lastHealth) {
           await loadIncidents();
-          if (state.selected) {
-            document.getElementById("liveNote").innerHTML =
-              "New log lines arrived - <button class=btn onclick='selectIncident(" + state.selected.id + ")'>Refresh this incident</button>";
-          }
         }
       } catch (e) { /* server down: keep the page, stop spamming */ }
     }, 5000);
@@ -83,7 +79,10 @@ async function loadIncidents() {
     if (mins < 1440) return Math.round(mins / 60) + " h ago";
     return Math.round(mins / 1440) + " d ago";
   }
-  var tierColor = { Critical: "#e1251b", High: "#f97316", Medium: "#d97706", Low: "#6b7280" };
+  // Palette (2026-11-01): black, white and one green only, plus
+  // black/white greys for the lower tiers - no red/orange/amber/blue.
+  var _td = document.documentElement.getAttribute("data-theme") === "dark";
+  var tierColor = _td ? { Critical: "#f4f4f5", High: "#34d399", Medium: "#a1a1aa", Low: "#57534e" } : { Critical: "#111111", High: "#00a66a", Medium: "#57534e", Low: "#a8a29e" };
   document.getElementById("incidents").innerHTML = (filterHtml + (shown.length ? shown.map(function(inc) {
     var tier = tierOf(inc.risk_score);
     return "<button class=inc data-id=" + inc.id + " data-tier=\"" + tier + "\" title=\"" + esc(inc.start_time || "") + "\">" +
@@ -211,9 +210,10 @@ function renderGraph(path) {
   // by role, like the inspiration: users, then sources, then pivots
   // (hosts that are both a destination and a source, in kill-chain
   // stage order), then destinations. Colour = worst severity on that
-  // node (backend-enriched): Critical red, High orange, Medium amber,
-  // Low grey, user blue, technique purple. Edge colour = destination
-  // severity. Default shows the top 60 most-connected nodes, not 250.
+  // node (backend-enriched): Critical black/white, High green,
+  // Medium dark grey, Low light grey, user black/white, technique
+  // green. Edge colour = destination severity. Default shows the
+  // top 60 most-connected nodes, not 250.
   if (!state.graphFilter || state.graphIncident !== path.id) {
     state.graphFilter = { technique: "All", severity: "All", search: "", showAll: false, zoom: 1 };
     state.graphIncident = path.id;
@@ -257,8 +257,10 @@ function renderGraph(path) {
       "All " + fmtNum(path.detection_count) + " steps happened on the host above - see the step list and the grouped report for what actually happened, instead of an empty graph.</p>";
     return;
   }
-  var sevColor = { Critical: "#e1251b", High: "#f97316", Medium: "#f0a832", Low: "#6b7280" };
-  var sevFill = { Critical: "#fde8e8", High: "#fef3e2", Medium: "#fef9e0", Low: "#f3f4f6" };
+  var _gd = document.documentElement.getAttribute("data-theme") === "dark";
+  var sevColor = _gd ? { Critical: "#f4f4f5", High: "#34d399", Medium: "#a1a1aa", Low: "#57534e" } : { Critical: "#111111", High: "#00a66a", Medium: "#57534e", Low: "#a8a29e" };
+  var sevFill = _gd ? { Critical: "#27272a", High: "#064e3b", Medium: "#3f3f46", Low: "#18181b" } : { Critical: "#e7e5e4", High: "#ecfdf5", Medium: "#f5f5f4", Low: "#ffffff" };
+  var userStroke = _gd ? "#f4f4f5" : "#111111"; var userFill = _gd ? "#27272a" : "#ffffff"; var techStroke = _gd ? "#34d399" : "#00a66a"; var techFill = _gd ? "#064e3b" : "#ecfdf5";
   var sevOf = function(n) { return n.type === "user" ? "user" : n.type === "technique" ? "technique" : (n.severity || "Low"); };
   // Filters: technique (edges), severity (nodes), search (nodes).
   var fEdges = realEdges.filter(function(e) { return gf.technique === "All" || e.technique_id === gf.technique; });
@@ -316,15 +318,15 @@ function renderGraph(path) {
   fNodes.forEach(function(n) { nodeById[n.id] = n; });
   var seenEdge = {};
   var svg = "<svg width='" + Math.round(W * gf.zoom) + "' height='" + Math.round(H * gf.zoom) + "' viewBox='0 0 " + W + " " + H + "' class='graph-svg' role='img' aria-label='Attack graph, left to right by role'>" +
-    "<defs><marker id='arr2' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#6b7280'/></marker></defs>";
+    "<defs><marker id='arr2' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' fill='#00a66a'/></marker></defs>";
   fEdges.forEach(function(e) {
     var key = e.from + ">" + e.to + "|" + (e.technique_id || "");
     if (seenEdge[key]) return; seenEdge[key] = true;
     var a = pos[e.from], b = pos[e.to];
     if (!a || !b) return;
     var col = sevColor[sevOf(nodeById[e.to])] || "#6b7280";
-    if (nodeById[e.to] && nodeById[e.to].type === "user") col = "#2563eb";
-    if (nodeById[e.to] && nodeById[e.to].type === "technique") col = "#7c3aed";
+    if (nodeById[e.to] && nodeById[e.to].type === "user") col = userStroke;
+    if (nodeById[e.to] && nodeById[e.to].type === "technique") col = techStroke;
     svg += "<line x1='" + (a.x + BW) + "' y1='" + (a.y + BH / 2) + "' x2='" + b.x + "' y2='" + (b.y + BH / 2) + "' stroke='" + col + "' stroke-width='2' marker-end='url(#arr2)'/>";
     if (state.graphMode !== "quantum" && fEdges.length <= 60 && e.technique_id) {
       svg += "<text x='" + Math.round((a.x + BW + b.x) / 2) + "' y='" + Math.round((a.y + b.y) / 2 + BH / 2 - 4) + "' class='elabel'>" + esc(e.technique_id) + "</text>";
@@ -333,8 +335,8 @@ function renderGraph(path) {
   fNodes.forEach(function(n) {
     var p = pos[n.id];
     var sev = sevOf(n);
-    var stroke = n.type === "user" ? "#2563eb" : n.type === "technique" ? "#7c3aed" : (sevColor[sev] || "#6b7280");
-    var fill = n.type === "user" ? "#e0efff" : n.type === "technique" ? "#f3e8ff" : (sevFill[sev] || "#fff");
+    var stroke = n.type === "user" ? userStroke : n.type === "technique" ? techStroke : (sevColor[sev] || "#57534e");
+    var fill = n.type === "user" ? userFill : n.type === "technique" ? techFill : (sevFill[sev] || "#ffffff");
     var label = n.id.length > 22 ? n.id.slice(0, 21) + "…" : n.id;
     var sub = n.type === "technique" && n.name ? n.name : (n.stage || n.type);
     svg += "<g class='gnode-wrap' data-node='" + esc(n.id) + "' tabindex='0' role='button' aria-label='Show steps for " + esc(n.id) + "'>" +
@@ -349,7 +351,7 @@ function renderGraph(path) {
   var techOpts = ["All"];
   realEdges.forEach(function(e) { if (e.technique_id && techOpts.indexOf(e.technique_id) < 0) techOpts.push(e.technique_id); });
   var capNote = (!gf.showAll && totalNodes > 60) ? "<p class='hint'>Showing the 60 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(fEdges.length) + " of " + fmtNum(totalEdges) + " edges). Use Show all below for the rest - the full step list and grouped report still cover everything.</p>" : "";
-  var colNote = "<p class='hint'>Left to right: " + usedCols.map(function(i) { return colNames[i] + " (" + cols[i].length + ")"; }).join(" → ") + ".</p>";
+  var colNote = "";
   var zl = document.getElementById("zoomLabel");
   if (zl) zl.textContent = Math.round(gf.zoom * 100) + "%";
   box.innerHTML =
@@ -363,7 +365,6 @@ function renderGraph(path) {
     "<button class=btn onclick=\"setGraphZoom(-0.2)\">Zoom −</button> " +
     "<button class=btn onclick=\"setGraphFilter('zoom', 1)\">Reset zoom</button>" +
     "</div>" +
-    "<p class='hint' style='margin:0 0 8px'>Colour = worst severity on that node - <span style='color:#e1251b'><b>Critical</b></span> · <span style='color:#f97316'><b>High</b></span> · <span style='color:#f0a832'><b>Medium</b></span> · <span style='color:#6b7280'><b>Low</b></span> · <span style='color:#2563eb'><b>user</b></span> · <span style='color:#7c3aed'><b>technique</b></span>. Edge label = MITRE technique (hidden when over 60 edges, to stay readable). Click a node to see its steps. Scroll inside the box to pan.</p>" +
     "<div style='overflow:auto;max-height:640px'>" + svg + "</div>" +
     capNote + colNote + "</div>";
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
@@ -390,8 +391,10 @@ function renderAttackPathCanvas(path) {
   var nodeById = {};
   nodes.forEach(function(n) { nodeById[n.id] = n; });
   var pathEdges = edges.filter(function(e) { return e.kind === "path"; });
-  var sevColor = { Critical: "#e1251b", High: "#f97316", Medium: "#f0a832", Low: "#6b7280" };
-  var sevFill = { Critical: "#fde8e8", High: "#fef3e2", Medium: "#fef9e0", Low: "#f3f4f6" };
+  var _gd = document.documentElement.getAttribute("data-theme") === "dark";
+  var sevColor = _gd ? { Critical: "#f4f4f5", High: "#34d399", Medium: "#a1a1aa", Low: "#57534e" } : { Critical: "#111111", High: "#00a66a", Medium: "#57534e", Low: "#a8a29e" };
+  var sevFill = _gd ? { Critical: "#27272a", High: "#064e3b", Medium: "#3f3f46", Low: "#18181b" } : { Critical: "#e7e5e4", High: "#ecfdf5", Medium: "#f5f5f4", Low: "#ffffff" };
+  var userStroke = _gd ? "#f4f4f5" : "#111111"; var userFill = _gd ? "#27272a" : "#ffffff"; var techStroke = _gd ? "#34d399" : "#00a66a"; var techFill = _gd ? "#064e3b" : "#ecfdf5";
   var sevOf = function(n) { return n && n.type === "user" ? "user" : n && n.type === "technique" ? "technique" : (n && n.severity) || "Low"; };
   var techName = {};
   (path.timeline_summary || []).forEach(function(s) { techName[s.technique_id] = s.technique_name; });
@@ -412,7 +415,7 @@ function renderAttackPathCanvas(path) {
     (path.timeline_summary || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
     if (!stages.length) (path.timeline || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
     var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]) || "Unknown host";
-    box.innerHTML = "<canvas id='attackCanvas' width='1080' height='170' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
+    box.innerHTML = "<canvas id='attackCanvas' width='1080' height='170' style='width:100%;height:auto;background:#ffffff;border:2px solid #111111;border-radius:12px;display:block'></canvas>" +
       "<p class='hint'>No host-to-host movement in this incident - all steps happened on " + esc(hostId) + ". The canvas below shows the stage progression in time order, not host hops. Click a stage box to see its steps.</p>";
     var cv0 = document.getElementById("attackCanvas");
     var ctx0 = cv0.getContext("2d");
@@ -447,7 +450,7 @@ function renderAttackPathCanvas(path) {
   var dstBoxes = destBoxes.slice(0, 6);
   var rows = Math.max(srcBoxes.length, pivBoxes.length, dstBoxes.length, 1);
   var H = rows * 92 + 30, W = 1080;
-  box.innerHTML = "<canvas id='attackCanvas' width='" + W + "' height='" + H + "' style='width:100%;height:auto;background:#f8f6f0;border:2px solid #333;border-radius:12px;display:block'></canvas>" +
+  box.innerHTML = "<canvas id='attackCanvas' width='" + W + "' height='" + H + "' style='width:100%;height:auto;background:#ffffff;border:2px solid #111111;border-radius:12px;display:block'></canvas>" +
     "<p class='hint'>Arrows are real log edges only - destinations fan out in parallel from their source, they are NOT sequential hops unless a pivot connects them. " +
     (sources.length > 5 ? "Showing 5 of " + sources.length + " sources. " : "") +
     (pivots.length > 5 ? "Showing 5 of " + pivots.length + " pivots. " : "") +
@@ -460,15 +463,15 @@ function renderAttackPathCanvas(path) {
   var ctx = cv.getContext("2d");
   ctx.scale(dpr, dpr);
   // Dotted-paper background, like the reference canvas.
-  ctx.fillStyle = isDark ? "#18181b" : "#f8f6f0"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = isDark ? "#3f3f46" : "#d8d2c2";
+  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
   for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
   var BW = 230, BH = 68, cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 320, boxes: pivBoxes, name: "PIVOT" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
   if (!pivBoxes.length) cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
   var rects = [];
   var drawBox = function(x, y, b) {
-    var stroke = b.sev === "user" ? "#2563eb" : b.sev === "technique" ? "#7c3aed" : (sevColor[b.sev] || "#6b7280");
-    var fill = sevFill[b.sev] || "#fff";
+    var stroke = b.sev === "user" ? userStroke : b.sev === "technique" ? techStroke : (sevColor[b.sev] || "#57534e");
+    var fill = b.sev === "user" ? userFill : b.sev === "technique" ? techFill : (sevFill[b.sev] || "#ffffff");
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
     ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke();
@@ -501,10 +504,10 @@ function renderAttackPathCanvas(path) {
   var pivY = function(i) { return 26 + i * 92 + BH / 2; };
   var dstY = function(i) { return 26 + i * 92 + BH / 2; };
   if (pivBoxes.length) {
-    srcBoxes.forEach(function(s, i) { drawArrow(20 + BW, srcY(i), 320, pivY(0), "#6b7280"); });
-    pivBoxes.forEach(function(p, i) { dstBoxes.forEach(function(d, j) { drawArrow(320 + BW, pivY(i), 620, dstY(j), "#6b7280"); }); });
+    srcBoxes.forEach(function(s, i) { drawArrow(20 + BW, srcY(i), 320, pivY(0), isDark ? "#34d399" : "#00a66a"); });
+    pivBoxes.forEach(function(p, i) { dstBoxes.forEach(function(d, j) { drawArrow(320 + BW, pivY(i), 620, dstY(j), isDark ? "#34d399" : "#00a66a"); }); });
   } else {
-    srcBoxes.forEach(function(s, i) { dstBoxes.forEach(function(d, j) { drawArrow(20 + BW, srcY(i), 620, dstY(j), "#6b7280"); }); });
+    srcBoxes.forEach(function(s, i) { dstBoxes.forEach(function(d, j) { drawArrow(20 + BW, srcY(i), 620, dstY(j), isDark ? "#34d399" : "#00a66a"); }); });
   }
   state.attackRects = rects;
   cv.addEventListener("click", function(ev) {
@@ -520,8 +523,8 @@ function drawAttackStageRow(ctx, stages, path) {
   var isDark = document.documentElement.getAttribute("data-theme") === "dark";
   var W = 1080, BH = 64, gap = 30;
   var BW = Math.min(200, Math.floor((W - 40 - (stages.length - 1) * gap) / Math.max(1, stages.length)));
-  ctx.fillStyle = isDark ? "#18181b" : "#f8f6f0"; ctx.fillRect(0, 0, W, 170);
-  ctx.fillStyle = isDark ? "#3f3f46" : "#d8d2c2";
+  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, 170);
+  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
   for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < 170; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
   var total = stages.length * (BW + gap) - gap;
   var x0 = Math.max(20, (W - total) / 2);
@@ -530,15 +533,15 @@ function drawAttackStageRow(ctx, stages, path) {
     var x = x0 + i * (BW + gap), y = 50;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
-    ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = "#e1251b"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 3; ctx.stroke();
     ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
     ctx.fillText(s.length > 24 ? s.slice(0, 23) + "…" : s, x + 12, y + 28);
     ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
     ctx.fillText("Stage " + (i + 1) + " of " + stages.length, x + 12, y + 48);
     rects.push({ x: x, y: y, w: BW, h: BH, id: s });
     if (i < stages.length - 1) {
-      ctx.strokeStyle = "#f0a832"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + BW, y + BH / 2); ctx.lineTo(x + BW + gap, y + BH / 2); ctx.stroke();
-      ctx.fillStyle = "#f0a832"; ctx.beginPath(); ctx.moveTo(x + BW + gap, y + BH / 2); ctx.lineTo(x + BW + gap - 10, y + BH / 2 - 4); ctx.lineTo(x + BW + gap - 10, y + BH / 2 + 4); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + BW, y + BH / 2); ctx.lineTo(x + BW + gap, y + BH / 2); ctx.stroke();
+      ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath(); ctx.moveTo(x + BW + gap, y + BH / 2); ctx.lineTo(x + BW + gap - 10, y + BH / 2 - 4); ctx.lineTo(x + BW + gap - 10, y + BH / 2 + 4); ctx.closePath(); ctx.fill();
     }
   });
   var cv = document.getElementById("attackCanvas");
@@ -810,8 +813,10 @@ function handleFile(file) {
   xhr.send(file);
 }
 
-// Load Sample / Tiny Demo: POST /sample or /tiny, server runs that
-// small file through the same pipeline, then the list refreshes.
+// Load Sample: POST /sample, server generates ~500 MB of synthetic
+// log from generate_logs.py and APPENDS it to the existing DB, then
+// the list refreshes. /tiny and /demo buttons are removed (2026-11-01);
+// their server endpoints still exist, but nothing on the page calls them.
 function runServerJob(endpoint, infoText) {
   document.getElementById("bar").style.width = "5%";
   document.getElementById("fileinfo").textContent = infoText;
@@ -835,55 +840,7 @@ function runServerJob(endpoint, infoText) {
   });
 }
 var sampleBtn = document.getElementById("sampleBtn");
-if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Loading the repo sample log…"); });
-var tinyBtn = document.getElementById("tinyBtn");
-if (tinyBtn) tinyBtn.addEventListener("click", function() { runServerJob("/tiny", "Loading the tiny demo (5 rows, synthetic)…"); });
-
-/* Demo button (2026-11-01): POST /demo, server generates ~100 MB
-   synthetic log and processes it like an upload. Polls /progress
-   the same way handleFile does. */
-var demoBtn = document.getElementById("demoBtn");
-if (demoBtn) {
-  demoBtn.addEventListener("click", async function() {
-    demoBtn.disabled = true;
-    document.getElementById("bar").style.width = "5%";
-    document.getElementById("fileinfo").textContent = "Generating demo (synthetic, about 100 MB) on the backend…";
-    var pollFails = 0;
-    var poll = setInterval(function() {
-      fetch("/progress").then(function(r) { return r.json(); }).then(function(p) {
-        pollFails = 0;
-        showBackendStatus(p, null);
-      }).catch(function() {
-        pollFails += 1;
-        if (pollFails >= 3) {
-          var el2 = document.getElementById("backendStatus");
-          el2.hidden = false;
-          el2.textContent = "Server not responding - check the server window (run.bat / run.sh) and restart it if needed, then try Demo again.";
-        }
-      });
-    }, 1000);
-    try {
-      var res = await fetch("/demo", { method: "POST" });
-      var data = await res.json();
-      clearInterval(poll);
-      document.getElementById("bar").style.width = "100%";
-      if (data.error) {
-        document.getElementById("fileinfo").textContent = "Demo error: " + data.error;
-      } else {
-        document.getElementById("fileinfo").textContent = "Demo (synthetic) - " + data.events + " lines, " + data.detections +
-          " detections, " + data.incidents + " incidents, in " + data.seconds + "s. Nothing was stored except the database on this machine.";
-        document.getElementById("backendStatus").textContent = "Done in " + data.seconds + "s - " + data.events + " lines, " + data.detections +
-          " detections, " + data.incidents + " incidents. Peak ASK memory: " + (data.peak_rss_mb || 0) + " MB.";
-        await loadIncidents();
-        if (state.incidents.length) selectIncident(state.incidents[0].id);
-      }
-    } catch (e) {
-      clearInterval(poll);
-      document.getElementById("fileinfo").textContent = "Demo failed - the server could not be reached.";
-    }
-    demoBtn.disabled = false;
-  });
-}
+if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Generating about 500 MB of synthetic log and appending it to the existing data - this takes a few minutes, the progress bar above tracks it…"); });
 
 loadIncidents();
 
@@ -908,13 +865,10 @@ document.querySelectorAll(".mode-btn").forEach(function(btn) {
     btn.classList.add("active");
     state.graphMode = btn.getAttribute("data-mode");
     var banner = document.getElementById("modeBanner");
-    var plain = document.getElementById("modePlain");
     if (state.graphMode === "quantum") {
       if (banner) banner.textContent = "QUANTUM WALK: Classical look-ahead from the observed graph - frontier hosts, not a Qiskit simulation";
-      if (plain) plain.textContent = "Quantum Walk graph, in plain words: the same computers, but now only the frontier is shown - hosts already contacted that the attacker could move to next, with the hosts they were reached from. It answers one question: where will the attacker go next, from what we actually observed?";
     } else {
       if (banner) banner.textContent = "KILL CHAIN ANALYSIS: Tracking MITRE ATT&CK progression & lateral traversal";
-      if (plain) plain.textContent = "Kill Chain graph, in plain words: each box is a computer (IP). An arrow means traffic went from one computer to another. Amber arrows are attack steps, in order: first access, then running code, then stealing passwords, then moving sideways, then reaching the target. Follow the amber arrows to read the attack story.";
     }
     if (state.selected) renderGraph(state.selected);
   });

@@ -38,15 +38,12 @@
       <h2>Incident Triage Queue</h2>
       <span id="activeCount">0 active</span>
     </div>
-    <p class="hint">Worst risk first</p>
     <div class="search-wrap">
       <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span>
       <input id="incidentSearch" type="search" placeholder="Filter CVE, host, or stage..." aria-label="Filter incidents">
     </div>
     <div class="stats" id="stats"></div>
     <div id="incidents"><p>No incidents yet. Upload a log to see them here.</p></div>
-    <p class="hint" id="liveStatus">Live status loading…</p>
-    <p class="hint" id="liveNote"></p>
   </aside>
 
   <!-- CENTER: Attack graph canvas + detail -->
@@ -67,13 +64,10 @@
     </div>
 
     <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
-    <p class="plain" id="modePlain">Kill Chain graph, in plain words: each box is a computer (IP). An arrow means traffic went from one computer to another. Amber arrows are attack steps, in order: first access, then running code, then stealing passwords, then moving sideways, then reaching the target. Follow the amber arrows to read the attack story.</p>
     <div class="path-banner" id="pathBanner" hidden></div>
 
     <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
 
-    <h3>Attack graph map - built by NetworkX</h3>
-    <p class="hint">Nodes are the real hosts and users from the backend NetworkX graph, connected by its edges. Click a node to see its steps. Hosts are squares, users are circles. Scroll inside the box to pan; use the zoom controls above.</p>
     <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"><p class="hint">Topology canvas empty - Awaiting flow telemetry. Upload a log or load the sample on the right.</p></div>
 
     <div class="legend-bar">
@@ -96,7 +90,6 @@
     <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
 
     <h3>Protect - what to do now</h3>
-    <p class="hint">ASK cannot block an attack itself - it has no agent on your hosts. These are the concrete actions for each technique found in this incident, worst first. Do them in order.</p>
     <div id="protect"></div>
   </section>
 
@@ -110,9 +103,7 @@
       </div>
       <div class="btn-row">
         <button id="uploadBtn" type="button" class="btn ghost">Upload PCAP/Logs</button>
-        <button id="tinyBtn" type="button" class="btn ghost">Tiny Demo (5 rows)</button>
         <button id="sampleBtn" type="button" class="btn ghost">Load Sample</button>
-        <button id="demoBtn" type="button" class="btn ghost">Demo</button>
       </div>
       <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
       <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs - never real production logs or credentials.</p>
@@ -133,15 +124,6 @@
         <button id="clearBtn" type="button" class="btn danger">Delete Data</button>
         <span id="clearStatus" class="hint"></span>
       </div>
-      <details>
-        <summary>What formats does it accept?</summary>
-        <ul>
-          <li>JSON lines: <code>{"time":"...","host":"WS-01","user":"priya","action":"...","detail":"..."}</code></li>
-          <li>Pipe: <code>time|host|user|source|action|detail|stage|mitre|severity</code></li>
-          <li>Plain lines are searched for attack words.</li>
-        </ul>
-        <p>5+ failed logins for the same user on the same host become one brute-force detection. A single failed login never flags. Flagged lines link into incidents by host, user, IP and time.</p>
-      </details>
     </section>
 
     <section class="card">
@@ -159,15 +141,13 @@
       <pre id="report">No incident selected yet.</pre>
       <p class="warn" id="reportWarning" hidden></p>
       <p class="btn-row">
-        <button class="btn" id="copyBtn" disabled>Copy report</button>
         <button class="btn ghost" id="pdfBtn" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span id="pdfLabel">Generate Threat Report (PDF) - English (US)</span></button>
+        <button class="btn" id="copyBtn" disabled style="margin-left:auto">Copy report</button>
       </p>
-      <p class="hint">Generate Threat Report (PDF) opens the report in a print view - choose “Save as PDF” there. That is how Hindi, Tamil, Telugu and Malayalam text prints correctly, using your system fonts.</p>
     </section>
 
     <section class="card">
       <h2>Quantum Next-Hop Look-Ahead <span class="row-count">Classical look-ahead</span></h2>
-      <p class="hint">Classical look-ahead from the observed graph - frontier hosts already contacted, not guessed targets, and not a Qiskit simulation.</p>
       <div id="next"><p>Awaiting active threat vectors to compute look-ahead.</p></div>
     </section>
 
@@ -175,7 +155,6 @@
       <h2>Attack Paths - Ranked <span class="row-count" id="pathsCount">No paths yet</span></h2>
       <div id="attackPaths"><p>Load data to see ranked attack paths.</p></div>
       <p><button id="corridorBtn" type="button" class="btn corridor" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></span><span id="corridorLabel">Execute Containment Isolator</span></button></p>
-      <p class="hint" id="corridorNote">Quarantine here is a dashboard simulation only - no real host is isolated and no firewall rule is changed.</p>
     </section>
   </aside>
 </main>
