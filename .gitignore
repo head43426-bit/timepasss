@@ -1,0 +1,6 @@
+.env
+*.duckdb
+*.duckdb.wal
+__pycache__/
+out.duckdb
+uploaded_logs/

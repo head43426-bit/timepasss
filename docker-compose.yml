@@ -1,0 +1,7 @@
+services:
+  kill-chain:
+    build: .
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./out.duckdb:/app/out.duckdb

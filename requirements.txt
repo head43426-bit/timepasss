@@ -1,0 +1,4 @@
+# Kill Chain Python engine. Loose pins: install with pip install -r requirements.txt
+duckdb>=1.0
+networkx>=3.0
+pyyaml>=6.0

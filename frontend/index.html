@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kill Chain Dashboard — Upload a .log file</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>Kill Chain <span>Dashboard</span></h1>
+    <p class="tag">Frontend + backend &middot; Your log files only &middot; No demo data</p>
+  </div>
+  <p class="tag">Analyse &middot; Secure &middot; Kill the chain</p>
+</header>
+
+<main>
+  <section class="card upload-card">
+    <h2>Upload your log file</h2>
+    <p>Drop a <code>.log</code> or <code>.txt</code> file here, or pick one. The backend (Python + DuckDB + NetworkX) processes it — the browser only sends the file you choose.</p>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
+      <strong>Drop your .log file here</strong><br>or click to choose a file
+      <input type="file" id="file" accept=".log,.txt" hidden>
+    </div>
+    <div class="progress" id="progress" aria-hidden="true"><div id="bar"></div></div>
+    <p id="fileinfo" class="warn">No file uploaded yet. Use only synthetic or authorised logs — never real production logs or credentials.</p>
+    <details>
+      <summary>What formats does it accept?</summary>
+      <ul>
+        <li>JSON lines: <code>{"time":"...","host":"WS-01","user":"priya","action":"...","detail":"..."}</code></li>
+        <li>Pipe: <code>time|host|user|source|action|detail|stage|mitre|severity</code></li>
+        <li>Plain lines are searched for attack words.</li>
+      </ul>
+      <p>5+ failed logins for the same user on the same host become one brute-force detection. A single failed login never flags. Flagged lines link into incidents by host, user, IP and time.</p>
+    </details>
+  </section>
+
+  <section class="card dark">
+    <h2>Incidents, worst first</h2>
+    <div class="stats" id="stats"></div>
+    <div id="incidents"><p>No incidents yet. Upload a log to see them here.</p></div>
+  </section>
+
+  <section class="card dark" id="detailSection">
+    <h2>Incident detail</h2>
+    <div id="detail"><p>Pick an incident above, then press a package on the conveyor belt to inspect that step.</p></div>
+
+    <h3>Conveyor — press a package to inspect its step</h3>
+    <p class="hint">Every package is a real button. Press it (or Tab to it and hit Enter) and the step detail below updates.</p>
+    <div class="belt" id="belt" role="group" aria-label="Attack steps as packages on a conveyor belt"></div>
+
+    <h3>Step detail</h3>
+    <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
+
+    <h3>Attack path</h3>
+    <div id="path" class="path"></div>
+
+    <h3>What the attacker could reach next</h3>
+    <div id="next"></div>
+
+    <h3>Report</h3>
+    <p>
+      <button class="btn" id="copyBtn" disabled>Copy English report</button>
+      <button class="btn ghost" id="hindiBtn" disabled>Show Hindi version</button>
+    </p>
+    <pre id="report">No incident selected yet.</pre>
+    <p class="warn" id="hindiNote" hidden>Hindi here is a fixed template — it is NOT a live Sarvam translation. For a real Sarvam Hindi report, run the backend with SARVAM_API_KEY set in a private .env.</p>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

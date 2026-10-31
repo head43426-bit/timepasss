@@ -1,0 +1,137 @@
+"""Pipeline CLI (one command, end to end):
+
+  python3 -m engine.cli --log mylogs.log --db out.duckdb \\
+      --rules rules --topology topology.json \\
+      --ground-truth truth.json
+
+Steps: stream-parse + detect in batches -> DuckDB -> link into
+incidents -> risk-score -> store graph edges -> print processing time,
+peak RSS (resource.getrusage, the process's own peak), counts, and
+evaluation vs ground truth when --ground-truth is given.
+
+Memory: only one batch of raw events, the detector's aggregate counters,
+and the detection list (detections are far fewer than raw lines, and
+are flushed to DuckDB per batch) are held at once. Raw benign events
+are counted and dropped, never stored. For the full 15/30/50 GB tiers
+the same code path runs; see README's scale section for what is
+implemented vs what is a documented next step (multiprocessing workers).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import resource
+import sys
+import time
+from typing import List
+
+from . import graph as graph_mod
+from . import store
+from .evaluate import evaluate as evaluate_fn
+from .parser import iter_events
+from .rules import Detector, load_rules
+
+
+def peak_rss_mb() -> float:
+    # ru_maxrss is KiB on Linux, bytes on macOS.
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return round(value / 1024.0, 1) if sys.platform != "darwin" else round(value / 1e6, 1)
+
+
+def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
+        chunk_size: int = 5000, ground_truth_path: str = None) -> dict:
+    started = time.time()
+    rules = load_rules(rules_dir)
+    detector = Detector(rules)
+    con = store.connect(db_path, fresh=True)
+    if topology_path:
+        with open(topology_path, "r", encoding="utf-8") as handle:
+            store.load_topology(con, json.load(handle))
+    total_lines = 0
+    detection_count = 0
+    next_id = 1
+    all_detections: List[dict] = []
+    for batch in iter_events(log_path, chunk_size=chunk_size):
+        total_lines += len(batch)
+        batch_detections = []
+        for event in batch:
+            batch_detections.extend(detector.process(event))
+        if batch_detections:
+            con.execute("BEGIN TRANSACTION")
+            next_id = store.insert_detections(con, batch_detections, next_id)
+            con.execute("COMMIT")
+            all_detections.extend(batch_detections)
+            detection_count += len(batch_detections)
+        if total_lines % 100000 < chunk_size:
+            print(f"  ... {total_lines} events, {detection_count} detections, "
+                  f"peak RSS {peak_rss_mb()} MB", flush=True)
+    # Link + score + store incidents.
+    incidents = graph_mod.link_detections(all_detections)
+    stored = []
+    for idx, dets in enumerate(incidents, start=1):
+        hosts = sorted({d["host"] for d in dets})
+        users = sorted({d["user"] for d in dets})
+        first, last = dets[0], dets[-1]
+        title = (f"{first.get('technique_name') or first.get('technique_id', '')} "
+                 f"path on {first['host']}"
+                 if dets else f"Incident {idx}")
+        record = {
+            "id": idx, "title": title,
+            "start_time": first.get("time", ""), "end_time": last.get("time", ""),
+            "hosts": hosts, "users": users,
+            "risk_score": graph_mod.risk_score(dets),
+            "merged_alerts": sum(d.get("merged_alerts", 1) for d in dets),
+            "detection_count": len(dets),
+            # Detection ids are 1-based in insertion order; all_detections
+            # order matches insertion order, so map by object identity via
+            # index in the full list.
+            "detection_ids": [all_detections.index(d) + 1 for d in dets],
+            "edges": graph_mod.graph_edges(dets),
+        }
+        stored.append(record)
+    con.execute("BEGIN TRANSACTION")
+    for record in stored:
+        store.insert_incident(con, record)
+    con.execute("COMMIT")
+    con.close()
+    elapsed = time.time() - started
+    summary = {
+        "events": total_lines, "detections": detection_count,
+        "incidents": len(stored), "seconds": round(elapsed, 2),
+        "peak_rss_mb": peak_rss_mb(),
+        "events_per_second": round(total_lines / elapsed, 1) if elapsed else 0,
+    }
+    if ground_truth_path:
+        summary["evaluation"] = evaluate_fn(db_path, ground_truth_path)
+    return summary
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Kill Chain engine pipeline")
+    parser.add_argument("--log", required=True)
+    parser.add_argument("--db", required=True)
+    parser.add_argument("--rules", default="rules")
+    parser.add_argument("--topology")
+    parser.add_argument("--chunk-size", type=int, default=5000)
+    parser.add_argument("--ground-truth")
+    args = parser.parse_args(argv)
+    summary = run(args.log, args.db, args.rules, args.topology,
+                  args.chunk_size, args.ground_truth)
+    print(f"Events processed: {summary['events']}")
+    print(f"Detections: {summary['detections']}")
+    print(f"Incidents: {summary['incidents']}")
+    print(f"Processing time: {summary['seconds']}s "
+          f"({summary['events_per_second']} events/sec)")
+    print(f"Peak RSS: {summary['peak_rss_mb']} MB")
+    if "evaluation" in summary:
+        ev = summary["evaluation"]
+        print(f"Evaluation: detection {ev['detection']:.1f}%, "
+              f"correct labels {ev['correct_labels']:.1f}%, "
+              f"attack path {ev['attack_path']:.1f}%, "
+              f"false alarms {ev['false_alarms']:.1f}%")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

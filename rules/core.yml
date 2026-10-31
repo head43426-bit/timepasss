@@ -1,0 +1,171 @@
+# Core Sigma-style rules. Edit / add files in this directory to change
+# detection without touching code (B-4). Priority: higher wins when
+# several rules match one event (exfiltration beats collection, etc.).
+rules:
+  - id: exfiltration_upload
+    name: Data upload to an outside IP
+    technique_id: T1048
+    technique_name: Exfiltration Over Alternative Protocol
+    tactic: Exfiltration
+    kill_chain_stage: Exfiltration
+    confidence: 90
+    priority: 100
+    description: Large upload to an outside IP
+    match:
+      any_contains: ["upload to outside", "upload to an outside", "data exfiltrated"]
+
+  - id: log_clearing
+    name: Security logs cleared
+    technique_id: T1070
+    technique_name: Indicator Removal
+    tactic: Defense Evasion
+    kill_chain_stage: Defense Evasion
+    confidence: 85
+    priority: 95
+    description: Event logs cleared on a host
+    match:
+      any_contains: ["logs cleared", "event logs cleared", "log cleared"]
+
+  - id: credential_dump
+    name: Credential dumping
+    technique_id: T1003.001
+    technique_name: LSASS Memory
+    tactic: Credential Access
+    kill_chain_stage: Credential Access
+    confidence: 90
+    priority: 95
+    description: Credential dump via LSASS / Mimikatz
+    match:
+      any_contains: ["credential dump", "lsass", "mimikatz"]
+
+  - id: web_shell
+    name: Web shell command
+    technique_id: T1505.003
+    technique_name: Web Shell
+    tactic: Persistence
+    kill_chain_stage: Persistence
+    confidence: 90
+    priority: 95
+    description: Web shell command executed
+    match:
+      any_contains: ["web shell"]
+
+  - id: new_admin_account
+    name: New admin account created
+    technique_id: T1136
+    technique_name: Create Account
+    tactic: Persistence
+    kill_chain_stage: Persistence
+    confidence: 85
+    priority: 90
+    description: New admin account created
+    match:
+      any_contains: ["new admin account"]
+
+  - id: kerberoasting
+    name: Kerberoasting attempt
+    technique_id: T1558.003
+    technique_name: Kerberoasting
+    tactic: Credential Access
+    kill_chain_stage: Credential Access
+    confidence: 90
+    priority: 90
+    description: Kerberoasting attempt against a service account
+    match:
+      any_contains: ["kerberoasting"]
+
+  - id: phishing
+    name: Phishing email opened
+    technique_id: T1566.001
+    technique_name: "Phishing: Spearphishing Attachment"
+    tactic: Initial Access
+    kill_chain_stage: Initial Access
+    confidence: 85
+    priority: 85
+    description: Phishing email opened
+    match:
+      any_contains: ["phishing", "malicious attachment"]
+
+  - id: macro_execution
+    name: Malicious macro executed
+    technique_id: T1204.002
+    technique_name: Malicious File
+    tactic: Execution
+    kill_chain_stage: Execution
+    confidence: 80
+    priority: 85
+    description: Office document macro executed
+    match:
+      any_contains: ["macro executed", "macro"]
+
+  - id: scheduled_task
+    name: Scheduled task created
+    technique_id: T1053.005
+    technique_name: Scheduled Task
+    tactic: Persistence
+    kill_chain_stage: Persistence
+    confidence: 85
+    priority: 85
+    description: Scheduled task created for persistence
+    match:
+      any_contains: ["scheduled task"]
+
+  - id: lateral_smb
+    name: Lateral movement over SMB
+    technique_id: T1021.002
+    technique_name: SMB/Windows Admin Shares
+    tactic: Lateral Movement
+    kill_chain_stage: Lateral Movement
+    confidence: 85
+    priority: 85
+    description: SMB lateral movement to another host
+    match:
+      any_contains: ["smb lateral", "lateral movement"]
+
+  - id: c2_beacon
+    name: Command-and-control beacon
+    technique_id: T1071.001
+    technique_name: Web Protocols
+    tactic: Command and Control
+    kill_chain_stage: Command and Control
+    confidence: 85
+    priority: 85
+    description: Periodic C2 beacon to an external server
+    match:
+      any_contains: ["c2 beacon", "command and control beacon", "beacon"]
+
+  - id: staging
+    name: Data staging for exfiltration
+    technique_id: T1560
+    technique_name: Archive Collected Data
+    tactic: Collection
+    kill_chain_stage: Collection
+    confidence: 80
+    priority: 80
+    description: Files staged / collected for transfer
+    match:
+      any_contains: ["staging files", "files collected for transfer", "files staged"]
+
+  - id: privilege_escalation
+    name: Privilege escalation
+    technique_id: T1068
+    technique_name: Exploitation for Privilege Escalation
+    tactic: Privilege Escalation
+    kill_chain_stage: Privilege Escalation
+    confidence: 85
+    priority: 80
+    description: Privilege escalation on a host
+    match:
+      any_contains: ["privilege escalation", "escalated privileges"]
+
+  - id: port_scan
+    name: Active port scanning
+    technique_id: T1595
+    technique_name: Active Scanning
+    tactic: Reconnaissance
+    kill_chain_stage: Reconnaissance
+    confidence: 75
+    priority: 70
+    description: Port scan against internal hosts
+    match:
+      any_contains: ["port scan"]

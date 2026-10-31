@@ -1,0 +1,16 @@
+# Sample custom rule (B-4): a rule added by editing a config file, not
+# code. It fires on a phrase that never appears in the demo dataset, so
+# it changes nothing in the default run -- and a log line containing
+# that phrase is detected as soon as this file is present.
+rules:
+  - id: midnight_db_export
+    name: Midnight database export
+    technique_id: T1048
+    technique_name: Exfiltration Over Alternative Protocol
+    tactic: Exfiltration
+    kill_chain_stage: Exfiltration
+    confidence: 75
+    priority: 60
+    description: Database export outside working hours
+    match:
+      any_contains: ["midnight database export"]

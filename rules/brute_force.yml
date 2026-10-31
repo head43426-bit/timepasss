@@ -1,0 +1,21 @@
+# Aggregate rule (FR-2 example): 50 failed logins on one account,
+# then a success, inside 120 minutes, grouped by user+host. Individual
+# failed logins are NOT detections on their own.
+rules:
+  - id: brute_force
+    name: Brute force then success
+    technique_id: T1110
+    technique_name: Brute Force
+    tactic: Credential Access
+    kill_chain_stage: Credential Access
+    confidence: 90
+    priority: 100
+    description: 50 failed logins followed by a success for the same account
+    type: aggregate
+    threshold: 50
+    window_minutes: 120
+    group_by: ["user", "host"]
+    trigger:
+      action_contains: ["login failed"]
+    success:
+      action_contains: ["login success"]
