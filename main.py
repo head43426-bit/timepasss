@@ -154,6 +154,10 @@ def make_handler(holder, rules_dir, db_path):
                         "tables": counts,
                         "top_techniques": [{"stage": b[0], "technique_id": b[1], "technique_name": b[2], "count": b[3]} for b in breakdown]
                     })
+                # Note: Amogh's timess also added a GET /clear route that
+                # wiped the DB on a plain GET. Removed on merge: clearing
+                # must only happen via POST /clear (the button), never by
+                # visiting a URL, a prefetch, or a link.
                 if parts == ["health"]:
                     return self._send_json({"status": "ok",
                                             "detections": store.count_detections(holder.con),
@@ -208,6 +212,14 @@ def make_handler(holder, rules_dir, db_path):
                 return self._send_json({"error": "not found, try / , /health or /incidents"}, 404)
 
         def do_POST(self):
+            if urlparse(self.path).path == "/clear":
+                with LOCK:
+                    try:
+                        holder.con.close()
+                    except Exception:
+                        pass
+                    holder.con = store.connect(db_path, fresh=True)
+                return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
             if urlparse(self.path).path != "/upload":
                 return self._send_json({"error": "not found"}, 404)
             length = int(self.headers.get("Content-Length") or 0)

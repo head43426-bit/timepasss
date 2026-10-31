@@ -233,3 +233,25 @@ function handleFile(file) {
 }
 
 loadIncidents();
+
+const clearBtn = document.getElementById("clearBtn");
+const clearStatus = document.getElementById("clearStatus");
+if (clearBtn) {
+  clearBtn.addEventListener("click", async () => {
+    if (!confirm("Are you sure you want to completely clear the database?")) return;
+    clearBtn.disabled = true;
+    if (clearStatus) clearStatus.textContent = "Clearing...";
+    try {
+      const res = await fetch("/clear", { method: "POST" });
+      const data = await res.json();
+      if (data.status === "ok") {
+        if (clearStatus) clearStatus.textContent = "Database cleared!";
+        setTimeout(() => { window.location.reload(); }, 600);
+      }
+    } catch (e) {
+      alert("Failed to clear database: " + e.message);
+      clearBtn.disabled = false;
+      if (clearStatus) clearStatus.textContent = "";
+    }
+  });
+}
