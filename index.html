@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KILLCHAIN // Full Attack Path Reconstruction — SYNTHETIC DEMO</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#timeline">Skip to timeline</a>
+<div class="topbar">
+  <div class="brand"><span class="brand-mark">◈</span> KILLCHAIN <span class="brand-sub">/ RECON — FULL</span></div>
+  <div class="top-tags">
+    <span class="pill green">SYNTHETIC DATA BY DEFAULT</span>
+    <span class="pill outline">PLUGGABLE ADAPTERS</span>
+    <span class="pill outline">MOCK ENRICHMENT — NO KEY SET</span>
+    <span class="pill outline">NO LIVE SIEM</span>
+  </div>
+</div>
+
+<header class="hero">
+  <div>
+    <p class="eyebrow">CYBERFORGE FULL VERSION • SOC WORKBENCH • 01</p>
+    <h1>Turn raw logs<br>into <span class="green">attack stories.</span></h1>
+    <p class="hero-text">This is the full-features build: ingest your own synthetic or demo logs, build a custom scenario, edit the MITRE-style mapping, and export the story. The simulation's three scenarios are still here as the starting point — everything else is new.</p>
+    <p class="plain-hero">In plain English: this shows, step by step, how a trick or break-in could sneak in, spread, and steal files — using made-up practice data, so a team can stop the real thing.</p>
+    <div class="hero-actions">
+      <button id="replayBtn" class="btn primary">▶ REPLAY ATTACK PATH</button>
+      <button id="resetBtn" class="btn ghost">Reset view</button>
+      <button id="cleanResetBtn" class="btn ghost">Reset demo to clean state</button>
+      <label class="speed">Speed
+        <select id="speedSel" aria-label="Replay speed">
+          <option value="900">Slow</option>
+          <option value="450" selected>Normal</option>
+          <option value="180">Fast</option>
+        </select>
+      </label>
+    </div>
+    <p class="note" id="adapterStatus">Adapter: built-in demo scenarios. Enrichment: mock fallback — no key configured.</p>
+  </div>
+  <div class="stat-grid" id="statGrid"></div>
+</header>
+
+<section class="panel plain-band" id="plainBand" aria-label="Plain English introduction">
+  <div class="plain-band-text">
+    <p class="eyebrow">FOR EVERYONE — NO SECURITY DEGREE NEEDED</p>
+    <h2>In plain English: how a break-in unfolds, step by step.</h2>
+    <p class="plain-lead">Think of it like a burglary with a paper trail. Someone finds a way in, quietly makes a copy of the keys, moves room to room, gathers the valuables, and tries to carry them out. This page replays that story from made-up practice clues — so a team can spot it and stop it before it is real.</p>
+    <div class="tour" role="group" aria-label="Thirty second guided tour">
+      <button class="btn primary tour-btn" data-tour="1">1 · Press play</button>
+      <button class="btn ghost tour-btn" data-tour="2">2 · Jump to the middle</button>
+      <button class="btn ghost tour-btn" data-tour="3">3 · Block a step</button>
+    </div>
+    <p class="p3-note" id="tourStatus" aria-live="polite">Try this in 30 seconds: press play, jump to the middle, then block a step and watch the risk drop.</p>
+  </div>
+  <div class="plain-svg" aria-hidden="true">
+    <svg viewBox="0 0 320 190" role="img" aria-label="Illustration: a trick message leads to a computer, then to a server, then data leaving">
+      <defs><linearGradient id="p3g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2bff88"/><stop offset="1" stop-color="#7dd7ff"/></linearGradient></defs>
+      <rect x="8" y="55" width="62" height="46" rx="10" fill="#0a0f0c" stroke="#2bff88" stroke-width="2"/>
+      <text x="39" y="82" text-anchor="middle" fill="#e8f2ea" font-size="11" font-weight="800">TRICK</text>
+      <text x="39" y="96" text-anchor="middle" fill="#93a89a" font-size="9">message</text>
+      <line class="flow-edge" x1="70" y1="78" x2="96" y2="78"/>
+      <rect x="96" y="45" width="72" height="56" rx="10" fill="#0a0f0c" stroke="#ffb020" stroke-width="2"/>
+      <text x="132" y="72" text-anchor="middle" fill="#e8f2ea" font-size="11" font-weight="800">COMPUTER</text>
+      <text x="132" y="88" text-anchor="middle" fill="#93a89a" font-size="9">gets in</text>
+      <line class="flow-edge" x1="168" y1="73" x2="196" y2="73"/>
+      <rect x="196" y="40" width="62" height="66" rx="10" fill="#0a0f0c" stroke="#ff5a5a" stroke-width="2"/>
+      <text x="227" y="66" text-anchor="middle" fill="#e8f2ea" font-size="11" font-weight="800">SERVER</text>
+      <text x="227" y="82" text-anchor="middle" fill="#93a89a" font-size="9">spreads</text>
+      <text x="227" y="96" text-anchor="middle" fill="#93a89a" font-size="9">gathers</text>
+      <line class="flow-edge" x1="258" y1="73" x2="282" y2="73"/>
+      <circle cx="298" cy="73" r="14" fill="none" stroke="#7dd7ff" stroke-width="2"/>
+      <text x="298" y="77" text-anchor="middle" fill="#e8f2ea" font-size="12" font-weight="800">↗</text>
+      <text x="160" y="150" text-anchor="middle" fill="#93a89a" font-size="11">One story. Every clue in order. Nothing hidden.</text>
+      <text x="160" y="170" text-anchor="middle" fill="#2bff88" font-size="11" font-weight="800">SYNTHETIC / DEMO DATA ONLY</text>
+    </svg>
+  </div>
+</section>
+
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>01 — Choose a scenario</h2>
+    <p>Built-in scenarios are synthetic. Custom scenarios you build below appear here too.</p>
+  </div>
+  <div class="scenario-row" id="scenarioRow"></div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>02 — Ingest: pluggable adapters</h2>
+    <p>Upload, paste, or pull from the mock SIEM. No live connection, no real logs, no keys in this build.</p>
+  </div>
+  <div class="form-grid">
+    <div>
+      <label>Adapter
+        <select id="adapterSelect">
+          <option value="demo">Built-in demo scenarios</option>
+          <option value="file">File upload — JSON / CSV</option>
+          <option value="paste">Paste logs — JSON or pipe-separated</option>
+          <option value="mock-siem">Mock SIEM adapter (simulated)</option>
+        </select>
+      </label>
+    </div>
+    <div>
+      <label>Upload a log file (JSON array or CSV with header)
+        <input id="fileInput" type="file" accept=".json,.csv,.txt">
+      </label>
+    </div>
+    <div class="wide">
+      <label>Paste logs — JSON array, or one event per line as: time | host | user | src | action | detail | stage | mitre | sev
+        <textarea id="pasteArea" class="paste" placeholder='[{"t":"09:12","host":"WS-041","user":"demo.user","src":"endpoint","action":"Macro opened","detail":"Demo only.","stage":"Execution","mitre":"T1204.002 — Malicious File","sev":"high"}]'></textarea>
+      </label>
+    </div>
+  </div>
+  <div class="hero-actions">
+    <button id="loadPasteBtn" class="btn primary">LOAD PASTED LOGS</button>
+    <button id="loadMockBtn" class="btn ghost">LOAD MOCK SIEM INCIDENT</button>
+    <button id="clearCustomBtn" class="btn ghost">CLEAR CUSTOM / UPLOADED CASE</button>
+  </div>
+  <p class="note" id="ingestStatus">No file loaded yet. Use a demo scenario, or ingest synthetic logs above.</p>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>03 — Attack path</h2>
+    <p>Click a node to inspect its evidence. Confidence is computed from shared host, shared user, and time proximity — see the detail card.</p>
+  </div>
+  <div class="chain" id="chain"></div>
+  <div class="graph-wrap" id="graphWrap" aria-label="Animated attack-path graph"></div>
+  <div class="gaps" id="gaps"></div>
+  <p class="note" id="blastLabel"></p>
+</section>
+
+<main class="two-col">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>04 — Timeline &amp; evidence</h2>
+      <div class="filters">
+        <input id="searchInput" type="search" placeholder="Search host, user, event…" aria-label="Search timeline">
+        <select id="stageFilter" aria-label="Filter by stage"><option value="all">All stages</option></select>
+        <select id="sevFilter" aria-label="Filter by severity">
+          <option value="all">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="progress" id="progressBarWrap" role="progressbar" aria-label="Replay progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progressBar"></div></div>
+    <p class="progress-label" id="progressLabel">Ready — press Replay to walk the path.</p>
+    <div class="scrubber-wrap"><label class="scrubber-label" for="scrubber">Walk the attack yourself</label><input id="scrubber" type="range" min="0" max="10" value="0" aria-label="Timeline scrubber: walk the attack step by step"><p class="scrubber-label" id="scrubberLabel">Step 0 — drag to walk the attack</p></div>
+    <ol class="timeline" id="timeline" aria-label="Event timeline"></ol>
+  </section>
+
+  <section class="panel story-panel">
+    <div class="panel-head"><h2>05 — Attack story</h2></div>
+    <div id="story"></div>
+    <div class="detail-card" id="detailCard">
+      <p class="eyebrow">SELECTED EVIDENCE</p>
+      <p>Click any timeline event or path node to see its full detail, confidence, and mock enrichment here.</p>
+    </div>
+    <div class="hero-actions">
+      <button id="exportJsonBtn" class="btn primary">EXPORT STORY — JSON</button>
+      <button id="exportMdBtn" class="btn ghost">EXPORT STORY — MARKDOWN</button>
+    </div>
+    <div class="how">
+      <h3>How linking works (full version)</h3>
+      <ol>
+        <li><b>Ingest</b> — demo, file, paste, or mock SIEM adapter, normalised to one shape.</li>
+        <li><b>Link</b> — shared host, shared user, and time proximity, scored as confidence.</li>
+        <li><b>Map</b> — kill-chain stage + MITRE-style technique, editable in section 06.</li>
+        <li><b>Score</b> — computed risk from severity, coverage, and exfiltration, not a fixed demo number for custom cases.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<section class="three-col">
+  <section class="panel">
+    <div class="panel-head"><h2>06a — Scenario builder</h2></div>
+    <p class="note">Add events to the current case. They become a saved custom scenario in this browser session.</p>
+    <div class="form-grid">
+      <div><label>Time <input id="bTime" type="text" value="12:00"></label></div>
+      <div><label>Host <input id="bHost" type="text" value="WS-200"></label></div>
+      <div><label>User <input id="bUser" type="text" value="demo.user"></label></div>
+      <div><label>Source <input id="bSrc" type="text" value="endpoint"></label></div>
+      <div class="wide"><label>Action <input id="bAction" type="text" value="Suspicious script executed"></label></div>
+      <div class="wide"><label>Detail <input id="bDetail" type="text" value="Synthetic demo event added in the builder."></label></div>
+      <div><label>Stage <select id="bStage"></select></label></div>
+      <div><label>Severity <select id="bSev"><option>critical</option><option selected>high</option><option>medium</option><option>low</option></select></label></div>
+      <div class="wide"><label>MITRE-style technique <input id="bMitre" type="text" value="T1059.001 — PowerShell"></label></div>
+    </div>
+    <div class="hero-actions">
+      <button id="addEventBtn" class="btn primary">ADD EVENT TO CASE</button>
+      <button id="deleteEventBtn" class="btn ghost">DELETE SELECTED EVENT</button>
+    </div>
+    <p class="note" id="builderStatus">Builder ready.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>06b — MITRE mapping editor</h2></div>
+    <p class="note">Edit the technique shown for a stage. This changes the mapping display for the current case; it does not rewrite history or call any live MITRE feed.</p>
+    <div>
+      <label class="note">Stage
+        <select id="mappingStage" style="width:100%;margin-top:6px;background:#0a0f0c;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px"></select>
+      </label>
+    </div>
+    <div style="margin-top:10px">
+      <label class="note">Technique label
+        <input id="mappingTechnique" type="text" style="width:100%;margin-top:6px;background:#0a0f0c;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px">
+      </label>
+    </div>
+    <div class="hero-actions">
+      <button id="saveMappingBtn" class="btn primary">SAVE MAPPING</button>
+      <button id="resetMappingBtn" class="btn ghost">RESET MAPPINGS</button>
+    </div>
+    <div id="mappingList" style="margin-top:14px"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>06c — Enrichment &amp; keys</h2></div>
+    <p class="note">Enrichment in this build is <b>mock only</b>. No key is read from the browser, and no live API is called.</p>
+    <p class="note">To add a key later, in a private server build only: copy <code>.env.example</code> to <code>.env</code>, fill in your own key, and never commit <code>.env</code>. See README.md. Never paste a real key into this web page or into chat.</p>
+    <p class="status" id="enrichmentStatus">Status: mock fallback — no key configured.</p>
+    <p class="note">When a key is configured in a future server build, the same enrichment slot should return the maintained MITRE technique detail and threat-intel context for the selected event's technique/host. Until then, the detail card shows a mock note so judges can see where enrichment belongs.</p>
+  </section>
+</section>
+
+
+<section class="panel" id="plainPanel">
+  <div class="panel-head"><h2>What happened, in plain English</h2><p>No jargon. Each step says what it means in everyday words, then shows the evidence behind it.</p></div>
+  <div id="plainStory"></div>
+</section>
+<section class="panel" id="soWhatPanel">
+  <div class="panel-head"><h2>So what?</h2><p>The business version: what was touched, what could be taken, and what stops it next.</p></div>
+  <div id="soWhat"></div>
+</section>
+<section class="panel" id="whatifPanel">
+  <div class="panel-head"><h2>What if we stop one step?</h2><p>Pick a step to block. Risk and blast radius update live — this is how a defender proves a control is worth it.</p></div>
+  <label class="p3-label" for="whatifSelect">Block this step
+    <select id="whatifSelect" aria-label="Choose a step to block in the what-if"></select>
+  </label>
+  <div id="whatifResult" aria-live="polite"></div>
+</section>
+<section class="panel" id="comparePanel">
+  <div class="panel-head"><h2>Compare the stories</h2><p>All scenarios side by side, in the same numbers. Click Open to load one.</p></div>
+  <div id="compareTable"></div>
+</section>
+<section class="panel" id="playbookPanel">
+  <div class="panel-head"><h2>Containment playbook — your checklist</h2><p>Generated from this attack path. Tick steps off as you would do them; this checklist changes no real system.</p></div>
+  <div id="playbookList"></div>
+  <div id="playbookProgress" aria-live="polite"></div>
+</section>
+
+
+<section class="panel" id="p4Panel">
+  <div class="panel-head"><h2>Pass 4 — Follow the attack, step by step</h2><p>Three steps, in order: detect and label, connect the steps, explain and look ahead. Everything below is synthetic and runs in this browser only.</p></div>
+
+  <h3>Step 1 — Detect and label</h3>
+  <p class="p3-note">A detection engine reads each event and checks it against a rule catalogue (below). A flagged event gets a MITRE ATT&amp;CK technique, a kill-chain stage, a confidence score, and a plain-words reason naming the matched word. Anything below the threshold is <b>not</b> labelled an attack — it is counted as benign and skipped. In the full version, the MITRE editor still works: editing a stage's technique changes what Step 1 shows for that stage.</p>
+  <div class="p4-controls">
+    <label class="p3-label" for="p4Threshold">Confidence threshold <span id="p4ThresholdLabel">70%</span>
+      <input id="p4Threshold" type="range" min="50" max="90" step="5" value="70" aria-label="Confidence threshold">
+    </label>
+    <label class="p3-label" for="p4Window">Direct link window (minutes)
+      <input id="p4Window" type="number" min="5" max="1440" value="60" aria-label="Direct link window in minutes">
+    </label>
+    <label class="p3-label" for="p4CredWindow">Credential / host-continuity window (minutes)
+      <input id="p4CredWindow" type="number" min="60" max="10080" value="2880" aria-label="Credential window in minutes">
+    </label>
+  </div>
+  <p class="p3-note">Defaults: direct window 60 minutes (a hop to another computer must be close in time and share a host or IP); credential window 2,880 minutes (48 hours — the same account reused days later, or the same computer across a long quiet gap, still links, but is labelled as a credential or host-continuity hop, never as a direct hop). Widening either window links more, but also risks joining two separate incidents — the link kind column shows you which kind each link is.</p>
+  <button id="p4DetectBtn" type="button">Run detection on current case</button>
+  <button id="p4BenignBtn" type="button">Show benign examples</button>
+  <div id="p4Detection" aria-live="polite"></div>
+  <div id="p4Benign" aria-live="polite"></div>
+  <details><summary>Rule catalogue — what the engine looks for</summary><div id="p4Rules"></div></details>
+
+  <h3>Step 2 — Connect the steps</h3>
+  <p class="p3-note">Flagged events are linked into <b>one</b> attack path. Link reasons are shown per edge: shared host, shared IP, same account reused, host continuity, or a credential chain (credentials obtained earlier in the path, then used on a new host). Events with no link to the path are left out — never invented into it. Memory design: events are processed in batches, only linked path nodes and per-key counts are kept, and the raw-event buffer is capped at 200 events. Benign events are counted, then dropped, so kept memory does not grow with the size of the log.</p>
+  <div id="p4Linking" aria-live="polite"></div>
+
+  <h3>Step 3 — Explain and look ahead</h3>
+  <p class="p3-note">Top row of the graph: computers. Bottom row: accounts. A line means that account acted on that computer in the linked path. Click or tab to a node (Enter/Space) to see its evidence. "What the attacker could reach next" is guessed only from the synthetic topology (same subnet, a service account used on server systems, a cloud API key created in the path) — if no topology covers a host, the panel says so instead of guessing.</p>
+  <div id="p4Graph" aria-live="polite"></div>
+  <div id="p4Next" aria-live="polite"></div>
+  <div id="p4Narrative" aria-live="polite"></div>
+
+  <h3>Large log test — find a concealed attack in thousands of events</h3>
+  <p class="p3-note"><b>Honest label:</b> this is a simulated scale test, not a real 50 GB file. Synthetic events are generated in batches (benign everyday activity plus 9 attack events spread over 3 days, hidden in the noise), then processed in batches of 500 with a progress bar, throughput, and the memory counters above. Only the linked path nodes and per-key aggregates are kept. The browser never holds a whole 50 GB file in memory, and this demo does not claim it does. The concealed attack links only because the same service account is reused across days (credential hops) and the attack stays on one workstation across a long gap (host continuity) — at a 60-minute direct window alone, it would not link, and the demo says so.</p>
+  <label class="p3-label" for="p4LargeSize">Synthetic log size
+    <select id="p4LargeSize" aria-label="Synthetic log size">
+      <option value="1000">1,000 benign + 9 attack</option>
+      <option value="5000" selected>5,000 benign + 9 attack</option>
+      <option value="10000">10,000 benign + 9 attack</option>
+    </select>
+  </label>
+  <button id="p4LargeBtn" type="button">Run large log test</button>
+  <div class="progress" role="progressbar" aria-label="Large log test progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p4LargeBarWrap"><div id="p4LargeBar" style="height:100%;width:0;background:var(--green)"></div></div>
+  <p id="p4LargeStatus" class="p3-note" aria-live="polite">Not run yet.</p>
+  
+  <h3>Chunked file processor — full version only</h3>
+  <p class="p3-note"><b>Demo / synthetic files only — do not upload real production logs.</b> Pick a JSON-lines file (one JSON event per line) or a pipe-separated file (<code>t|host|user|src|action|detail|stage|mitre|sev</code>). The file is read in 64 KB slices, line by line; the whole file is never held as one string, nothing is stored or sent anywhere, and the same detect + link engine produces the same one-narrative output (Where it began / What the attacker did, in order / Which systems they can reach next). A sample: save the built-in scenario's events as one JSON object per line and upload that.</p>
+  <label class="p3-label" for="p4ChunkFile">Synthetic log file
+    <input id="p4ChunkFile" type="file" accept=".json,.jsonl,.txt,.log" aria-label="Synthetic log file to process in chunks">
+  </label>
+  <button id="p4ChunkBtn" type="button">Process file in chunks</button>
+  <div class="progress" role="progressbar" aria-label="Chunked file progress" aria-valuemin="0" aria-valuemax="100"><div id="p4ChunkBar" style="height:100%;width:0;background:var(--green)"></div></div>
+  <p id="p4ChunkStatus" class="p3-note" aria-live="polite">No file processed yet.</p>
+
+</section>
+
+<footer>
+  <p><b>SYNTHETIC / DEMO BY DEFAULT.</b> Built-in scenarios and mock-SIEM data are invented. Uploaded/pasted logs are your own responsibility: use synthetic or authorised demo logs only, never real production logs, credentials, or personal data. No live SIEM connection, no real attack, no real key in this build.</p>
+  <p>See <code>README.md</code> and <code>WORKFLOW.md</code> for the simulation-vs-full differences and the adapter design.</p>
+</footer>
+
+<script src="adapters.js"></script>
+<script src="app.js"></script>
+<script src="pass3.js"></script>
+<script src="pass4.js"></script>
+</body>
+</html>

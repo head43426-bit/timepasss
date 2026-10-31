@@ -44,6 +44,22 @@ docker compose up --build
 - `main.py` — serves the frontend and the API, and runs uploads
   through the real pipeline.
 
+## Everything from before, also in this repo
+
+- `showcase.html` — the devinthehood-style showcase dashboard
+  (split cream/black, red seam, chapters, mission/loadout).
+  Open it directly in a browser.
+- `index.html` + `app.js` + `pass3.js` + `pass4.js` + `styles.css`
+  + `adapters.js` — the original browser demo with scenarios,
+  plain-English story, what-if blocker, timeline scrubber and
+  attack graph. Open `index.html` directly, no server needed.
+- `dashboard.html` — single-file browser-only upload dashboard
+  (no Python needed, just double-click it).
+- `web-app/` — reference source of the hosted full functional app
+  (TypeScript port, not standalone runnable; run `main.py` for
+  the real thing).
+- `WORKFLOW.md` — full workflow and design breakdown.
+
 Hindi reports use the Sarvam API only when `SARVAM_API_KEY` is
 set in a private `.env`; without a key they are a clearly labelled
 template, never a claimed real translation.
