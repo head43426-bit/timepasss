@@ -187,3 +187,34 @@ template, never a claimed real translation.
    Tamil, Telugu and Malayalam print correctly. API: the same
    translation is available as
    `GET /incidents/{id}/report?lang=hi|ta|te|ml` (English: `?lang=en`).
+
+## Severity, Low tier, and intrinsic priority (2026-11-01)
+
+- `engine/severity.py` is the single place severity is decided.
+  `normalize_severity()` accepts any casing and Fortinet level
+  synonyms (`critical`/`CRITICAL` -> Critical, `notice`/
+  `information` -> Low, etc., including the `.title()` rule), so a
+  lowercase "critical" no longer falls through to the Medium weight.
+  Weight lookups fall back to Low (3), never Medium (10).
+- Missing severity no longer defaults to Medium at the parser,
+  detector, or store. A matched detection with no severity
+  information is Low, so single probes, blocked notice events, and
+  benign scans stay in the Low tier (risk 0-39) instead of being
+  pushed to Medium (base 40).
+- Intrinsic priority: the final severity is the higher of the log
+  line's own severity and the MITRE technique's intrinsic severity
+  (Critical: T1003 LSASS/credential dumping, T1048 exfiltration,
+  T1485/T1486/T1490 destructive impact; High: T1558 Kerberoasting,
+  T1071 C2, T1021 remote services, T1059 PowerShell, T1204
+  malicious file, T1505 web shell, T1136 create account, T1053
+  scheduled task, T1070 log clearing, T1566 phishing). Recon /
+  scanning techniques are deliberately not in that map, so a probe
+  stays Low. Exception: if the action was blocked/denied/dropped,
+  the attack did not succeed, so intrinsic priority does not upgrade
+  it and the log line's severity stands.
+- The dashboard queue tiers are now All / Critical / High / Medium /
+  Low, matching the backend risk tiers (90-100 / 70-89 / 40-69 /
+  0-39). Low is its own tier, not folded into Medium or Elevated.
+- Theme toggle is now sun/moon SVG icons (not text, not emojis)
+  beside GitHub on `/` and `/app`; the icons cross-fade and rotate
+  over 0.5s when the theme changes, in both directions.

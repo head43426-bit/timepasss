@@ -29,6 +29,8 @@ from __future__ import annotations
 import networkx as nx
 from typing import Dict, List
 
+from .severity import SEVERITY_WEIGHTS as _SEV_W, normalize_severity, weight_of
+
 LINK_WINDOW_SECONDS = 48 * 3600
 SEVERITY_WEIGHTS = {"Critical": 40, "High": 25, "Medium": 10, "Low": 3}
 
@@ -70,9 +72,7 @@ def risk_score(detections: List[Dict]) -> float:
     100 (Critical). Count adds a little, never everything."""
     if not detections:
         return 0.0
-    _weights = SEVERITY_WEIGHTS
-    _worst = max((_weights.get(d.get("severity", "Medium"), 10)
-                  for d in detections), default=10)
+    _worst = max((weight_of(d.get("severity", "")) for d in detections), default=3)
     _base, _ceil = ((90, 100) if _worst >= 40 else
                     (70, 89) if _worst >= 25 else
                     (40, 69) if _worst >= 10 else
@@ -389,8 +389,7 @@ def observed_blast_radius(detections: List[Dict], edges: List[Dict]) -> Dict:
     _dsts = {e.get("to") for e in _path_edges if e.get("to")}
     _srcs = {e.get("from") for e in _path_edges if e.get("from")}
     _stages = {d.get("kill_chain_stage", "") for d in detections} - {""}
-    _worst = max((SEVERITY_WEIGHTS.get(d.get("severity", "Medium"), 10)
-                  for d in detections), default=0)
+    _worst = max((weight_of(d.get("severity", "")) for d in detections), default=0)
     _reach = round(25 * min(1.0, len(_dsts) / 50.0), 1)
     _spread = round(25 * min(1.0, len(_srcs) / 10.0), 1)
     _depth = round(25 * (len(_stages) / len(KILL_CHAIN_ORDER)), 1)
@@ -424,8 +423,8 @@ def observed_next_reach(edges: List[Dict], technique_severity: Dict) -> List[Dic
         if not _dst or _dst in _srcs:
             continue
         _tid = e.get("technique_id", "")
-        _sev = technique_severity.get(_tid, "Medium")
-        _w = SEVERITY_WEIGHTS.get(_sev, 10)
+        _sev = technique_severity.get(_tid, "")
+        _w = weight_of(_sev)
         _cur = _frontier.get(_dst)
         if _cur is None or _w > _cur["_w"]:
             _frontier[_dst] = {"host": _dst, "_w": _w, "technique_id": _tid,

@@ -29,6 +29,8 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 
+from .severity import normalize_severity
+
 _TIME_FORMATS = ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M")
 
 
@@ -108,7 +110,11 @@ def _normalise(raw: Dict) -> Dict:
         "detail": str(pick("detail", "message", "description", "msg")),
         "stage_hint": str(pick("stage", "kill_chain_stage")),
         "technique_hint": str(pick("technique", "mitre", "technique_id")),
-        "severity": str(pick("severity", "sev", "level", default="Medium")),
+        # Severity is normalised here (any casing / synonym -> Title
+        # Case) and left "" when the line carries none, instead of
+        # defaulting to Medium. The detector fills it in (intrinsic
+        # technique priority, else Low) — see engine/severity.py.
+        "severity": normalize_severity(pick("severity", "sev", "level")),
     }
 
 

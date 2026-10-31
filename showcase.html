@@ -59,6 +59,16 @@ h1{margin:12px 0 16px;font-size:52px;line-height:1.05;letter-spacing:-.03em}
 footer{border-top:1px solid var(--border);margin-top:64px;padding:24px;max-width:1020px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#78716c}
 footer{color:var(--muted)}footer a{text-decoration:none}
 @media(max-width:700px){h1{font-size:36px}.stats,.cards,.steps{grid-template-columns:1fr}.nav-links{display:none}.wrap{padding-top:40px}}
+
+/* Theme icon button: sun / moon SVGs (not emojis) cross-fade and
+   rotate when the theme changes — the animation is the data-theme
+   swap itself, so it runs on every toggle, both directions. */
+.theme-btn{position:relative;width:38px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
+.theme-icon{position:absolute;width:20px;height:20px;transition:transform .5s ease,opacity .5s ease}
+[data-theme="light"] .icon-sun{opacity:0;transform:rotate(-90deg) scale(.5)}
+[data-theme="light"] .icon-moon{opacity:1;transform:rotate(0deg) scale(1)}
+[data-theme="dark"] .icon-sun{opacity:1;transform:rotate(0deg) scale(1)}
+[data-theme="dark"] .icon-moon{opacity:0;transform:rotate(90deg) scale(.5)}
 </style>
 </head>
 <body>
@@ -70,7 +80,7 @@ footer{color:var(--muted)}footer a{text-decoration:none}
       <a href="/app">Incident Workspace</a>
     </div>
     <a class="gh" href="https://github.com/head43426-bit/mitigata-ask">GitHub</a>
-    <button id="themeBtn" type="button" class="gh">Dark mode</button>
+    <button id="themeBtn" type="button" class="gh theme-btn" aria-label="Switch to dark mode"><svg class="theme-icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></g></svg><svg class="theme-icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" fill="currentColor"/></svg></button>
   </div>
 </nav>
 
@@ -111,17 +121,6 @@ footer{color:var(--muted)}footer a{text-decoration:none}
     </div>
   </section>
 
-  <section class="section">
-    <p class="eyebrow">How it works</p>
-    <h2>Four steps, your logs only</h2>
-    <div class="steps">
-      <div class="step"><b>01</b><p>Upload a .log file in the workspace.</p></div>
-      <div class="step"><b>02</b><p>ASK detects and labels it — MITRE + kill-chain stage.</p></div>
-      <div class="step"><b>03</b><p>Steps link into incidents, worst risk first.</p></div>
-      <div class="step"><b>04</b><p>Read the report, graph and what to block first.</p></div>
-    </div>
-    <div class="note">Honest limit: ASK reads logs. It has no agent on your hosts and no firewall control, so it cannot actively block — protection is concrete per-technique actions, not a promise to stop every attack. Use only synthetic or authorised logs, never real production logs or credentials.</div>
-  </section>
 </main>
 
 <footer>
@@ -137,7 +136,7 @@ footer{color:var(--muted)}footer a{text-decoration:none}
       document.documentElement.setAttribute("data-theme", theme);
       try { localStorage.setItem("ask_theme", theme); } catch (e) {}
       var btn = document.getElementById("themeBtn");
-      if (btn) btn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+      if (btn) btn.setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
     }
     var saved = null;
     try { saved = localStorage.getItem("ask_theme"); } catch (e) {}

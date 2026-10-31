@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import graph as graph_mod
+from .severity import normalize_severity, weight_of
 from . import report as report_mod
 from . import store
 from .live import Tailer
@@ -58,9 +59,10 @@ def _incident_with_extras(con, incident_id):
                 "JOIN incident_detections idt ON idt.detection_id = d.id "
                 "WHERE idt.incident_id = ? AND d.technique_id <> ''",
                 [incident_id]).fetchall():
-            _w = graph_mod.SEVERITY_WEIGHTS.get(_sev, 10)
+            _sev = normalize_severity(_sev) or "Low"
+            _w = weight_of(_sev)
             _cur = _tech_sev.get(_tid)
-            if _cur is None or _w > graph_mod.SEVERITY_WEIGHTS.get(_cur, 10):
+            if _cur is None or _w > weight_of(_cur):
                 _tech_sev[_tid] = _sev
     except Exception:
         _tech_sev = {}

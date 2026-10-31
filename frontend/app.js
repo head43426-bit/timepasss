@@ -5,7 +5,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   try { localStorage.setItem("ask_theme", theme); } catch (e) {}
   var btn = document.getElementById("themeBtn");
-  if (btn) btn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+  if (btn) btn.setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
 }
 (function initTheme() {
   var saved = null;
@@ -58,25 +58,40 @@ async function loadIncidents() {
   // per tier showing its count, plus All. List is sorted by risk
   // descending, then steps descending, so the worst incidents are
   // first instead of a flat 700-card wall in id order.
-  // Screenshot tiers: Critical / High / Elevated (Medium + Low are
-  // grouped as Elevated, so the queue stays at 4 buttons, not 5).
-  function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : "Elevated"; }
+  // Tiers match the backend risk_tier(): Critical 90-100, High
+  // 70-89, Medium 40-69, Low 0-39. Low is its own tier now — a
+  // Low-severity incident must never be folded into Medium/Elevated.
+  function tierOf(s) { return s >= 90 ? "Critical" : s >= 70 ? "High" : s >= 40 ? "Medium" : "Low"; }
   var sorted = list.slice().sort(function(a, b) {
     return (b.risk_score - a.risk_score) || (b.detection_count - a.detection_count) || (a.id - b.id);
   });
-  var counts = { All: sorted.length, Critical: 0, High: 0, Elevated: 0 };
+  var counts = { All: sorted.length, Critical: 0, High: 0, Medium: 0, Low: 0 };
   sorted.forEach(function(i) { counts[tierOf(i.risk_score)] += 1; });
   if (!state.tierFilter) state.tierFilter = "All";
   window.setTierFilter = function(t) { state.tierFilter = t; loadIncidents(); };
   var shown = state.tierFilter === "All" ? sorted : sorted.filter(function(i) { return tierOf(i.risk_score) === state.tierFilter; });
-  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Elevated"].map(function(t) {
+  var filterHtml = "<div style='margin:8px 0'>" + ["All", "Critical", "High", "Medium", "Low"].map(function(t) {
     var sel = state.tierFilter === t ? " style='background:#f0a832;color:#000;font-weight:bold'" : "";
     return "<button class=btn onclick=\"setTierFilter('" + t + "')\"" + sel + ">" + t + " (" + counts[t] + ")</button> ";
   }).join("") + "</div>";
+  function timeAgo(ts) {
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return ts || "";
+    var mins = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + " min ago";
+    if (mins < 1440) return Math.round(mins / 60) + " h ago";
+    return Math.round(mins / 1440) + " d ago";
+  }
+  var tierColor = { Critical: "#e1251b", High: "#f97316", Medium: "#d97706", Low: "#6b7280" };
   document.getElementById("incidents").innerHTML = (filterHtml + (shown.length ? shown.map(function(inc) {
-    return "<button class=inc data-id=" + inc.id + "><b>Incident " + inc.id + " — " + tierOf(inc.risk_score) + " · risk " + inc.risk_score + "/100</b> &middot; " +
-      inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged<br><small>" +
-      esc(inc.title) + " &middot; " + esc(inc.hosts.join(", ")) + "</small></button>";
+    var tier = tierOf(inc.risk_score);
+    return "<button class=inc data-id=" + inc.id + " data-tier=\"" + tier + "\">" +
+      "<span class=inc-score style='color:" + tierColor[tier] + "'>" + inc.risk_score + "<small>/100</small></span>" +
+      "<span class=inc-body><b>INC-" + inc.id + " — " + esc(inc.title) + "</b>" +
+      "<span class=inc-meta>" + esc(inc.hosts.join(", ")) + " &middot; " + tier + " &middot; " +
+      inc.detection_count + " steps &middot; " + inc.merged_alerts + " raw alerts merged</span><br>" +
+      "<span class=inc-meta>" + esc(inc.start_time || "") + " &middot; " + timeAgo(inc.start_time) + "</span></span></button>";
   }).join("") : "<p>No " + esc(state.tierFilter) + " incidents in this file. Try All.</p>"));
   document.querySelectorAll(".inc").forEach(function(el) {
     el.addEventListener("click", function() { selectIncident(parseInt(el.getAttribute("data-id"), 10)); });
@@ -107,6 +122,28 @@ async function selectIncident(id) {
   if (cn) cn.textContent = "Quarantine here is a dashboard simulation only — no real host is isolated and no firewall rule is changed.";
   var bs = document.getElementById("briefStatus");
   if (bs) bs.textContent = "Incident #" + path.id + " — " + esc(path.title);
+  var br = document.getElementById("briefRisk");
+  if (br) br.textContent = "Risk " + path.risk_score + "/100";
+  var sn = document.getElementById("selectedNodeLabel");
+  if (sn) sn.textContent = "None";
+  var sv = document.getElementById("severBtn");
+  if (sv) { sv.disabled = true; sv.textContent = "Sever & Isolate"; }
+  // Flow Log Data table: real timeline steps only (first 20 shown).
+  // Columns are Time / Src IP-or-Host / Technique / Stage / Flag —
+  // the backend timeline has no destination port/protocol per step,
+  // so those are not invented here.
+  var fr = document.getElementById("flowRows");
+  var fc = document.getElementById("flowRowCount");
+  if (fr) {
+    var rows = (path.timeline || []).slice(0, 20);
+    fr.innerHTML = rows.length ? rows.map(function(s) {
+      return "<tr><td>" + esc(s.time || "") + "</td><td>" + esc(s.ip || s.host || "") + "</td><td>" +
+        esc(s.technique_id || "") + " " + esc(s.technique_name || "") + "</td><td>" +
+        esc(s.kill_chain_stage || "") + "</td><td>" + esc(s.severity || "") + "</td></tr>";
+    }).join("") : "<tr><td colspan=\"5\" class=\"hint\">No flow rows for this incident.</td></tr>";
+    if (fc) fc.textContent = fmtNum(path.timeline_total || path.detection_count || 0) + " rows" +
+      (rows.length < (path.timeline_total || path.detection_count || 0) ? " (first 20 shown)" : "");
+  }
   document.querySelectorAll(".inc").forEach(function(el) {
     el.classList.toggle("sel", parseInt(el.getAttribute("data-id"), 10) === id);
   });
@@ -303,7 +340,8 @@ function renderGraph(path) {
       "<rect x='" + p.x + "' y='" + p.y + "' width='" + BW + "' height='" + BH + "' rx='10' fill='" + fill + "' stroke='" + stroke + "' stroke-width='3'/>" +
       "<text x='" + (p.x + 10) + "' y='" + (p.y + 22) + "' class='nlabel'>" + esc(label) + "</text>" +
       "<text x='" + (p.x + 10) + "' y='" + (p.y + 40) + "' class='ntype'>" + esc(sub.length > 24 ? sub.slice(0, 23) + "…" : sub) + "</text>" +
-      "<text x='" + (p.x + 10) + "' y='" + (p.y + 57) + "' class='nsev' fill='" + stroke + "'>" + esc(sev.toUpperCase()) + "</text></g>";
+      "<text x='" + (p.x + 10) + "' y='" + (p.y + 57) + "' class='nsev' fill='" + stroke + "'>" + esc(sev.toUpperCase()) + "</text>" +
+      (n.count ? "<text x='" + (p.x + BW - 10) + "' y='" + (p.y + 22) + "' class='nsev' fill='" + stroke + "' text-anchor='end'>×" + n.count + "</text>" : "") + "</g>";
   });
   svg += "</svg>";
   var techOpts = ["All"];
@@ -519,6 +557,10 @@ function showNodeSteps(path, nodeId) {
   document.querySelectorAll(".gnode-wrap").forEach(function(el) {
     el.classList.toggle("sel", el.getAttribute("data-node") === nodeId);
   });
+  var sn = document.getElementById("selectedNodeLabel");
+  if (sn) sn.textContent = nodeId;
+  var sv = document.getElementById("severBtn");
+  if (sv) { sv.disabled = false; sv.textContent = "Sever & Isolate"; }
   var steps = path.timeline.map(function(s, i) { return { s: s, i: i }; }).filter(function(x) {
     return x.s.host === nodeId || x.s.user === nodeId || x.s.technique_id === nodeId;
   });
@@ -565,6 +607,8 @@ function showStep(path, i) {
 async function showReport() {
   var langSel = document.getElementById("reportLang");
   var lang = langSel ? langSel.value : "en";
+  var pdfBtn2 = document.getElementById("pdfBtn");
+  if (pdfBtn2 && langSel) pdfBtn2.textContent = "Generate Threat Report (PDF) – " + langSel.options[langSel.selectedIndex].text;
   var box = document.getElementById("report");
   var warn = document.getElementById("reportWarning");
   if (!state.selected) return;
@@ -882,6 +926,55 @@ var zOut = document.getElementById("zoomOut");
 if (zOut) zOut.addEventListener("click", function() { zoomStep(-0.2); });
 var zReset = document.getElementById("zoomReset");
 if (zReset) zReset.addEventListener("click", function() { if (window.setGraphFilter) window.setGraphFilter("zoom", 1); });
+
+// Pan button + drag-to-pan on the graph box (reference header:
+// "< Pan >" — dragging the canvas background scrolls it).
+var panBtn = document.getElementById("panBtn");
+var graphBox = document.getElementById("graphMap");
+var panState = null;
+if (panBtn) {
+  panBtn.addEventListener("click", function() {
+    state.panMode = !state.panMode;
+    panBtn.classList.toggle("active", !!state.panMode);
+    if (graphBox) graphBox.classList.toggle("panning", !!state.panMode);
+    panBtn.textContent = state.panMode ? "Panning" : "Pan";
+  });
+}
+if (graphBox) {
+  graphBox.addEventListener("mousedown", function(e) {
+    if (!state.panMode) return;
+    panState = { x: e.clientX, y: e.clientY, sl: graphBox.scrollLeft, st: graphBox.scrollTop };
+  });
+  graphBox.addEventListener("mousemove", function(e) {
+    if (!panState) return;
+    graphBox.scrollLeft = panState.sl - (e.clientX - panState.x);
+    graphBox.scrollTop = panState.st - (e.clientY - panState.y);
+  });
+  window.addEventListener("mouseup", function() { panState = null; });
+}
+var refreshBtn = document.getElementById("refreshBtn");
+if (refreshBtn) refreshBtn.addEventListener("click", function() { loadIncidents(); });
+var uploadBtn = document.getElementById("uploadBtn");
+if (uploadBtn) uploadBtn.addEventListener("click", function() { document.getElementById("file").click(); });
+var flowFilter = document.getElementById("flowFilter");
+if (flowFilter) {
+  flowFilter.addEventListener("input", function() {
+    var q = flowFilter.value.toLowerCase();
+    document.querySelectorAll("#flowRows tr").forEach(function(row) {
+      row.style.display = !q || row.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
+    });
+  });
+}
+var severBtn = document.getElementById("severBtn");
+if (severBtn) {
+  severBtn.addEventListener("click", function() {
+    var node = document.getElementById("selectedNodeLabel");
+    severBtn.textContent = "Severed & Quarantined";
+    severBtn.disabled = true;
+    var note = document.getElementById("corridorNote");
+    if (note) note.textContent = "Node " + (node ? node.textContent : "") + " marked quarantined in this dashboard only. No real host was isolated and no firewall rule was changed.";
+  });
+}
 
 // Corridor button: dashboard simulation only, never a real isolation.
 var corridorBtn = document.getElementById("corridorBtn");

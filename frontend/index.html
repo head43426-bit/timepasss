@@ -27,7 +27,7 @@
   </div>
   <div class="nav-actions">
     <a class="gh" href="https://github.com/head43426-bit/mitigata-ask">GitHub</a>
-    <button id="themeBtn" type="button" class="gh">Dark mode</button>
+    <button id="themeBtn" type="button" class="gh theme-btn" aria-label="Switch to dark mode"><svg class="theme-icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></g></svg><svg class="theme-icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" fill="currentColor"/></svg></button>
   </div>
 </nav>
 
@@ -52,10 +52,12 @@
       <button type="button" class="mode-btn active" data-mode="kill">Kill Chain</button>
       <button type="button" class="mode-btn" data-mode="quantum">Quantum Walk</button>
       <span class="mode-spacer"></span>
+      <button type="button" class="zoom-btn" id="panBtn" aria-label="Toggle drag to pan">Pan</button>
       <button type="button" class="zoom-btn" id="zoomOut" aria-label="Zoom out">−</button>
       <span class="zoom-label" id="zoomLabel">100%</span>
       <button type="button" class="zoom-btn" id="zoomIn" aria-label="Zoom in">+</button>
       <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
+      <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
     </div>
 
     <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
@@ -67,6 +69,19 @@
     <h3>Attack graph map — built by NetworkX</h3>
     <p class="hint">Nodes are the real hosts and users from the backend NetworkX graph, connected by its edges. Click a node to see its steps. Hosts are squares, users are circles. Scroll inside the box to pan; use the zoom controls above.</p>
     <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"><p class="hint">Topology canvas empty — Awaiting flow telemetry. Upload a log or load the sample on the right.</p></div>
+
+    <div class="legend-bar">
+      <span class="legend-title">Legend:</span>
+      <span class="legend-item"><i class="dot dot-critical"></i>Critical</span>
+      <span class="legend-item"><i class="dot dot-high"></i>High</span>
+      <span class="legend-item"><i class="dot dot-medium"></i>Medium</span>
+      <span class="legend-item"><i class="dot dot-low"></i>Low</span>
+      <span class="legend-item"><i class="dot dot-user"></i>User</span>
+      <span class="legend-item"><i class="dot dot-technique"></i>Technique</span>
+      <span class="legend-spacer"></span>
+      <span>Selected Node: <b id="selectedNodeLabel">None</b></span>
+      <button type="button" class="btn ghost" id="severBtn" disabled>Sever &amp; Isolate</button>
+    </div>
 
     <h3>Attack path</h3>
     <div id="path" class="path"></div>
@@ -82,13 +97,14 @@
   <!-- RIGHT: Data, Sarvam brief, look-ahead, paths -->
   <aside class="col col-right">
     <section class="card">
-      <h2>Flow Log Data</h2>
+      <h2>Flow Log Data <span class="row-count" id="flowRowCount">0 rows</span></h2>
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
         <strong>Drop your .log file here</strong><br>or click to choose a file
         <input type="file" id="file" accept=".log,.txt" hidden>
       </div>
       <div class="btn-row">
-        <button id="demoBtn" type="button" class="btn">Demo</button>
+        <button id="uploadBtn" type="button" class="btn">Upload Logs</button>
+        <button id="demoBtn" type="button" class="btn ghost">Demo</button>
         <button id="sampleBtn" type="button" class="btn ghost">Load Sample</button>
         <button id="tinyBtn" type="button" class="btn ghost">Tiny Demo (5 rows)</button>
       </div>
@@ -100,8 +116,15 @@
         <p class="hint">This slab changes as the file is read. Each card is an attack found so far, what gave it away, why it matters, and how it helps you.</p>
         <div id="liveTellsList"></div>
       </div>
+      <input id="flowFilter" type="search" placeholder="Filter logs by IP, technique, stage, flag..." aria-label="Filter flow log rows">
+      <div class="table-wrap">
+        <table class="flow-table">
+          <thead><tr><th>Time</th><th>Src IP / Host</th><th>Technique</th><th>Stage</th><th>Flag</th></tr></thead>
+          <tbody id="flowRows"><tr><td colspan="5" class="hint">Load data to see flow rows.</td></tr></tbody>
+        </table>
+      </div>
       <div class="btn-row">
-        <button id="clearBtn" type="button" class="btn danger">Clear Database</button>
+        <button id="clearBtn" type="button" class="btn danger">Delete Data</button>
         <span id="clearStatus" class="hint"></span>
       </div>
       <details>
@@ -116,11 +139,11 @@
     </section>
 
     <section class="card">
-      <h2>Sarvam AI Forensic Brief</h2>
+      <h2>Sarvam AI Forensic Brief <span class="row-count" id="briefRisk"></span></h2>
       <p class="hint" id="briefStatus">No incident selected yet. Pick an incident, then choose a report language.</p>
-      <label class="lang-label">Report language:
+      <label class="lang-label">Select Report Language:
         <select id="reportLang" aria-label="Report language">
-          <option value="en">English</option>
+          <option value="en">English (US)</option>
           <option value="hi">Hindi</option>
           <option value="ta">Tamil</option>
           <option value="te">Telugu</option>
@@ -131,9 +154,9 @@
       <p class="warn" id="reportWarning" hidden></p>
       <p class="btn-row">
         <button class="btn" id="copyBtn" disabled>Copy report</button>
-        <button class="btn ghost" id="pdfBtn" disabled>Generate PDF</button>
+        <button class="btn ghost" id="pdfBtn" disabled>Generate Threat Report (PDF) – English (US)</button>
       </p>
-      <p class="hint">Generate PDF opens the report in a print view — choose “Save as PDF” there. That is how Hindi, Tamil, Telugu and Malayalam text prints correctly, using your system fonts.</p>
+      <p class="hint">Generate Threat Report (PDF) opens the report in a print view — choose “Save as PDF” there. That is how Hindi, Tamil, Telugu and Malayalam text prints correctly, using your system fonts.</p>
     </section>
 
     <section class="card">

@@ -34,6 +34,8 @@ from typing import Dict, List, Optional
 
 import yaml
 
+from .severity import detection_severity, normalize_severity
+
 
 @dataclass
 class Rule:
@@ -110,8 +112,11 @@ def _match_conditions(event: Dict, cond: Dict) -> bool:
         return False
     if "action_equals" in cond and action.strip().lower() != str(cond["action_equals"]).lower():
         return False
-    if "severity_in" in cond and event.get("severity", "") not in cond["severity_in"]:
-        return False
+    if "severity_in" in cond:
+        _sev = normalize_severity(event.get("severity", ""))
+        _allowed = {normalize_severity(v) for v in cond["severity_in"]}
+        if _sev not in _allowed:
+            return False
     if "source_contains" in cond and not _contains(event.get("source", ""), cond["source_contains"]):
         return False
     return True
@@ -153,8 +158,11 @@ def _fast_match(fast: Dict, combined: str, action: str,
         return False
     if fast["equals"] is not None and action.strip() != fast["equals"]:
         return False
-    if fast["severity"] is not None and severity not in fast["severity"]:
-        return False
+    if fast["severity"] is not None:
+        _sev = normalize_severity(severity)
+        _allowed = {normalize_severity(v) for v in fast["severity"]}
+        if _sev not in _allowed:
+            return False
     return True
 
 
@@ -190,7 +198,10 @@ class Detector:
             "technique_name": rule.technique_name,
             "tactic": rule.tactic,
             "kill_chain_stage": rule.kill_chain_stage,
-            "severity": event.get("severity", "Medium"),
+            "severity": detection_severity(event.get("severity", ""),
+                                           rule.technique_id,
+                                           event.get("action", ""),
+                                           event.get("detail", "")),
             "confidence": rule.confidence,
             "rule_id": rule.id,
             "merged_alerts": merged,
@@ -206,7 +217,7 @@ class Detector:
         detail = (event.get("detail", "") or "").lower()
         combined = f"{action} {detail}"
         source = (event.get("source", "") or "").lower()
-        severity = event.get("severity", "")
+        severity = normalize_severity(event.get("severity", ""))
         # Aggregate rules first: trigger events are counted, not emitted.
         for rule, trig, succ in self._agg_fast:
             group = tuple(event.get(k, "") for k in rule.group_by)
