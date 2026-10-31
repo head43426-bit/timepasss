@@ -379,12 +379,18 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     # replay, so no line is ever dropped or double-counted.
                     import os as _os
                     from engine.parallel import cpu_friendly_workers as _workers
-                    _workers_n = _workers(0)
+                    # User demand (2026-11-01): 8 workers, 4 is too few.
+                    # Explicit request, capped by cores and by RAM
+                    # (max 8 on an 8 GB machine, 2 on a 4 GB machine).
+                    # Trade-off, stated plainly: 8 workers use more
+                    # CPU/RAM and the system may lag while they run.
+                    _workers_n = _workers(8)
                     if (est_total > 50000 or length > 20 * 1024 * 1024) and _workers_n > 1:
                         _set_progress(stage_text=(
-                            f"Step 2 of 4 — Reading with {_workers_n} workers "
-                            f"(70% of your CPU, so your system stays usable). "
-                            f"Benign lines are counted and dropped, not stored."))
+                            f"Step 2 of 4 — Reading with {_workers_n} workers. "
+                            f"Benign lines are counted and dropped, not stored. "
+                            f"Progress updates after every small chunk, so "
+                            f"the first update arrives within seconds."))
                         summary = parallel_run(tmp_path, db_path, rules_dir,
                                                workers=_workers_n,
                                                on_progress=_on_progress)

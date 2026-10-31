@@ -180,6 +180,9 @@ class Detector:
             "user": event.get("user", ""),
             "ip": event.get("ip", ""),
             "dst_ip": event.get("dst_ip", ""),
+            # Destination domain (DNS lines): nytimes.com, not its IP.
+            # The graph uses this as the destination node when present.
+            "hostname": event.get("hostname", ""),
             "source": event.get("source", ""),
             "action": event.get("action", ""),
             "detail": event.get("detail", ""),
@@ -242,6 +245,48 @@ class Detector:
                               match={})
             return [self._detection(event, _dns_rule, merged=1,
                                     reason=f"DNS hostname {_host} has {_host.count('.') + 1} labels and {len(_host)} characters — far above normal DNS, consistent with data hidden in DNS queries")]
+        # Heuristic (not a keyword rule): EXTERNAL SMB to an INTERNAL
+        # host, accepted. Internal SMB is normal file sharing and must
+        # NOT fire — that would flood false alarms. But SMB arriving
+        # from a public IP to a private IP should never happen in
+        # normal use: it is an outsider reaching straight into an
+        # internal/DMZ host over the file-sharing protocol, i.e.
+        # lateral movement (T1021.002). The old keyword rule only
+        # fired on the literal phrase "smb lateral", which a Fortinet
+        # traffic line never contains, so a real case in the user's
+        # own logs (external -> DMZ over SMB, accepted) was missed.
+        # This checks the IPs, not the words: src public + dst private
+        # + service SMB (in action/detail) + action accept/pass.
+        def _is_private(_ip: str) -> bool:
+            try:
+                _parts = [int(x) for x in _ip.strip().split(".")]
+                if len(_parts) != 4 or any(p < 0 or p > 255 for p in _parts):
+                    return False
+                a, b = _parts[0], _parts[1]
+                return (a == 10 or a == 127 or (a == 172 and 16 <= b <= 31)
+                        or (a == 192 and b == 168) or (a == 169 and b == 254))
+            except Exception:
+                return False
+        _src_ip = (event.get("ip", "") or "").strip()
+        _dst_ip = (event.get("dst_ip", "") or "").strip()
+        if (_src_ip and _dst_ip and "smb" in combined
+                and not _is_private(_src_ip) and _is_private(_dst_ip)
+                and ("accept" in action or "pass" in action)):
+            _smb_rule = Rule(id="external_smb_to_internal",
+                             name="External SMB to internal host",
+                             technique_id="T1021.002",
+                             technique_name="Remote Services: SMB/Windows Admin Shares",
+                             tactic="Lateral Movement",
+                             kill_chain_stage="Lateral Movement",
+                             confidence=70, priority=85,
+                             description="SMB connection from a public IP to a private internal host, accepted",
+                             match={})
+            _det = self._detection(event, _smb_rule, merged=1,
+                                   reason=(f"SMB from public IP {_src_ip} to private host {_dst_ip}, accepted by the firewall — "
+                                           f"SMB should never arrive from the internet to an internal host. Check whether that host was exposed, "
+                                           f"whether the session was legitimate, and block external SMB at the firewall if it was not."))
+            _det["severity"] = "High"
+            return [_det]
         # Simple rules: highest priority match wins (one detection/event).
         for rule, fast in self._simple_fast:
             if _fast_match(fast, combined, action, detail, source, severity):

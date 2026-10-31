@@ -47,46 +47,54 @@ def risk_score(detections: List[Dict]) -> float:
 
 
 def build_graph(detections: List[Dict]) -> nx.DiGraph:
-    """Hosts + users as nodes; detections as user->host edges, plus a
-    host->host edge for each consecutive distinct host in time order,
-    plus a real src->dst host-to-host edge when a detection carries a
-    destination IP (firewall logs: srcip -> dstip). Blank hosts/users
-    are never nodes: a "" node is what made single-host graphs lie.
-    If, after all that, the graph still has no edges (one host, no
-    user, no destination — the Fortinet phishing/malware flood), fall
-    back to a host -> technique graph, so there is still a real graph
-    to draw: the host in the centre, one node per technique it was
-    hit with."""
+    """PROPER MAP (2026-11-01, user demand): nodes are the REAL
+    machines, never the firewall's own name. In Fortinet logs the
+    "host" field is the firewall (FGT60FTK00000000) for every line —
+    using it as a node collapses the whole incident into one dot,
+    which is exactly what the user saw. So:
+      * source node = srcip if present, else the host field.
+        The firewall name is NEVER added as a standalone node, and
+        never used as a fallback source when a real srcip exists.
+      * destination node = queried domain (hostname) if present,
+        else dstip. So a DNS line draws 10.10.40.156 -> nytimes.com,
+        not FGT... -> nothing.
+      * user -> source edge when a user is recorded.
+    NO consecutive-source path edges: drawing an edge between two
+    unrelated sources just because their detections happened one
+    after another invented movement (e.g. an external SMB attacker
+    -> an internal phishing host, 1 second apart, no shared host,
+    user or IP). Only edges evidenced by a single log line are
+    drawn: user -> source, and source -> destination.
+    Nodes only ever come from edges (NetworkX creates them on
+    add_edge). If there are still no edges (a flood with no srcip,
+    no dstip, no domain — e.g. pure phishing text), fall back to
+    source -> technique, so there is still a graph to draw.
+    Blank nodes are never created."""
     graph = nx.DiGraph()
+
+    def _src(det):
+        return det.get("ip", "") or det.get("host", "")
+
+    def _dst(det):
+        return det.get("hostname", "") or det.get("dst_ip", "")
+
     for det in detections:
-        host, user = det.get("host", ""), det.get("user", "")
-        if host:
-            graph.add_node(host, type="host")
-        if user:
+        src, user, dst = _src(det), det.get("user", ""), _dst(det)
+        if user and src:
             graph.add_node(user, type="user")
-            if host:
-                graph.add_edge(user, host, kind="event",
-                               technique_id=det.get("technique_id", ""),
-                               time=det.get("time", ""))
-        dst = det.get("dst_ip", "")
-        if dst and dst != host:
-            graph.add_node(dst, type="host")
-            src = det.get("ip", "") or host
-            if src:
-                graph.add_edge(src, dst, kind="path",
-                               technique_id=det.get("technique_id", ""),
-                               time=det.get("time", ""))
-    ordered = sorted(detections, key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
-    prev_host = None
-    for det in ordered:
-        if prev_host and det["host"] != prev_host:
-            graph.add_edge(prev_host, det["host"], kind="path",
+            graph.add_node(src, type="host")
+            graph.add_edge(user, src, kind="event",
                            technique_id=det.get("technique_id", ""),
                            time=det.get("time", ""))
-        prev_host = det["host"]
+        if src and dst and dst != src:
+            graph.add_node(src, type="host")
+            graph.add_node(dst, type="host")
+            graph.add_edge(src, dst, kind="path",
+                           technique_id=det.get("technique_id", ""),
+                           time=det.get("time", ""))
     if graph.number_of_edges() == 0 and detections:
-        host = detections[0].get("host", "")
-        if host:
+        src = _src(detections[0])
+        if src:
             seen = []
             for det in detections:
                 tid = det.get("technique_id", "")
@@ -94,7 +102,7 @@ def build_graph(detections: List[Dict]) -> nx.DiGraph:
                     seen.append(tid)
             for tid in seen:
                 graph.add_node(tid, type="technique")
-                graph.add_edge(host, tid, kind="technique",
+                graph.add_edge(src, tid, kind="technique",
                                technique_id=tid, time="")
     return graph
 
@@ -201,20 +209,22 @@ def blast_radius_score(compromised_hosts: List[str], topology: Dict) -> int:
 
 
 def _compact(det: Dict):
-    """Shrink one detection to the 12 fields linking/flushing actually
-    needs. The full dict carries long detail/reason/source/action
-    strings (a Fortinet detail alone is ~200 bytes of k=v pairs), and
-    the linker held one such dict per detection for the whole active
-    incident — that is why a 600k-step flood peaked at 1.7 GB RSS and
-    why an 8 GB machine hit 90% memory. A tuple of short strings/ints
-    is a fraction of that, and the full row already lives in DuckDB
-    (detections are inserted before linking, with _id stamped), so
-    nothing is lost: detail/reason stay queryable from the DB."""
+    """Shrink one detection to the 13 fields linking/flushing actually
+    needs (hostname added for the IP/domain graph). The full dict
+    carries long detail/reason/source/action strings (a Fortinet
+    detail alone is ~200 bytes of k=v pairs), and the linker held one
+    such dict per detection for the whole active incident — that is
+    why a 600k-step flood peaked at 1.7 GB RSS and why an 8 GB machine
+    hit 90% memory. A tuple of short strings/ints is a fraction of
+    that, and the full row already lives in DuckDB (detections are
+    inserted before linking, with _id stamped), so nothing is lost:
+    detail/reason stay queryable from the DB."""
     return (det.get("ts") or 0, det.get("time", ""), det.get("host", ""),
             det.get("user", ""), det.get("ip", ""), det.get("dst_ip", ""),
             det.get("technique_id", ""), det.get("technique_name", ""),
             det.get("kill_chain_stage", ""), det.get("severity", "Medium"),
-            int(det.get("merged_alerts", 1)), det.get("_id"))
+            int(det.get("merged_alerts", 1)), det.get("_id"),
+            det.get("hostname", ""))
 
 
 def expand_compact(compacted) -> List[Dict]:
@@ -224,7 +234,8 @@ def expand_compact(compacted) -> List[Dict]:
     return [{"ts": t[0], "time": t[1], "host": t[2], "user": t[3],
              "ip": t[4], "dst_ip": t[5], "technique_id": t[6],
              "technique_name": t[7], "kill_chain_stage": t[8],
-             "severity": t[9], "merged_alerts": t[10], "_id": t[11]}
+             "severity": t[9], "merged_alerts": t[10], "_id": t[11],
+             "hostname": t[12] if len(t) > 12 else ""}
             for t in compacted]
 
 
@@ -245,34 +256,59 @@ class StreamingLinker:
     that peaked at 1.7 GB is the case this fixes."""
 
     def __init__(self):
-        self.active = []  # {hosts, users, ips, last_ts, dets: [tuples]}
+        self.active = []  # {keys, users, ips, dsts, last_ts, dets}
 
     def feed(self, det: Dict):
+        # LINKING FIX (2026-11-01, real Fortinet data): the old code
+        # matched on raw host, and host is the firewall (FGT...) for
+        # every Fortinet line — so every detection in a file linked
+        # into ONE giant incident, even unrelated attacks. It also
+        # matched on blank user ("": every Fortinet line has no user,
+        # so "" matched "" and linked everything again). Now:
+        #   * link key = srcip if present, else host (never the
+        #     firewall name when a real srcip exists),
+        #   * user only matches when it is non-empty,
+        #   * a pivot also links: current src was a previous dst,
+        #     or current dst was a previous src.
+        # Unrelated Fortinet attacks (different src, no shared user,
+        # no pivot) now stay separate incidents, as they should.
         ts = det.get("ts") or 0
         finished = [a["dets"] for a in self.active
                     if ts - a["last_ts"] > LINK_WINDOW_SECONDS]
         self.active = [a for a in self.active
                        if ts - a["last_ts"] <= LINK_WINDOW_SECONDS]
+        _primary = det.get("ip", "") or det.get("host", "")
+        _user = det.get("user", "")
+        _dst = det.get("dst_ip", "")
         matches = [a for a in self.active
-                   if det["host"] in a["hosts"] or det["user"] in a["users"]
-                   or (det.get("ip") and det["ip"] in a["ips"])]
+                   if (_primary and _primary in a["keys"])
+                   or (_user and _user in a["users"])
+                   or (det.get("ip") and det["ip"] in a["dsts"])
+                   or (_dst and _dst in a["keys"])]
         compacted = _compact(det)
         if not matches:
-            self.active.append({"hosts": {det["host"]}, "users": {det["user"]},
+            self.active.append({"keys": {_primary} if _primary else set(),
+                                "users": {_user} if _user else set(),
                                 "ips": {det["ip"]} if det.get("ip") else set(),
+                                "dsts": {_dst} if _dst else set(),
                                 "last_ts": ts, "dets": [compacted]})
         else:
             first = matches[0]
             for other in matches[1:]:
-                first["hosts"] |= other["hosts"]
+                first["keys"] |= other["keys"]
                 first["users"] |= other["users"]
                 first["ips"] |= other["ips"]
+                first["dsts"] |= other["dsts"]
                 first["dets"].extend(other["dets"])
                 self.active.remove(other)
-            first["hosts"].add(det["host"])
-            first["users"].add(det["user"])
+            if _primary:
+                first["keys"].add(_primary)
+            if _user:
+                first["users"].add(_user)
             if det.get("ip"):
                 first["ips"].add(det["ip"])
+            if _dst:
+                first["dsts"].add(_dst)
             first["last_ts"] = max(first["last_ts"], ts)
             first["dets"].append(compacted)
         for dets in finished:

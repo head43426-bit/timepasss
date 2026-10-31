@@ -157,18 +157,22 @@ def cpu_friendly_workers(requested: int = 0) -> int:
     is 5 workers; on a 4-core machine, 2; on a 1-core machine, 1.
     Pass an explicit workers count to override, but it is still capped
     at 70% unless the caller really insists (workers < 0 means uncapped).
-    MEMORY FIX (2026-11-01): also capped by RAM — on an 8 GB machine
-    at most 4 workers, on a 4 GB machine at most 2 — because each
-    worker is a full Python process and the main process spikes while
-    linking one huge incident; more workers on low RAM just pushes
-    the system into paging, which is slower than fewer workers."""
+    MEMORY FIX (2026-11-01): also capped by RAM — on a 4 GB machine
+    at most 2 workers. WORKERS FIX (2026-11-01, user demand): the
+    upload path now explicitly asks for 8 workers, and an explicit
+    request is honoured up to the machine's core count (not the 70%
+    cap — that cap only applies to the default, requested == 0).
+    On an 8 GB machine the RAM cap for an explicit request is 8
+    workers; the user accepts that 8 workers use more RAM/CPU and
+    the system may lag while they run, in exchange for speed."""
     total = os.cpu_count() or 1
     cap = max(1, int(total * 0.7))
     _ram = _total_ram_gb()
+    if requested > 0:
+        _ram_cap = 2 if (_ram and _ram <= 4) else 8
+        return min(requested, total, _ram_cap)
     if _ram and _ram <= 4:
         cap = min(cap, 2)
-    elif _ram and _ram <= 8:
-        cap = min(cap, 4)
     if requested < 0:
         return total
     if requested == 0:
@@ -186,10 +190,21 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         import json
         with open(topology_path, "r", encoding="utf-8") as handle:
             store.load_topology(con, json.load(handle))
-    ranges = _byte_ranges(log_path, workers)
+    # PROGRESS FIX (2026-11-01): previously one chunk per worker, so
+    # a 3.9M-line file on 4 workers showed "0 lines, 0 detections"
+    # for the entire first ~974k-line chunk — on an HDD + 90% RAM
+    # machine that looked frozen for a very long time. Now the file
+    # is split into 8x as many chunks as workers (32 chunks for 4
+    # workers, ~122k lines each for firex), while the pool still has
+    # only `workers` processes — pool.map preserves input order, so
+    # chunk order, aggregate replay and counts are unchanged, but
+    # progress now updates after every small chunk, within seconds.
+    # max_workers must stay `workers`, NOT len(ranges), or 32
+    # processes would spawn at once.
+    ranges = _byte_ranges(log_path, workers * 8)
     total_events = 0
     chunk_results = []
-    with ProcessPoolExecutor(max_workers=len(ranges),
+    with ProcessPoolExecutor(max_workers=workers,
                              initializer=_init_worker, initargs=(rules_dir,)) as pool:
         completed_workers = 0
         _tmpdir = os.path.dirname(os.path.abspath(db_path)) or "."
@@ -272,7 +287,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         con.execute("BEGIN TRANSACTION")
         store.insert_incident(con, {
             "id": incident_count,
-            "title": (f"{first.get('technique_name') or first.get('technique_id', '')} path on {first['host']}"
+            "title": (f"{first.get('technique_name') or first.get('technique_id', '')} path on {first.get('ip') or first['host']}"
                        if dets else f"Incident {incident_count}"),
             "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
             "hosts": sorted({d["host"] for d in dets if d["host"]}),
@@ -354,7 +369,7 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         "events": total_events, "detections": detection_count,
         "incidents": incident_count, "seconds": round(elapsed, 2),
         "events_per_second": round(total_events / elapsed, 1) if elapsed else 0,
-        "workers": len(ranges), "chunks": len(ranges),
+        "workers": workers, "chunks": len(ranges),
         "peak_rss_mb": peak_rss_mb(),
     }
     if ground_truth_path:

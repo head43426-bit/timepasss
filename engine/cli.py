@@ -127,7 +127,7 @@ def run(log_path: str, db_path: str, rules_dir: str, topology_path: str = None,
         record = {
             "id": incident_count,
             "title": (f"{first.get('technique_name') or first.get('technique_id', '')} "
-                       f"path on {first['host']}" if dets else f"Incident {incident_count}"),
+                       f"path on {first.get('ip') or first['host']}" if dets else f"Incident {incident_count}"),
             "start_time": times[0] if times else "", "end_time": times[-1] if times else "",
             "hosts": hosts, "users": users,
             "risk_score": graph_mod.risk_score(dets),

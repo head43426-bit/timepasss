@@ -272,30 +272,22 @@ def get_incident(con, incident_id: int) -> Optional[Dict]:
     edges = con.execute(
         "SELECT from_node, to_node, kind, technique_id, time FROM edges"
         " WHERE incident_id = ?", [incident_id]).fetchall()
-    nodes = {}
-    for h in json.loads(row[4] or "[]"):
-        if h:
-            nodes.setdefault(h, {"id": h, "type": "host"})
-    for u in json.loads(row[5] or "[]"):
-        if u:
-            nodes.setdefault(u, {"id": u, "type": "user"})
-    for det in timeline:
-        # Skip blank ids: Fortinet-style logs carry no user, and a node
-        # labelled "" is worse than no user node at all.
-        if det[2]:
-            nodes.setdefault(det[2], {"id": det[2], "type": "host"})
-        if det[3]:
-            nodes.setdefault(det[3], {"id": det[3], "type": "user"})
-    # Edge endpoints are nodes too: dstip hosts and technique nodes
-    # from the fallback graph are not in the timeline's host/user
-    # columns, and without them their edges would be dropped by the
-    # frontend for having no position.
+    # MAP FIX (2026-11-01): nodes come ONLY from edge endpoints.
+    # The old code added every host/user from the incident row first,
+    # so the firewall name FGT... always appeared as an isolated node
+    # even when no edge touched it — that is the "single host, nothing
+    # showing" map. Edge endpoints are the real machines (srcip,
+    # dstip/domain, user, technique); anything else is not drawn.
+    _users = set(json.loads(row[5] or "[]"))
     tech_ids = {det[8] for det in timeline if det[8]} | {s[0] for s in _summary if s[0]}
+    nodes = {}
     for e in edges:
         for endpoint in (e[0], e[1]):
             if endpoint and endpoint not in nodes:
                 nodes[endpoint] = {"id": endpoint,
-                                   "type": "technique" if endpoint in tech_ids else "host"}
+                                   "type": "user" if endpoint in _users
+                                   else "technique" if endpoint in tech_ids
+                                   else "host"}
     return {
         "id": row[0], "title": row[1], "start_time": row[2], "end_time": row[3],
         "hosts": json.loads(row[4] or "[]"), "users": json.loads(row[5] or "[]"),

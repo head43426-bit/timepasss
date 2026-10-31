@@ -62,11 +62,16 @@ async function selectIncident(id) {
   // backend with NetworkX, not drawn by hand). Nodes are placed on a
   // circle in first-seen order so every edge is visible at once.
   renderGraph(path);
-  var pathHosts = (path.hosts || []).filter(function(h) { return h; });
+  // Attack path uses the GRAPH's host/IP nodes, not the incident's
+  // hosts column — that column is the firewall name for Fortinet
+  // logs, which is why the path used to say "single host" even when
+  // the logs show real src -> dst movement.
+  var graphHosts = ((path.graph && path.graph.nodes) || []).filter(function(n) { return n.type === "host"; }).map(function(n) { return n.id; });
+  var pathHosts = graphHosts.length ? graphHosts.slice(0, 12) : (path.hosts || []).filter(function(h) { return h; });
   document.getElementById("path").innerHTML = pathHosts.length > 1
-    ? pathHosts.map(function(h) { return "<span class=node>" + esc(h) + "</span>"; }).join("<span class=arrow>&rarr;</span>")
+    ? pathHosts.map(function(h) { return "<span class=node>" + esc(h) + "</span>"; }).join("<span class=arrow>&rarr;</span>") + (graphHosts.length > 12 ? "<p class='hint'>First 12 of " + fmtNum(graphHosts.length) + " IPs/domains in this incident.</p>" : "")
     : pathHosts.length === 1
-      ? "<span class=node>" + esc(pathHosts[0]) + "</span><p class='hint'>Single host — no host-to-host path in this incident. All steps happened on this one host, so there is no chain of hosts to draw.</p>"
+      ? "<span class=node>" + esc(pathHosts[0]) + "</span><p class='hint'>Single source — no src -> dst movement in this incident. All steps came from this one source, so there is no chain to draw; see the graph map and step list for what actually happened.</p>"
       : "<p>Unknown host path.</p>";
   var nextHtml = (next.next_reach && next.next_reach.length)
     ? "<ul>" + next.next_reach.map(function(n) {
@@ -99,12 +104,32 @@ function renderGraph(path) {
   var graph = path.graph || { nodes: [], edges: [] };
   var nodes = graph.nodes || [], edges = graph.edges || [];
   if (!nodes.length) { box.innerHTML = "<p>No graph nodes for this incident.</p>"; return; }
+  // HANG FIX: the old posCheck did nodes.some() for BOTH ends of
+  // EVERY edge — O(edges x nodes) in JS. With thousands of dstip
+  // nodes/edges that alone hung the tab (RESULT_CODE_HUNG). A Set
+  // lookup is O(1) per edge, so the whole filter is O(edges).
+  var nodeSet = {};
+  nodes.forEach(function(n) { nodeSet[n.id] = true; });
+  var realEdges = edges.filter(function(e) { return nodeSet[e.from] && nodeSet[e.to]; });
+  // CAP: a circle layout with thousands of nodes still hangs the
+  // renderer (thousands of SVG groups + listeners, on a 90% RAM
+  // machine). Keep the 250 most-connected nodes and their edges,
+  // and say so plainly instead of silently drawing a wall of dots.
+  var totalNodes = nodes.length, totalEdges = realEdges.length;
+  if (nodes.length > 250) {
+    var deg = {};
+    realEdges.forEach(function(e) { deg[e.from] = (deg[e.from] || 0) + 1; deg[e.to] = (deg[e.to] || 0) + 1; });
+    var keep = nodes.slice().sort(function(a, b) { return (deg[b.id] || 0) - (deg[a.id] || 0); }).slice(0, 250);
+    var keepSet = {};
+    keep.forEach(function(n) { keepSet[n.id] = true; });
+    nodes = keep;
+    nodeSet = keepSet;
+    realEdges = realEdges.filter(function(e) { return keepSet[e.from] && keepSet[e.to]; });
+  }
   // Old DBs (built before the technique fallback) have a single host
   // and no edges: build the host -> technique graph here from the
   // timeline summary, so those incidents get a real graph too without
   // re-running the whole log. New runs already store these edges.
-  var realEdges = edges.filter(function(e) { return posCheck(e); });
-  function posCheck(e) { return nodes.some(function(n) { return n.id === e.from; }) && nodes.some(function(n) { return n.id === e.to; }); }
   if (!realEdges.length && path.timeline_summary && path.timeline_summary.length) {
     var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]);
     if (hostId) {
@@ -154,7 +179,8 @@ function renderGraph(path) {
       shape + "<text x='" + p.x + "' y='" + (p.y + 48) + "' class='nlabel'>" + esc(nLabel) + "</text>" +
       "<text x='" + p.x + "' y='" + (p.y + 66) + "' class='ntype'>" + esc(nSub) + "</text></g>";
   });
-  svg += "</svg><p class='hint'>■ host &nbsp; ● user &nbsp; — arrow = NetworkX edge, label = MITRE technique. Click a node or an edge label.</p>";
+  var capNote = (totalNodes > 250) ? "<p class='hint'>Showing the 250 most-connected of " + fmtNum(totalNodes) + " nodes (" + fmtNum(realEdges.length) + " of " + fmtNum(totalEdges) + " edges) — the rest are the same IPs/domains repeated. The full step list and grouped report below still cover everything.</p>" : "";
+  svg += "</svg>" + capNote + "<p class='hint'>■ host/IP/domain &nbsp; ● user &nbsp; — arrow = NetworkX edge, label = MITRE technique. Nodes are real IPs/domains (src → dst), never the firewall name alone. Click a node or an edge label.</p>";
   box.innerHTML = svg;
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
     el.addEventListener("click", function() { showNodeSteps(path, el.getAttribute("data-node")); });
