@@ -464,19 +464,41 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         for line in iter_sample_lines(_SAMPLE_BYTES):
                             _pos = _line_no % 81
                             _line_no += 1
-                            if _pos == 70 and len(_gt_attacks) < 200:
-                                _gt_current = {"id": "sample-chain-%d" % (len(_gt_attacks) + 1),
-                                               "title": "Sample attack chain",
-                                               "steps": []}
-                                _gt_attacks.append(_gt_current)
-                            elif _pos > 70 and _gt_current is not None:
-                                _f = line.split("|")
-                                if len(_f) >= 9:
-                                    _gt_current["steps"].append({
-                                        "technique_id": _f[8],
-                                        "technique_name": _f[8],
-                                        "kill_chain_stage": _f[7],
-                                        "host": _f[1], "user": _f[2]})
+                            if _pos >= 70:
+                                # BUG FIXES (2026-11-01): (1) the first
+                                # version only created a new chain
+                                # while under the 200 limit, but left
+                                # _gt_current pointing at chain 200
+                                # afterwards - so every later chain's
+                                # attack lines kept appending to it,
+                                # producing one ~256,000-step
+                                # mega-attack and a planted_steps
+                                # count of 258,222 instead of 2,200.
+                                # (2) It also skipped the pos-70 line
+                                # itself when creating a chain, so
+                                # every attack had 10 steps instead of
+                                # 11 (the T1595 first step was lost).
+                                # Now: a new chain is created at
+                                # pos 70 and that line's step is
+                                # appended too, and after 200 chains
+                                # _gt_current is set to None so later
+                                # chains are ignored cleanly.
+                                if _pos == 70:
+                                    if len(_gt_attacks) < 200:
+                                        _gt_current = {"id": "sample-chain-%d" % (len(_gt_attacks) + 1),
+                                                       "title": "Sample attack chain",
+                                                       "steps": []}
+                                        _gt_attacks.append(_gt_current)
+                                    else:
+                                        _gt_current = None
+                                if _gt_current is not None:
+                                    _f = line.split("|")
+                                    if len(_f) >= 9:
+                                        _gt_current["steps"].append({
+                                            "technique_id": _f[8],
+                                            "technique_name": _f[8],
+                                            "kill_chain_stage": _f[7],
+                                            "host": _f[1], "user": _f[2]})
                             buf.append(line)
                             written += len(line) + 1
                             if len(buf) >= 1000:
