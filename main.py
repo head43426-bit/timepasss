@@ -328,39 +328,40 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     holder.con = store.connect(db_path, fresh=True)
                 return self._send_json({"status": "ok", "detections": 0, "incidents": 0})
             if urlparse(self.path).path == "/sample":
-                # LOAD SAMPLE (2026-11-01, changed behaviour): it no
-                # longer loads the small sample_attack.log and no
-                # longer wipes the DB. It generates about 500 MB of
-                # synthetic log from generate_logs.py
-                # (engine/sample_gen.py, streamed to a temp file next
-                # to the DB, never held in RAM) and APPENDS it with
-                # cli run_append (fresh=False): existing detections
-                # and incidents keep their ids and graphs, and the new
-                # detections link among themselves into new incidents.
-                # Progress reuses /progress like /demo, so the bar
-                # tracks generation then processing. When this POST
-                # returns, the page reloads the list; the dashboard's
-                # 5-second /health refresh also picks the new counts
-                # up afterwards (live mode). Expect a few minutes for
-                # the full 500 MB run.
+                # LOAD SAMPLE (2026-11-01, changed behaviour, capped
+                # 2026-11-01): it no longer loads the small
+                # sample_attack.log and no longer wipes the DB. It
+                # generates about 250 MB of synthetic log from
+                # generate_logs.py (engine/sample_gen.py, streamed to
+                # a temp file next to the DB, never held in RAM) and
+                # APPENDS it with cli run_append (fresh=False):
+                # existing detections and incidents keep their ids
+                # and graphs, and the new detections link among
+                # themselves into new incidents. Progress reuses
+                # /progress like /demo, so the bar tracks generation
+                # then processing. When this POST returns, the page
+                # reloads the list; the dashboard's 5-second /health
+                # refresh also picks the new counts up afterwards
+                # (live mode). Expect about half the time of the old
+                # 500 MB run (which took ~3.5 minutes).
                 from engine.sample_gen import TARGET_BYTES as _SAMPLE_BYTES, iter_sample_lines
                 from engine.cli import run_append as _run_append
                 started = time.time()
-                filename = "sample-500mb.log (synthetic, from generate_logs.py)"
+                filename = "sample-250mb.log (synthetic, from generate_logs.py)"
                 try:
                     _before_incidents = len(store.list_incidents(holder.con))
                 except Exception:
                     _before_incidents = 0
                 # Scratch file goes in the repo dir (real disk), NOT
                 # next to the DB: a DB in /tmp (a 512 MB tmpfs here)
-                # cannot hold a 500 MB temp file, and that exact
-                # failure was hit in testing. The file is deleted
-                # after processing either way.
+                # cannot hold a 250 MB temp file alongside the DB,
+                # and that exact failure was hit in testing at 500 MB.
+                # The file is deleted after processing either way.
                 _db_dir = ROOT
                 tmp_path = None
                 try:
                     _set_progress(stage="generating",
-                                  stage_text="Generating sample - synthetic, about 500 MB, from generate_logs.py",
+                                  stage_text="Generating sample - synthetic, about 250 MB, from generate_logs.py",
                                   filename=filename, bytes_received=0,
                                   bytes_total=_SAMPLE_BYTES, events=0,
                                   detections=0, estimated_total_events=0,

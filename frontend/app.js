@@ -119,8 +119,8 @@ async function selectIncident(id) {
   }
   var cb = document.getElementById("corridorBtn");
   if (cb) { cb.disabled = false; var cl = document.getElementById("corridorLabel"); if (cl) cl.textContent = "Execute Containment Isolator"; }
-  var cn = document.getElementById("corridorNote");
-  if (cn) cn.textContent = "Quarantine here is a dashboard simulation only - no real host is isolated and no firewall rule is changed.";
+  // (No corridorNote element any more: the simulation explanation
+  // now lives in the containment popup, not in a stray note.)
   var bs = document.getElementById("briefStatus");
   if (bs) bs.textContent = "Incident #" + path.id + " - " + esc(path.title);
   var br = document.getElementById("briefRisk");
@@ -846,7 +846,7 @@ function handleFile(file) {
   xhr.send(file);
 }
 
-// Load Sample: POST /sample, server generates ~500 MB of synthetic
+// Load Sample: POST /sample, server generates ~250 MB of synthetic
 // log from generate_logs.py and APPENDS it to the existing DB, then
 // the list refreshes. /tiny and /demo buttons are removed (2026-11-01);
 // their server endpoints still exist, but nothing on the page calls them.
@@ -866,14 +866,23 @@ function runServerJob(endpoint, infoText) {
     document.getElementById("fileinfo").textContent = (data.events || 0) + " lines, " + (data.detections || 0) +
       " detections, " + (data.incidents || 0) + " incidents, in " + (data.seconds || 0) + "s.";
     await loadIncidents();
-    if (state.incidents.length) selectIncident(state.incidents[0].id);
+    // LIVE MODE (2026-11-01 fix): after an append, show the NEWEST
+    // incident, not the first in DB order. The old code selected
+    // state.incidents[0], which is the oldest incident - so after
+    // Load Sample the centre kept showing old data while the new
+    // incidents sat in the queue, and the attack path the user saw
+    // was not the new run's at all. Highest id = last appended.
+    if (state.incidents.length) {
+      var newest = state.incidents.reduce(function(a, b) { return b.id > a.id ? b : a; }, state.incidents[0]);
+      selectIncident(newest.id);
+    }
   }).catch(function() {
     clearInterval(poll);
     document.getElementById("fileinfo").textContent = "Failed - the server could not be reached.";
   });
 }
 var sampleBtn = document.getElementById("sampleBtn");
-if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Generating about 500 MB of synthetic log and appending it to the existing data - this takes a few minutes, the progress bar above tracks it…"); });
+if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/sample", "Generating about 250 MB of synthetic log and appending it to the existing data - this takes a couple of minutes, the progress bar above tracks it…"); });
 
 loadIncidents();
 

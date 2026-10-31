@@ -1,9 +1,12 @@
-"""Load Sample generator (2026-11-01): ~500 MB of synthetic log,
-generated from generate_logs.py, streamed, never held as a list.
+"""Load Sample generator (2026-11-01, capped 2026-11-01): ~250 MB of
+synthetic log, generated from generate_logs.py, streamed, never held
+as a list. 250 MB is the live-demo size: inside the 100-500 MB range
+the user asked for (big enough to show a real live-mode run, small
+enough not to take the ~3.5 minutes the old 500 MB run took).
 
 Why a new module instead of calling generate_logs.generate_logs()
 directly: that function builds the whole log as a list in memory,
-which is unusable at 500 MB. This module reuses its data verbatim -
+which is unusable at 250 MB. This module reuses its data verbatim -
 BENIGN_ACTIONS, BENIGN_HOSTS, BENIGN_USERS and ATTACK_STEPS (the
 same 11 steps that match rules/core.yml) - and yields pipe-format
 lines one at a time, in the same chain shape as engine/demo.py:
@@ -38,7 +41,7 @@ from generate_logs import (  # noqa: E402
     BENIGN_USERS,
 )
 
-TARGET_BYTES = 500 * 1024 * 1024  # ~500 MB
+TARGET_BYTES = 250 * 1024 * 1024  # ~250 MB, inside the 100-500 MB live-demo range
 
 BASE_TIME = datetime(2026, 10, 31, 8, 0, 0, tzinfo=timezone.utc)
 
