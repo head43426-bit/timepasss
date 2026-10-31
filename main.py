@@ -34,6 +34,7 @@ from engine import report as report_mod  # noqa: E402
 from engine import store  # noqa: E402
 from engine.api import LOCK, _apply_detection, _incident_with_extras  # noqa: E402
 from engine.cli import run as cli_run  # noqa: E402
+from engine.parallel import parallel_run  # noqa: E402
 from engine.live import Tailer  # noqa: E402
 from engine.rules import Detector, load_rules  # noqa: E402
 
@@ -190,13 +191,19 @@ def main():
     r.add_argument("--rules", default="rules")
     r.add_argument("--topology", default=None)
     r.add_argument("--ground-truth", default=None)
+    r.add_argument("--workers", type=int, default=1,
+                   help="1 = single-core (default). >1 = multi-core parallel, 0 = all cores")
     args = ap.parse_args()
     if args.cmd == "serve":
         serve(args.db, args.host, args.port, args.rules, args.watch)
     else:
-        summary = cli_run(args.log, args.db, args.rules, args.topology, ground_truth_path=args.ground_truth)
+        if args.workers != 1:
+            summary = parallel_run(args.log, args.db, args.rules, workers=args.workers,
+                                   topology_path=args.topology, ground_truth_path=args.ground_truth)
+        else:
+            summary = cli_run(args.log, args.db, args.rules, args.topology, ground_truth_path=args.ground_truth)
         print("Events: %(events)s  Detections: %(detections)s  Incidents: %(incidents)s  "
-              "%(seconds)ss (%(events_per_second)s events/sec)  Peak RSS: %(peak_rss_mb)s MB" % summary)
+              "%(seconds)ss (%(events_per_second)s events/sec)  Peak RSS: %(peak_rss_mb)s MB" % {**summary, "peak_rss_mb": summary.get("peak_rss_mb", 0)})
         if "evaluation" in summary:
             print("Evaluation:", summary["evaluation"])
 

@@ -22,6 +22,20 @@ python main.py run --log mylogs.log --db out.duckdb
 python main.py run --log mylogs.log --db out.duckdb --topology topology.json --ground-truth truth.json
 ```
 
+Multi-core (Advanced tier, for large logs):
+
+```bash
+python main.py run --log mylogs.log --db out.duckdb --workers 4
+python main.py run --log mylogs.log --db out.duckdb --workers 0  # all cores
+```
+
+Workers are processes (not threads — threads share the GIL and
+would not speed up parsing). Each worker parses and detects on its
+own byte-range chunk, returning only detections. Aggregate rules
+(e.g. brute force) are replayed globally in the main process, so a
+sequence split across chunks is not missed. Linking, risk scoring
+and DuckDB writes stay in the main process, exactly as single-core.
+
 API: `GET /health`, `GET /incidents`, `GET /incidents/{id}/path`,
 `GET /incidents/{id}/report`, `GET /incidents/{id}/next`
 (`?hindi=1` for the Hindi report).
