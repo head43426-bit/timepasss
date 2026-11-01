@@ -255,7 +255,8 @@ async function selectIncident(id) {
     var total = next.next_frontier_total || frontier.length;
     var laHtml = "";
     if (frontier.length) {
-      laHtml += "<p><b>Frontier hosts to watch (" + fmtNum(total) + " in total" + (total > frontier.length ? ", first " + frontier.length + " shown" : "") + "):</b></p><ol>" + frontier.map(function(n) {
+      laHtml += "<p><b>Frontier hosts to watch (" + fmtNum(total) + " in total" + (total > frontier.length ? ", first " + frontier.length + " shown" : "") + "):</b></p>" +
+        "<p class='hint'>Number in brackets, like (90), is the priority for that host: 90 = contacted via a Critical technique, 70 = High, 40 = Medium, 20 = Low. Higher means watch it first. It is not a probability, it comes from the worst severity used to contact that host.</p><ol>" + frontier.map(function(n) {
         return "<li><b>" + esc(n.host) + " (" + (n.confidence || 0) + ")</b> - " + esc(n.reason) + ". " + esc(n.block || "") + "</li>";
       }).join("") + "</ol>";
       laHtml += "<p class='hint'>Basis: " + esc(next.next_basis || "observed graph") + " - these are hosts the attacker has already contacted, not hosts guessed from nowhere. If one starts connecting onward, that is the next hop.</p>";
