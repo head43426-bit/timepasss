@@ -162,6 +162,18 @@
   </aside>
 </main>
 
+<!-- NODE POPUP (2026-11-01, user: open a pop-up when I click a
+     graph node): filled by showNodeSteps in app.js, closed by its
+     X button, by clicking outside it, or with Escape. -->
+<div id="nodeModal" class="modal" hidden>
+  <div class="modal-backdrop" id="nodeModalBackdrop"></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="nodeModalTitle">
+    <button type="button" class="modal-close" id="nodeModalClose" aria-label="Close">×</button>
+    <h3 id="nodeModalTitle"></h3>
+    <div id="nodeModalBody"></div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

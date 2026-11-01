@@ -195,6 +195,8 @@ async function selectIncident(id) {
   // detailed 8-section brief, used only by Copy and Generate PDF.
   state.selected = path; state.report = rep.report; state.fullReport = rep.full_report || rep.report; state.fullTranslated = null; state.hindi = rep.hindi || null;
   path.next_reach = next.next_reach || [];
+  path.next_stages = next.next_stages || [];
+  path.protections = rep.protections || [];
   // REPEATED INFO REMOVED (2026-11-01, user: remove any repeated
   // info): the pathBanner strip (incident # / risk / hosts) and the
   // right "Attack Paths - Ranked" card (same frontier hosts, scores
@@ -495,248 +497,179 @@ function renderGraph(path) {
 }
 
 function renderAttackPathCanvas(path) {
-  // ATTACK PATH CANVAS (2026-11-01, user demand: 'make this in canvas,
-  // use the reference'). The old version listed the first 12 graph
-  // nodes with arrows between them, which INVENTED a chain: for a star
-  // incident those destinations are parallel, not sequential hops.
-  // This canvas draws only real edges: sources on the left, pivots
-  // (both a destination and a source, in stage order) in the middle,
-  // destinations on the right as a fan-out, grouped by technique when
-  // there are more than 8 of them. Annotation boxes on the right are
-  // the real techniques/stages found in this incident (from the
-  // timeline summary) - never invented CVEs, Kubernetes objects, or
-  // hosts. Click a box to see its steps.
+  // REFERENCE-STYLE ATTACK PATH (2026-11-01, user: do it like the
+  // preview, remove all text except the Attack path heading and the
+  // text inside the boxes). No canvas, no hint paragraphs, no
+  // "showing X of Y" notes inside this section - only node boxes
+  // and one dashed side box. The heading itself lives in index.html
+  // (<h3>Attack path</h3>), so this function renders boxes only.
+  // Arrows are real log edges only: sources -> pivots -> destinations
+  // in parallel, never sequential hops unless a pivot connects them.
+  // With no host-to-host edges, the chain is the stage progression
+  // in kill-chain order, not host hops.
   var box = document.getElementById("path");
   var graph = path.graph || { nodes: [], edges: [] };
   var nodes = graph.nodes || [], edges = graph.edges || [];
   var nodeById = {};
   nodes.forEach(function(n) { nodeById[n.id] = n; });
   var pathEdges = edges.filter(function(e) { return e.kind === "path"; });
-  var _gd = document.documentElement.getAttribute("data-theme") === "dark";
-  var sevColor = _gd ? { Critical: "#f4f4f5", High: "#34d399", Medium: "#a1a1aa", Low: "#57534e" } : { Critical: "#111111", High: "#00a66a", Medium: "#57534e", Low: "#a8a29e" };
-  var sevFill = _gd ? { Critical: "#27272a", High: "#064e3b", Medium: "#3f3f46", Low: "#18181b" } : { Critical: "#e7e5e4", High: "#ecfdf5", Medium: "#f5f5f4", Low: "#ffffff" };
-  var userStroke = _gd ? "#f4f4f5" : "#111111"; var userFill = _gd ? "#27272a" : "#ffffff"; var techStroke = _gd ? "#34d399" : "#00a66a"; var techFill = _gd ? "#064e3b" : "#ecfdf5";
-  var sevOf = function(n) { return n && n.type === "user" ? "user" : n && n.type === "technique" ? "technique" : (n && n.severity) || "Low"; };
-  var techName = {};
-  (path.timeline_summary || []).forEach(function(s) { techName[s.technique_id] = s.technique_name; });
-  var stageOfTech = {};
-  (path.timeline_summary || []).forEach(function(s) { stageOfTech[s.technique_id] = s.kill_chain_stage; });
+  var stageOrder = ["Reconnaissance", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"];
+  var sevW = { Critical: 40, High: 25, Medium: 10, Low: 3 };
+  var isPrivate = function(ip) { return /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/.test(ip || ""); };
+  var techName = {}, techStage = {}, techCount = {};
+  (path.timeline_summary || []).forEach(function(s) { techName[s.technique_id] = s.technique_name; techStage[s.technique_id] = s.kill_chain_stage; techCount[s.technique_id] = s.count; });
+  (path.timeline || []).forEach(function(s) { if (s.technique_id) { techName[s.technique_id] = techName[s.technique_id] || s.technique_name; techStage[s.technique_id] = techStage[s.technique_id] || s.kill_chain_stage; techCount[s.technique_id] = techCount[s.technique_id] || 0; } });
+  var protByTid = {};
+  (path.protections || []).forEach(function(p) { protByTid[p.technique_id] = p.action; });
   var srcs = {}, dsts = {};
   pathEdges.forEach(function(e) { srcs[e.from] = true; dsts[e.to] = true; });
-  var sources = nodes.filter(function(n) { return n.type === "host" && srcs[n.id] && !dsts[n.id]; });
-  var pivots = nodes.filter(function(n) { return n.type === "host" && srcs[n.id] && dsts[n.id]; });
-  var dests = nodes.filter(function(n) { return n.type === "host" && dsts[n.id] && !srcs[n.id]; });
-  var stageOrder = ["Reconnaissance", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"];
+  var hostNodes = nodes.filter(function(n) { return n.type === "host"; });
+  var sources = hostNodes.filter(function(n) { return srcs[n.id] && !dsts[n.id]; });
+  var pivots = hostNodes.filter(function(n) { return srcs[n.id] && dsts[n.id]; });
+  var dests = hostNodes.filter(function(n) { return dsts[n.id] && !srcs[n.id]; });
   pivots.sort(function(a, b) { var ia = stageOrder.indexOf(a.stage || ""), ib = stageOrder.indexOf(b.stage || ""); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  if (!pathEdges.length) {
-    // No host-to-host edges (e.g. the sample): the honest path is the
-    // STAGE PROGRESSION in time order, labelled as such - not host
-    // hops. Draw one box per distinct stage, in kill-chain order.
+  var bySev = function(a, b) { return (sevW[b.severity] || 0) - (sevW[a.severity] || 0) || (a.id < b.id ? -1 : 1); };
+  sources.sort(bySev); dests.sort(bySev);
+  var nodeBox = function(id, role, label, sub, sev, extra) {
+    return "<button type='button' class='ap-node' data-ap-id='" + esc(id) + "' data-ap-kind='" + esc(extra || "node") + "'>" +
+      "<span class='ap-role'>" + esc(role) + "</span><span class='ap-label'>" + esc(label) + "</span>" +
+      (sub ? "<span class='ap-sub'>" + esc(sub) + "</span>" : "") +
+      (sev ? "<span class='ap-sev ap-sev-" + esc(sev.toLowerCase()) + "'>" + esc(sev.toUpperCase()) + "</span>" : "") + "</button>";
+  };
+  var chainHtml = "", defaultId = "", defaultKind = "node";
+  if (pathEdges.length) {
+    var cols = [];
+    if (sources.length && !isPrivate(sources[0].id)) cols.push({ role: "Entry", boxes: [nodeBox("Internet", "Entry", "Internet", "Outside the network", "", "entry")] });
+    if (sources.length) cols.push({ role: "Sources", boxes: sources.slice(0, 5).map(function(n) { return nodeBox(n.id, "Source", n.id, n.stage || "Source", n.severity); }) });
+    if (pivots.length) cols.push({ role: "Pivots", boxes: pivots.slice(0, 5).map(function(n) { return nodeBox(n.id, "Pivot", n.id, n.stage || "Pivot", n.severity); }) });
+    if (dests.length) {
+      var destBoxes;
+      if (dests.length <= 8) {
+        destBoxes = dests.map(function(d) { var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {}; return nodeBox(d.id, "Destination", d.id, techStage[e.technique_id] || d.stage || "Destination", d.severity); });
+      } else {
+        var groups = {};
+        dests.forEach(function(d) { var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {}; var k = e.technique_id || "unknown"; if (!groups[k]) groups[k] = { tech: k, name: techName[k] || k, stage: techStage[k] || d.stage || "", sev: "Low", count: 0, examples: [] }; groups[k].count += 1; if (groups[k].examples.length < 3) groups[k].examples.push(d.id); if ((sevW[d.severity] || 0) > (sevW[groups[k].sev] || 0)) groups[k].sev = d.severity; });
+        destBoxes = Object.keys(groups).map(function(k) { var g = groups[k]; return nodeBox(g.tech, "Destination", g.name, g.stage + " · " + g.count + " destinations", g.sev, "group"); });
+      }
+      cols.push({ role: "Destinations", boxes: destBoxes.slice(0, 6) });
+    }
+    chainHtml = "<div class='ap-chain'>" + cols.map(function(c, i) {
+      return (i ? "<span class='ap-arrow'>→</span>" : "") + "<div class='ap-col'>" + c.boxes.join("") + "</div>";
+    }).join("") + "</div>";
+    defaultId = (pivots[0] && pivots[0].id) || (dests[0] && dests[0].id) || (sources[0] && sources[0].id) || "";
+  } else {
     var stages = [];
     (path.timeline_summary || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
     if (!stages.length) (path.timeline || []).forEach(function(s) { if (s.kill_chain_stage && stages.indexOf(s.kill_chain_stage) < 0) stages.push(s.kill_chain_stage); });
-    var hostId = (nodes[0] && nodes[0].id) || (path.hosts && path.hosts[0]) || "Unknown host";
-    box.innerHTML = "<canvas id='attackCanvas' width='1080' height='170' style='width:100%;height:auto;background:#ffffff;border:2px solid #111111;border-radius:12px;display:block'></canvas>" +
-      "<p class='hint'>No host-to-host movement in this incident - all steps happened on " + esc(hostId) + ". The canvas below shows the stage progression in time order, not host hops. Click a stage box to see its steps.</p>";
-    var cv0 = document.getElementById("attackCanvas");
-    var ctx0 = cv0.getContext("2d");
-    drawAttackStageRow(ctx0, stages, path);
-    return;
+    var stageSev = {};
+    (path.timeline || []).forEach(function(s) { if (s.kill_chain_stage && (!stageSev[s.kill_chain_stage] || (sevW[s.severity] || 0) > (sevW[stageSev[s.kill_chain_stage]] || 0))) stageSev[s.kill_chain_stage] = s.severity; });
+    var stageCount = {};
+    (path.timeline_summary || []).forEach(function(s) { stageCount[s.kill_chain_stage] = (stageCount[s.kill_chain_stage] || 0) + (s.count || 0); });
+    chainHtml = "<div class='ap-chain ap-stages'>" + stages.map(function(st, i) {
+      return (i ? "<span class='ap-arrow'>→</span>" : "") + nodeBox(st, "Stage", st, (stageCount[st] ? fmtNum(stageCount[st]) + " steps" : ""), stageSev[st] || "", "stage");
+    }).join("") + "</div>";
+    defaultId = stages[0] || ""; defaultKind = "stage";
   }
-  // Destination boxes: individual if few, grouped by technique if many.
-  var destBoxes = [];
-  if (dests.length <= 8) {
-    dests.forEach(function(d) {
-      var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {};
-      destBoxes.push({ id: d.id, label: d.id, sub: (stageOfTech[e.technique_id] || d.stage || "Destination"), sev: sevOf(d), tech: e.technique_id || "", count: 1 });
-    });
-  } else {
-    var groups = {};
-    dests.forEach(function(d) {
-      var e = pathEdges.filter(function(x) { return x.to === d.id; })[0] || {};
-      var key = e.technique_id || "unknown";
-      if (!groups[key]) groups[key] = { tech: key, name: techName[key] || key, stage: stageOfTech[key] || d.stage || "", sev: "Low", count: 0, examples: [] };
-      groups[key].count += 1;
-      if (groups[key].examples.length < 3) groups[key].examples.push(d.id);
-      var w = { Critical: 40, High: 25, Medium: 10, Low: 3 };
-      if (w[sevOf(d)] > w[groups[key].sev]) groups[key].sev = sevOf(d);
-    });
-    Object.keys(groups).forEach(function(k) {
-      var g = groups[k];
-      destBoxes.push({ id: g.tech, label: g.name, sub: g.stage + " · " + g.count + " destinations", sev: g.sev, tech: g.tech, count: g.count, examples: g.examples });
-    });
-  }
-  var srcBoxes = sources.slice(0, 5).map(function(n) { return { id: n.id, label: n.id, sub: n.stage || "Source", sev: sevOf(n), tech: "", count: 1 }; });
-  var pivBoxes = pivots.slice(0, 5).map(function(n) { return { id: n.id, label: n.id, sub: n.stage || "Pivot", sev: sevOf(n), tech: "", count: 1 }; });
-  var dstBoxes = destBoxes.slice(0, 6);
-  var rows = Math.max(srcBoxes.length, pivBoxes.length, dstBoxes.length, 1);
-  var H = rows * 92 + 30, W = 1080;
-  box.innerHTML = "<canvas id='attackCanvas' width='" + W + "' height='" + H + "' style='width:100%;height:auto;background:#ffffff;border:2px solid #111111;border-radius:12px;display:block'></canvas>" +
-    "<p class='hint'>Arrows are real log edges only - destinations fan out in parallel from their source, they are NOT sequential hops unless a pivot connects them. " +
-    (sources.length > 5 ? "Showing 5 of " + sources.length + " sources. " : "") +
-    (pivots.length > 5 ? "Showing 5 of " + pivots.length + " pivots. " : "") +
-    (destBoxes.length > 6 ? "Showing 6 of " + destBoxes.length + " destination groups. " : "") +
-    "Full list: see the graph map and step list below. Click a box to see its steps.</p>";
-  var cv = document.getElementById("attackCanvas");
-  var isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  var dpr = window.devicePixelRatio || 1;
-  cv.width = W * dpr; cv.height = H * dpr;
-  var ctx = cv.getContext("2d");
-  ctx.scale(dpr, dpr);
-  // Dotted-paper background, like the reference canvas.
-  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
-  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
-  var BW = 230, BH = 68, cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 320, boxes: pivBoxes, name: "PIVOT" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
-  if (!pivBoxes.length) cols = [{ x: 20, boxes: srcBoxes, name: "SOURCE" }, { x: 620, boxes: dstBoxes, name: "DESTINATIONS" }];
-  var rects = [];
-  var drawBox = function(x, y, b) {
-    var stroke = b.sev === "user" ? userStroke : b.sev === "technique" ? techStroke : (sevColor[b.sev] || "#57534e");
-    var fill = b.sev === "user" ? userFill : b.sev === "technique" ? techFill : (sevFill[b.sev] || "#ffffff");
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
-    ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
-    var lab = b.label.length > 26 ? b.label.slice(0, 25) + "…" : b.label;
-    ctx.fillText(lab, x + 12, y + 24);
-    ctx.fillStyle = isDark ? "#a1a1aa" : "#555"; ctx.font = "11px system-ui, sans-serif";
-    var sub = (b.sub || "").length > 30 ? b.sub.slice(0, 29) + "…" : (b.sub || "");
-    ctx.fillText(sub, x + 12, y + 42);
-    ctx.fillStyle = stroke; ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.fillText((b.sev || "").toUpperCase() + (b.count > 1 ? " · ×" + b.count : ""), x + 12, y + 58);
-    rects.push({ x: x, y: y, w: BW, h: BH, id: b.id });
-    if (b.examples) {
-      ctx.fillStyle = "#555"; ctx.font = "10px ui-monospace, monospace";
-      ctx.fillText(b.examples.join(", "), x + 12, y + BH + 14);
+  box.innerHTML = "<div class='ap-wrap'>" + chainHtml + "<aside class='ap-side' id='apSide'></aside></div>";
+  var side = document.getElementById("apSide");
+  var tidsForNode = function(id) {
+    var tids = {};
+    pathEdges.forEach(function(e) { if (e.from === id || e.to === id) { if (e.technique_id) tids[e.technique_id] = true; } });
+    (path.timeline || []).forEach(function(s) { if ((s.ip === id || s.host === id) && s.technique_id) tids[s.technique_id] = true; });
+    return Object.keys(tids);
+  };
+  var showSide = function(id, kind) {
+    var events = [], todos = [], watch = [];
+    if (kind === "entry") {
+      events = ["No log line for Internet itself"];
+      var first = sources[0];
+      if (first) { var ft = tidsForNode(first.id); ft.forEach(function(t) { if (protByTid[t]) todos.push(protByTid[t]); }); watch.push(first.id); }
+    } else if (kind === "stage") {
+      var st = (path.timeline_summary || []).filter(function(s) { return s.kill_chain_stage === id; });
+      if (!st.length) st = (path.timeline || []).filter(function(s) { return s.kill_chain_stage === id; }).map(function(s) { return { technique_id: s.technique_id, technique_name: s.technique_name, count: 1 }; });
+      st.forEach(function(s) { events.push((s.technique_name || s.technique_id) + " (" + s.technique_id + ")" + (s.count > 1 ? " ×" + s.count : "")); if (protByTid[s.technique_id]) todos.push(protByTid[s.technique_id]); });
+      (path.next_stages || []).forEach(function(s) { watch.push(s.stage + " — " + s.reason); });
+    } else if (kind === "group") {
+      events = [techName[id] || id];
+      if (protByTid[id]) todos.push(protByTid[id]);
+    } else {
+      var tids = tidsForNode(id);
+      tids.forEach(function(t) {
+        var c = techCount[t];
+        events.push((techName[t] || t) + " (" + t + ")" + (c > 1 ? " ×" + c : "") + (techStage[t] ? " — " + techStage[t] : ""));
+        if (protByTid[t]) todos.push(protByTid[t]);
+      });
+      (path.next_reach || []).forEach(function(n) {
+        var fromHere = pathEdges.some(function(e) { return e.from === id && e.to === n.host; });
+        if (fromHere || n.host === id) watch.push(n.host + " — " + (n.block || n.reason || ""));
+      });
+      if (!watch.length && (path.next_reach || []).length && dests.some(function(d) { return d.id === id; })) watch.push(id + " — watch for outbound connections");
     }
+    if (!events.length) events = ["No steps recorded for this box in the sampled timeline"];
+    if (!todos.length) todos = ["No protection action for these techniques"];
+    if (!watch.length) watch = ["Nothing to watch from here in the logs"];
+    side.innerHTML = "<h4>Events</h4><ul>" + events.map(function(e) { return "<li>" + esc(e) + "</li>"; }).join("") + "</ul>" +
+      "<h4>What to do</h4><ul>" + todos.map(function(e) { return "<li>" + esc(e) + "</li>"; }).join("") + "</ul>" +
+      "<h4>Watch next</h4><ul>" + watch.map(function(e) { return "<li>" + esc(e) + "</li>"; }).join("") + "</ul>";
+    box.querySelectorAll(".ap-node").forEach(function(el) { el.classList.toggle("sel", el.getAttribute("data-ap-id") === id); });
   };
-  var drawArrow = function(x1, y1, x2, y2, col) {
-    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 10, y2 - 4); ctx.lineTo(x2 - 10, y2 + 4); ctx.closePath(); ctx.fill();
-  };
-  cols.forEach(function(c) {
-    ctx.fillStyle = isDark ? "#a1a1aa" : "#888"; ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.fillText(c.name, c.x, 18);
-    c.boxes.forEach(function(b, i) { drawBox(c.x, 26 + i * 92, b); });
+  box.querySelectorAll(".ap-node").forEach(function(el) {
+    el.addEventListener("click", function() { showSide(el.getAttribute("data-ap-id"), el.getAttribute("data-ap-kind") || "node"); });
   });
-  // Arrows: source -> pivot (if any) -> destinations, and source ->
-  // destinations directly. One arrow per box pair, not per detection.
-  var srcY = function(i) { return 26 + i * 92 + BH / 2; };
-  var pivY = function(i) { return 26 + i * 92 + BH / 2; };
-  var dstY = function(i) { return 26 + i * 92 + BH / 2; };
-  if (pivBoxes.length) {
-    srcBoxes.forEach(function(s, i) { drawArrow(20 + BW, srcY(i), 320, pivY(0), isDark ? "#34d399" : "#00a66a"); });
-    pivBoxes.forEach(function(p, i) { dstBoxes.forEach(function(d, j) { drawArrow(320 + BW, pivY(i), 620, dstY(j), isDark ? "#34d399" : "#00a66a"); }); });
-  } else {
-    srcBoxes.forEach(function(s, i) { dstBoxes.forEach(function(d, j) { drawArrow(20 + BW, srcY(i), 620, dstY(j), isDark ? "#34d399" : "#00a66a"); }); });
-  }
-  state.attackRects = rects;
-  cv.addEventListener("click", function(ev) {
-    var r = cv.getBoundingClientRect();
-    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (H / r.height);
-    var hit = null;
-    rects.forEach(function(rc) { if (x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h) hit = rc; });
-    if (hit) showNodeSteps(path, hit.id);
-  });
+  if (defaultId) showSide(defaultId, defaultKind);
 }
 
-function drawAttackStageRow(ctx, stages, path) {
-  // STAGE ROW (2026-11-01 fix, live mode): the old version squeezed
-  // all stages into ONE row, so an 11-stage incident got 67 px boxes
-  // with unreadable truncated names - that is the 'attack path not
-  // showing properly' the user saw after Load Sample. Now stages
-  // wrap after 5 boxes into a second/third row at full readable
-  // size, with an arrow down to the next row, and each box shows how
-  // many steps that stage has (from the timeline summary when the
-  // incident is sampled, else counted from the timeline).
-  var isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  var W = 1080, BH = 64, gap = 30;
-  var perRow = stages.length <= 6 ? stages.length : 5;
-  var rows = Math.max(1, Math.ceil(stages.length / perRow));
-  var BW = Math.min(200, Math.floor((W - 40 - (perRow - 1) * gap) / Math.max(1, perRow)));
-  var maxChars = Math.max(10, Math.floor((BW - 24) / 7));
-  var H = 50 + rows * 92 - 28 + 20;
-  var cv = document.getElementById("attackCanvas");
-  if (cv) { cv.width = W; cv.height = H; }
-  var counts = {};
-  (path.timeline_summary || []).forEach(function(s) { counts[s.kill_chain_stage] = (counts[s.kill_chain_stage] || 0) + (s.count || 0); });
-  if (!Object.keys(counts).length) (path.timeline || []).forEach(function(s) { counts[s.kill_chain_stage] = (counts[s.kill_chain_stage] || 0) + 1; });
-  ctx.fillStyle = isDark ? "#18181b" : "#ffffff"; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = isDark ? "#3f3f46" : "#e7e5e4";
-  for (var gx = 9; gx < W; gx += 18) for (var gy = 9; gy < H; gy += 18) { ctx.beginPath(); ctx.arc(gx, gy, 1, 0, 2 * Math.PI); ctx.fill(); }
-  var rects = [];
-  var drawArrowR = function(x1, y1, x2, y2) {
-    ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 10, y2 - 4); ctx.lineTo(x2 - 10, y2 + 4); ctx.closePath(); ctx.fill();
-  };
-  for (var row = 0; row < rows; row++) {
-    var rowStages = stages.slice(row * perRow, (row + 1) * perRow);
-    var total = rowStages.length * (BW + gap) - gap;
-    var x0 = Math.max(20, (W - total) / 2);
-    rowStages.forEach(function(s, j) {
-      var i = row * perRow + j;
-      var x = x0 + j * (BW + gap), y = 50 + row * 92;
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, y, BW, BH, 10); else ctx.rect(x, y, BW, BH);
-      ctx.fillStyle = isDark ? "#27272a" : "#fff"; ctx.fill(); ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = isDark ? "#f4f4f5" : "#111"; ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.fillText(s.length > maxChars ? s.slice(0, maxChars - 1) + "…" : s, x + 12, y + 28);
-      ctx.fillStyle = "#555"; ctx.font = "11px system-ui, sans-serif";
-      ctx.fillText("Stage " + (i + 1) + " of " + stages.length + (counts[s] ? " · " + fmtNum(counts[s]) + " steps" : ""), x + 12, y + 48);
-      rects.push({ x: x, y: y, w: BW, h: BH, id: s });
-      if (j < rowStages.length - 1) drawArrowR(x + BW, y + BH / 2, x + BW + gap, y + BH / 2);
-      else if (row < rows - 1) {
-        // Down-arrow to the first box of the next row.
-        var nextRow = stages.slice((row + 1) * perRow, (row + 2) * perRow);
-        var nextTotal = nextRow.length * (BW + gap) - gap;
-        var nextX0 = Math.max(20, (W - nextTotal) / 2);
-        var midY = y + BH + 14; // middle of the 28 px gap between rows
-        var nextTop = y + 92; // top edge of the next row's boxes
-        ctx.strokeStyle = isDark ? "#34d399" : "#00a66a"; ctx.lineWidth = 2; ctx.beginPath();
-        ctx.moveTo(x + BW / 2, y + BH); ctx.lineTo(x + BW / 2, midY); ctx.lineTo(nextX0 + BW / 2, midY); ctx.lineTo(nextX0 + BW / 2, nextTop); ctx.stroke();
-        ctx.fillStyle = isDark ? "#34d399" : "#00a66a"; ctx.beginPath();
-        ctx.moveTo(nextX0 + BW / 2, nextTop); ctx.lineTo(nextX0 + BW / 2 - 4, nextTop - 10); ctx.lineTo(nextX0 + BW / 2 + 4, nextTop - 10); ctx.closePath(); ctx.fill();
-      }
-    });
-  }
-  state.attackRects = rects;
-  if (cv) cv.addEventListener("click", function(ev) {
-    var r = cv.getBoundingClientRect();
-    var x = (ev.clientX - r.left) * (W / r.width), y = (ev.clientY - r.top) * (H / r.height);
-    rects.forEach(function(rc) {
-      if (x >= rc.x && x <= rc.x + rc.w && y >= rc.y && y <= rc.y + rc.h) {
-        var idx = (path.timeline || []).findIndex(function(s) { return s.kill_chain_stage === rc.id; });
-        if (idx >= 0) showStep(path, idx);
-      }
-    });
-  });
+function closeNodeModal() {
+  var m = document.getElementById("nodeModal");
+  if (m) m.hidden = true;
 }
-
+(function initNodeModal() {
+  document.addEventListener("click", function(e) {
+    if (e.target && (e.target.id === "nodeModalClose" || e.target.id === "nodeModalBackdrop")) closeNodeModal();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeNodeModal();
+  });
+})();
 function showNodeSteps(path, nodeId) {
+  // NODE POPUP (2026-11-01, user: open a pop-up when I click a
+  // graph node): the same step list that used to fill Step detail
+  // and scroll the page now opens in a modal over the graph, so the
+  // user stays where they clicked. Clicking a step inside the popup
+  // closes it and shows that step in Step detail below, as before.
+  // FIX: steps also match by IP - graph SOURCES boxes are IPs
+  // (e.g. 102.186.34.243), while timeline.host is the hostname, so
+  // the old host/user/technique-only filter showed "No steps" for
+  // exactly the IP boxes in the user's screenshot.
   document.querySelectorAll(".gnode-wrap").forEach(function(el) {
     el.classList.toggle("sel", el.getAttribute("data-node") === nodeId);
   });
   var sn = document.getElementById("selectedNodeLabel");
   if (sn) sn.textContent = nodeId;
+  var modal = document.getElementById("nodeModal");
+  var title = document.getElementById("nodeModalTitle");
+  var body = document.getElementById("nodeModalBody");
+  if (!modal || !title || !body) return;
   var steps = path.timeline.map(function(s, i) { return { s: s, i: i }; }).filter(function(x) {
-    return x.s.host === nodeId || x.s.user === nodeId || x.s.technique_id === nodeId;
+    return x.s.host === nodeId || x.s.ip === nodeId || x.s.user === nodeId || x.s.technique_id === nodeId;
   });
+  title.textContent = "Node: " + nodeId;
   if (!steps.length) {
-    document.getElementById("stepDetail").innerHTML = "<p>No steps on " + esc(nodeId) + ".</p>";
-    return;
+    body.innerHTML = "<p>No steps on " + esc(nodeId) + " in the sampled timeline.</p>";
+  } else {
+    var shown = steps.slice(0, 100);
+    body.innerHTML =
+      "<p>" + steps.length + " step(s) in this incident" +
+      (steps.length > 100 ? " (showing the first 100 - the rest repeat the same techniques)" : "") + ". Click a step to inspect it.</p>" +
+      shown.map(function(x) {
+        return "<button class='btn ghost step-link' data-i='" + x.i + "'>" + (x.i + 1) + ". " + esc(x.s.kill_chain_stage) + " - " +
+          esc(x.s.technique_id) + " " + esc(x.s.technique_name) + " (" + esc(x.s.time) + ")</button>";
+      }).join(" ");
+    body.querySelectorAll(".step-link").forEach(function(el) {
+      el.addEventListener("click", function() { closeNodeModal(); showStep(path, parseInt(el.getAttribute("data-i"), 10)); });
+    });
   }
-  var shown = steps.slice(0, 100);
-  document.getElementById("stepDetail").innerHTML =
-    "<b>Node: " + esc(nodeId) + "</b> - " + steps.length + " step(s) in this incident" +
-    (steps.length > 100 ? " (showing the first 100 - the rest repeat the same techniques)" : "") + ". Click a step to inspect it.<br>" +
-    shown.map(function(x) {
-      return "<button class='btn ghost step-link' data-i='" + x.i + "'>" + (x.i + 1) + ". " + esc(x.s.kill_chain_stage) + " - " +
-        esc(x.s.technique_id) + " " + esc(x.s.technique_name) + " (" + esc(x.s.time) + ")</button>";
-    }).join(" ");
-  document.querySelectorAll(".step-link").forEach(function(el) {
-    el.addEventListener("click", function() { showStep(path, parseInt(el.getAttribute("data-i"), 10)); });
-  });
-  document.getElementById("stepDetail").scrollIntoView({ behavior: "smooth", block: "center" });
+  modal.hidden = false;
 }
 
 function showStep(path, i) {
