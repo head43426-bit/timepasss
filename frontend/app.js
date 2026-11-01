@@ -494,6 +494,19 @@ function renderGraph(path) {
   });
 }
 
+function closeNodeModal() {
+  var m = document.getElementById("nodeModal");
+  if (m) m.hidden = true;
+}
+(function initNodeModal() {
+  document.addEventListener("click", function(e) {
+    if (e.target && (e.target.id === "nodeModalClose" || e.target.id === "nodeModalBackdrop" || (e.target.closest && e.target.closest("#nodeModalClose")))) closeNodeModal();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeNodeModal();
+  });
+})();
+
 function showNodeSteps(path, nodeId) {
   // NODE POPUP ONLY (2026-11-01): clicking a graph node opens a
   // real modal over the graph - not a side panel, not a scroll to
