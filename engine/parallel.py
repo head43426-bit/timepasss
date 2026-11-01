@@ -211,15 +211,36 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
     chunk_results = []
     with ProcessPoolExecutor(max_workers=workers,
                              initializer=_init_worker, initargs=(rules_dir, rule_files)) as pool:
-        completed_workers = 0
+        # FREEZE FIX (2026-11-01, user: progress freezes at ~492k lines
+        # then suddenly completes): pool.map yields results IN INPUT
+        # ORDER, so one slow chunk held back every later chunk that
+        # had already finished - the bar sat still, then jumped.
+        # Byte ranges are equal bytes, not equal lines, so a region
+        # of short lines makes one chunk hold far more lines (and
+        # take far longer) than its neighbours; on an HDD + 90% RAM
+        # machine paging makes that worse, but the fix does not
+        # depend on which chunk is slow. as_completed reports each
+        # chunk the moment it finishes, whatever order that is, so
+        # the bar moves whenever ANY worker finishes. Chunk order is
+        # restored afterwards (results sorted by input index) before
+        # the aggregate replay and the det-file streaming, so counts,
+        # aggregate replay and linking are unchanged.
+        from concurrent.futures import as_completed as _as_completed
         _tmpdir = os.path.dirname(os.path.abspath(db_path)) or "."
-        for result in pool.map(_process_range, [(log_path, s, e, _tmpdir) for s, e in ranges]):
+        _futures = {}
+        for _idx, (_s, _e) in enumerate(ranges):
+            _futures[pool.submit(_process_range, (log_path, _s, _e, _tmpdir))] = _idx
+        _by_idx = {}
+        completed_workers = 0
+        for _fut in _as_completed(_futures):
+            result = _fut.result()
+            _by_idx[_futures[_fut]] = result
             completed_workers += 1
             total_events += result["events"]
-            chunk_results.append(result)
             if on_progress:
-                on_progress(total_events, sum(r["detections"] for r in chunk_results), "reading")
+                on_progress(total_events, sum(r["detections"] for r in _by_idx.values()), "reading")
             print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {result['detections']} detections)", flush=True)
+        chunk_results = [_by_idx[i] for i in range(len(ranges))]
     # Global aggregate pass, in original file order (chunk order, then
     # byte position inside the chunk). Aggregate detections are few by
     # definition (only emitted after threshold + success), so holding
@@ -231,11 +252,17 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         print(f"  ... Processing {total_agg:,} aggregate candidates...", flush=True)
         agg_detector = Detector(load_rules(rules_dir, only_files=rule_files))
         agg_detector.simple = []
+        # FREEZE FIX (2026-11-01): this pass used to report nothing
+        # at all, so the bar froze for its whole duration, then
+        # jumped. Report once per chunk file processed, still in
+        # stage "reading" (the UI's Step 2), with total events.
         for result in chunk_results:
             with open(result["agg_path"], encoding="utf-8") as fh:
                 for line in fh:
                     row = _json.loads(line)
                     agg_detections.extend(agg_detector.process(row["event"]))
+            if on_progress:
+                on_progress(total_events, sum(r["detections"] for r in chunk_results) + len(agg_detections), "reading")
         agg_detections.sort(key=lambda d: (d.get("ts") is None, d.get("ts") or 0))
         print(f"  ... Finished aggregate pass ({len(agg_detections)} aggregate detections)", flush=True)
     # Stream simple detections in chunk order, merging aggregate

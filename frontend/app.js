@@ -95,107 +95,94 @@ async function loadIncidents() {
   document.querySelectorAll(".inc").forEach(function(el) {
     el.addEventListener("click", function() { selectIncident(parseInt(el.getAttribute("data-id"), 10)); });
   });
+  // INVESTIGATION SPEED, SECOND CAUSE (2026-11-01): on page load
+  // nothing ever selected an incident - the list rendered, but
+  // selectIncident (the only place that sets the speed) ran only
+  // after an upload/sample or a click. So opening /app on an
+  // existing DB left the speed at "—" no matter how long ago the
+  // run finished. Auto-select the first (highest-risk) incident
+  // once, on the first list load only - later refreshes (live
+  // timer, tier filter) must never steal the incident the user
+  // is already reading.
+  if (!state.autoSelected && shown.length) {
+    state.autoSelected = true;
+    selectIncident(shown[0].id);
+  }
 }
 
 // RUN STATS (2026-11-01): the card at the top of the right column.
-// Definitions, so no number is a mystery:
-//  - Detection %: planted attack steps whose technique appears in the
-//    best-matching incident, out of all planted steps (evaluate.py).
-//  - Correct labels %: of planted steps matched to a detection on the
-//    same host, the share whose technique also matches.
-//  - Attack path: planted attacks whose steps appear in ONE incident
-//    in the correct order, shown as a fraction plus words - 'full of
-//    them' when every attack rebuilt, 'about half of them' near half.
-//  - False alarms %: incidents that are the best match for no attack,
-//    out of all incidents (lower is better).
-//  - Processing time: last run's total seconds, shown in minutes.
-//  - Memory: last run's peak RSS, shown in GB (main process only -
-//    parallel workers are separate processes, so it is a lower bound).
+// Only two boxes remain (2026-11-01, user: delete the accuracy
+// boxes - they are not necessary):
+//  - Memory: live PC RAM meter at the top of the box, plus ASK
+//    (main) memory below it. The old last-run peak GB value was
+//    removed 2026-11-01, when the meter moved into its place.
 //  - Investigation speed: time to open an incident (the three
 //    detail fetches plus rendering), measured in the browser with
-//    performance.now(), shown in ms, or seconds when over 1 s.
-//  - Lines / sec: last run's processing speed.
-// Accuracy stats exist only after Load Sample, because only its
-// planted attacks are known ground truth; after a plain upload they
-// show 'not available' instead of a guessed number.
-function fmtPct(v) { return (v === undefined || v === null) ? "—" : (Math.round(v * 10) / 10) + "%"; }
-function fmtMins(sec) {
-  if (sec === undefined || sec === null) return "—";
-  var m = sec / 60;
-  return (m >= 0.1 ? m.toFixed(2) : m.toFixed(3)) + " mins";
-}
-function fmtGB(mb) {
-  if (mb === undefined || mb === null) return "—";
-  return (mb / 1024).toFixed(2) + " GB";
-}
+//    performance.now(), always shown in milliseconds (2026-11-01,
+//    user: it should be in milliseconds - never converted to
+//    seconds, even when it passes 1000 ms).
+// Removed before this: Processing time, Lines / sec, and the four
+// accuracy boxes (Detection %, Correct labels %, Attack path,
+// False alarms %) - those four needed planted Load Sample ground
+// truth and stayed "not available" after a plain upload, so the
+// user asked to delete them rather than show them empty.
+// The server still records evaluation in /run-stats JSON; nothing
+// on the page displays it any more.
 function fmtDur(ms) {
-  if (ms < 1000) return Math.round(ms) + " ms";
-  return (ms / 1000).toFixed(2) + " s";
-}
-function attackPathWords(ev) {
-  if (!ev || !ev.attacks) return "—";
-  if (ev.rebuilt_attacks === ev.attacks) return "full of them";
-  var frac = ev.rebuilt_attacks / ev.attacks;
-  if (frac >= 0.4 && frac <= 0.6) return "about half of them";
-  return ev.rebuilt_attacks + " of " + ev.attacks;
+  // Always milliseconds, by user request - no seconds conversion.
+  return Math.round(ms) + " ms";
 }
 async function loadStats() {
   var set = function(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
   try {
     var s = await (await fetch("/run-stats")).json();
-    var ev = s.evaluation, run = s.last_run;
-    if (ev) {
-      set("statDetection", fmtPct(ev.detection));
-      set("statLabels", fmtPct(ev.correct_labels));
-      set("statAttackPath", fmtPct(ev.attack_path) + " - " + attackPathWords(ev));
-      set("statAttackPathNote", (ev.rebuilt_attacks || 0) + " of " + (ev.attacks || 0) + " attacks rebuilt in order");
-      set("statFalse", fmtPct(ev.false_alarms) + (ev.false_incidents !== undefined ? " (" + ev.false_incidents + " incidents)" : ""));
-    } else {
-      set("statDetection", "not available");
-      set("statLabels", "not available");
-      set("statAttackPath", "not available");
-      set("statAttackPathNote", "needs Load Sample ground truth");
-      set("statFalse", "not available");
-    }
-    if (run) {
-      set("statTime", fmtMins(run.seconds));
-      set("statTimeNote", "last run: " + (run.kind || "") + (run.filename ? " - " + run.filename : ""));
-      set("statMemory", fmtGB(run.peak_rss_mb));
-      set("statLines", run.events_per_second ? fmtNum(Math.round(run.events_per_second)) + " / sec" : "—");
-      set("statLinesNote", "last run: " + fmtNum(run.events || 0) + " lines, " + fmtNum(run.detections || 0) + " detections");
-    }
+    // No accuracy sets here: those four boxes were deleted
+    // 2026-11-01 at user request. Evaluation still arrives in
+    // /run-stats JSON, but nothing on the page displays it.
     // LIVE PC MEMORY METER (2026-11-01, user: stats not loaded from
     // the PC, add a meter for memory): /run-stats now carries a
     // fresh system snapshot on every call, so this meter is live
     // from the machine running the server (your PC, when you run
     // it locally), even with no run yet. It is system RAM, not
     // ASK-only memory: ASK (main) is shown separately below it.
-    // Run stats above (time, lines/sec, investigation) stay
-    // last-run measurements - they cannot exist before a run, and
-    // this meter does not invent them.
+    // Investigation speed stays a last-run measurement - it cannot
+    // exist before a run, and this meter does not invent it.
     var sys = s.system || {};
     var bar = document.getElementById("memBar");
     if (bar && sys.ram_percent !== undefined && sys.ram_percent !== null) {
       bar.style.width = Math.min(100, Math.max(0, sys.ram_percent)) + "%";
       bar.style.background = sys.ram_percent >= 90 ? "#dc2626" : (sys.ram_percent >= 70 ? "#d97706" : "#16a34a");
     }
-    if (sys.ram_total_mb) {
+    // MEMORY 0 GB FIX (2026-11-01, user: memory locked in 0 GB):
+    // the old Memory box showed ASK's peak in GB, and ASK's peak is
+    // tens/hundreds of MB, so it always rounded to 0.0 GB. That
+    // value is gone: PC RAM is shown in GB (a real 7-8 GB total on
+    // an 8 GB machine, never 0 - a 0/missing total means the
+    // snapshot failed, so it says "processing" instead of
+    // "0.0 / 0.0 GB"), and ASK is shown separately in MB.
+    if (sys.ram_total_mb && sys.ram_used_mb !== undefined && sys.ram_used_mb !== null && sys.ram_percent !== undefined && sys.ram_percent !== null) {
       set("memLive", "PC RAM: " + (sys.ram_used_mb / 1024).toFixed(1) + " / " + (sys.ram_total_mb / 1024).toFixed(1) + " GB (" + sys.ram_percent + "%)" + (sys.cpu_percent !== undefined && sys.cpu_percent !== null ? " · CPU " + sys.cpu_percent + "%" : ""));
     } else {
-      set("memLive", "PC RAM: not available");
+      set("memLive", "PC RAM: processing");
     }
-    if (sys.ask_rss_mb) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
+    if (sys.ask_rss_mb !== undefined && sys.ask_rss_mb !== null) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
+    else set("memAsk", "ASK (main): processing");
     var basis = document.getElementById("statBasis");
-    if (basis) {
-      if (ev && s.evaluation_basis) basis.textContent = "Accuracy basis: " + s.evaluation_basis + ".";
-      else if (run) basis.textContent = "Accuracy stats need Load Sample ground truth. Processing time, memory and lines/sec are from the last " + (run.kind || "run") + ". The memory meter is live from this PC.";
-      else basis.textContent = "No run yet. Upload a log or run Load Sample to fill processing time, lines/sec and investigation speed. The memory meter is live from this PC.";
-    }
+    if (basis) basis.textContent = "Memory meter is live from this PC. Investigation speed is measured in milliseconds when you open an incident.";
   } catch (e) { /* server down: leave the dashes */ }
 }
 
 async function selectIncident(id) {
+  // INVESTIGATION SPEED FIX (2026-11-01, user: speed not loaded):
+  // the speed was set only at the very end of this function, so
+  // any throw in the rendering above it (a missing timeline, a
+  // graph/canvas error, a failed fetch) silently killed the whole
+  // async function and the box stayed "—" forever, with no error
+  // shown. The try/finally below guarantees the speed is set even
+  // when a render step throws - the measurement is the time to
+  // open the incident, whatever happened while opening it.
   var _t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  try {
   var path = await (await fetch("/incidents/" + id + "/path")).json();
   var rep = await (await fetch("/incidents/" + id + "/report")).json();
   var next = await (await fetch("/incidents/" + id + "/next")).json();
@@ -215,10 +202,6 @@ async function selectIncident(id) {
       ? "<ol>" + ranked.map(function(n, i) { return "<li><b>" + esc(n.host) + "</b> - watch score " + n.confidence + "/100 - " + esc(n.reason) + "</li>"; }).join("") + "</ol>"
       : "<p>No frontier paths yet for this incident.</p>";
   }
-  var cb = document.getElementById("corridorBtn");
-  if (cb) { cb.disabled = false; var cl = document.getElementById("corridorLabel"); if (cl) cl.textContent = "Execute Containment Isolator"; }
-  // (No corridorNote element any more: the simulation explanation
-  // now lives in the containment popup, not in a stray note.)
   var bs = document.getElementById("briefStatus");
   if (bs) bs.textContent = "Incident #" + path.id + " - " + esc(path.title);
   var br = document.getElementById("briefRisk");
@@ -257,11 +240,43 @@ async function selectIncident(id) {
   // Attack path canvas: see renderAttackPathCanvas - the old
   // flat arrow list invented a chain between unrelated nodes.
   renderAttackPathCanvas(path);
-  // The next-hop card was removed with the rest of the look-ahead
-  // panel (2026-11-01): its frontier hosts still feed the Attack
-  // Paths card above through next.next_reach, but there is no
-  // separate next-hop panel on the page any more, so nothing here
-  // writes to a removed element.
+  // LOOK AHEAD (restored 2026-11-01 at user request - it had been
+  // removed with the old look-ahead panel, leaving only the right
+  // Attack Paths card): "What the attacker could reach next" in
+  // the centre column, from GET /incidents/{id}/next (already
+  // fetched above as `next`). Frontier hosts are destinations
+  // already contacted but not yet used as stepping stones - not
+  // guessed hosts. Stages are predictions about stages, never
+  // guessed hosts. Blast radius is from the observed graph unless
+  // a topology was supplied.
+  var la = document.getElementById("lookAhead");
+  if (la) {
+    var frontier = next.next_reach || [];
+    var stages = next.next_stages || [];
+    var total = next.next_frontier_total || frontier.length;
+    var laHtml = "";
+    if (frontier.length) {
+      laHtml += "<p><b>Frontier hosts to watch (" + fmtNum(total) + " in total" + (total > frontier.length ? ", first " + frontier.length + " shown" : "") + "):</b></p><ol>" + frontier.map(function(n) {
+        return "<li><b>" + esc(n.host) + "</b> - watch score " + (n.confidence || 0) + "/100 - " + esc(n.reason) + ". " + esc(n.block || "") + "</li>";
+      }).join("") + "</ol>";
+      laHtml += "<p class='hint'>Basis: " + esc(next.next_basis || "observed graph") + " - these are hosts the attacker has already contacted, not hosts guessed from nowhere. If one starts connecting onward, that is the next hop.</p>";
+    } else {
+      laHtml += "<p>No frontier host to watch: no new target is guessed.</p>";
+    }
+    if (stages.length) {
+      laHtml += "<p><b>Next kill-chain stages to watch for:</b></p><ol>" + stages.map(function(s) {
+        return "<li><b>" + esc(s.stage) + "</b> - " + esc(s.reason) + ". " + esc(s.block || "") + "</li>";
+      }).join("") + "</ol>";
+    }
+    if (next.blast_radius !== undefined && next.blast_radius !== null) {
+      laHtml += "<p><b>Blast radius: " + next.blast_radius + "/100</b>";
+      var br = next.blast_breakdown;
+      if (br) laHtml += " (observed graph - Reach " + br.reach + "/25 from " + br.dst_count + " destinations, Spread " + br.spread + "/25 from " + br.src_count + " sources, Depth " + br.depth + "/25 from " + br.stage_count + " stages, Severity " + br.severity + "/25, worst " + esc(br.worst_severity) + ")";
+      else if (next.blast_basis) laHtml += " (" + esc(next.blast_basis) + ")";
+      laHtml += ". This is a score from what the logs show, not a count of compromised hosts.</p>";
+    }
+    la.innerHTML = laHtml;
+  }
   document.getElementById("protect").innerHTML = (rep.protections && rep.protections.length)
     ? "<ol>" + rep.protections.map(function(p) {
         return "<li><b>" + esc(p.technique_id) + " - " + esc(p.technique_name) + ":</b> " + esc(p.action) + "</li>";
@@ -271,14 +286,16 @@ async function selectIncident(id) {
   document.getElementById("copyBtn").disabled = false;
   var pdf = document.getElementById("pdfBtn");
   if (pdf) pdf.disabled = false;
-  if (path.timeline.length) showStep(path, 0);
-  // Investigation speed: how long this incident took to open, from
-  // the first detail fetch to the rendered detail (not the click
-  // animation or the scroll that follows).
-  var _t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-  var _inv = document.getElementById("statInvest");
-  if (_inv) _inv.textContent = fmtDur(_t1 - _t0);
-  document.getElementById("detailSection").scrollIntoView({ behavior: "smooth" });
+  if ((path.timeline || []).length) showStep(path, 0);
+  } finally {
+    // Always in milliseconds (fmtDur never converts to seconds),
+    // and always set - even if a render step above threw.
+    var _t1 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    var _inv = document.getElementById("statInvest");
+    if (_inv) _inv.textContent = fmtDur(_t1 - _t0);
+  }
+  var _ds = document.getElementById("detailSection");
+  if (_ds) _ds.scrollIntoView({ behavior: "smooth" });
 }
 
 function renderGraph(path) {
@@ -1101,52 +1118,6 @@ if (flowFilter) {
     });
   });
 }
-// CONTAINMENT (2026-11-01, user demand): there is ONE containment
-// button now, in the Attack Paths card. The old centre-column
-// "Sever & Isolate" button (one selected node) and this button
-// (the whole attack path) did the same thing - a dashboard-only
-// simulation - so the single-node one is removed; keeping both
-// only invited the question 'what is the difference'. Clicking the
-// one remaining button does exactly this, and nothing more:
-//  - its label becomes "Attack Path Severed & Quarantined" and it
-//    disables itself, so it cannot be pressed twice;
-//  - the incident banner above the graph is marked contained, in
-//    this dashboard view only;
-//  - a popup (below) states that plainly, with a Close button.
-// It does NOT isolate any real machine, change any firewall rule,
-// block any traffic, call any backend API, or change the database:
-// reloading, or picking another incident, shows the original data.
-var corridorBtn = document.getElementById("corridorBtn");
-function closeContainModal() {
-  var m = document.getElementById("containModal");
-  if (m) m.hidden = true;
-}
-if (corridorBtn) {
-  corridorBtn.addEventListener("click", function() {
-    var cl2 = document.getElementById("corridorLabel"); if (cl2) cl2.textContent = "Attack Path Severed & Quarantined";
-    corridorBtn.disabled = true;
-    var banner = document.getElementById("pathBanner");
-    var sel = state.selected;
-    if (banner && sel) banner.textContent = "Showing incident #" + sel.id + " - attack path severed & quarantined (dashboard simulation only) - risk " + sel.risk_score + "/100 - " + (sel.hosts || []).join(", ");
-    var body = document.getElementById("containModalBody");
-    if (body) {
-      var hosts = sel ? (sel.hosts || []).join(", ") : "this incident";
-      body.innerHTML =
-        "<p><b>What just happened, in this dashboard only:</b> the attack path for incident " + (sel ? "#" + sel.id : "") + " (" + esc(hosts) + ") is marked severed &amp; quarantined, and the button above is now disabled so it cannot be pressed twice.</p>" +
-        "<p><b>What did NOT happen:</b> no real machine was isolated, no firewall rule was changed, no network traffic was blocked, no backend call was made, and the database was not changed. Reloading the page, or picking another incident, shows the original data.</p>" +
-        "<p><b>Why there is only one button now:</b> the old 'Sever &amp; Isolate' button (one selected node) and this button (the whole attack path) were the same simulation at two scopes. The single-node one is removed, so there is nothing left to compare - this button is the only containment action, and it is a demo marking, not a real isolation.</p>";
-    }
-    var modal = document.getElementById("containModal");
-    if (modal) modal.hidden = false;
-  });
-}
-var containClose = document.getElementById("containModalClose");
-if (containClose) containClose.addEventListener("click", closeContainModal);
-var containOk = document.getElementById("containModalOk");
-if (containOk) containOk.addEventListener("click", closeContainModal);
-var containBackdrop = document.getElementById("containModal");
-if (containBackdrop) containBackdrop.addEventListener("click", function(e) { if (e.target === containBackdrop) closeContainModal(); });
-
 const clearBtn = document.getElementById("clearBtn");
 const clearStatus = document.getElementById("clearStatus");
 if (clearBtn) {

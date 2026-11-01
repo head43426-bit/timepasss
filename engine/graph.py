@@ -65,21 +65,52 @@ def risk_score(detections: List[Dict]) -> float:
         +15 over 1,000) + 5 each for exfiltration and for
         credential-access/privilege-escalation - then clamped to
         the tier ceiling, which is the only cap that matters.
-    So a single Low phishing line scores 10 (Low), a single High SMB
-    scores 70 (High), a 137-step Low phishing flood scores 10+0+0+15
-    = 25 (Low, not 100), and a multi-stage Critical attack with
-    credential access and exfiltration scores 90+12+10+15, capped at
-    100 (Critical). Count adds a little, never everything."""
+    So a single Low phishing line scores 10 (Low), a 137-step Low
+    phishing flood scores 10+0+0+10 = 20 (Low, not 100), and a
+    multi-stage Critical attack with credential access and
+    exfiltration scores 90+12+10+15, capped at 100 (Critical).
+    Count adds a little, never everything.
+    PROGRESSION DOWNGRADE (2026-11-01, user: 671 Critical + 714
+    High + 0 Medium + 0 Low, and moving the tier boundaries only
+    relabels - Critical becomes 0, High/Medium grow, nothing real
+    changes). That zero-sum is structural, not a threshold bug:
+    tier was set by the WORST detection alone, and almost every
+    detected technique is intrinsically High (phishing, malware,
+    SMB, C2, PowerShell...) or Critical (credential dump,
+    exfiltration, ransomware), so any incident containing even one
+    such detection could never be Medium or Low, however isolated
+    it was. Shifting 90/70/40 only moves the label, it cannot
+    create a real Medium bucket.
+    The fix is a second dimension, not a new boundary: this tool
+    reconstructs attack PATHS, so a lone signal is not a path.
+    An incident with only ONE distinct kill-chain stage is
+    downgraded exactly one tier (Critical -> High, High ->
+    Medium, Medium -> Low, Low stays Low) - unless that single
+    stage is Impact or Exfiltration, where the damage is already
+    done and no downgrade applies. A multi-stage incident is
+    never downgraded, so a real chain stays Critical/High.
+    Examples: a single phishing line is now Medium (40), not
+    High; a single credential dump is High (75: base 70 +
+    credential-access bonus), not Critical;
+    a phishing -> malware -> C2 chain stays High; the sample's
+    11-step multi-stage chain stays Critical (100). In live
+    mode an incident starts at the downgraded tier and rises
+    to its full tier as soon as a second stage arrives, because
+    risk_score is recomputed on every new detection."""
     if not detections:
         return 0.0
     _worst = max((weight_of(d.get("severity", "")) for d in detections), default=3)
-    _base, _ceil = ((90, 100) if _worst >= 40 else
-                    (70, 89) if _worst >= 25 else
-                    (40, 69) if _worst >= 10 else
-                    (10, 39))
+    _tiers = [(90, 100), (70, 89), (40, 69), (10, 39)]
+    _idx = (0 if _worst >= 40 else 1 if _worst >= 25 else
+            2 if _worst >= 10 else 3)
     _stages = {d.get("kill_chain_stage", "") for d in detections} - {""}
     _techs = {d.get("technique_id", "") for d in detections} - {""}
     _n = len(detections)
+    # One stage, no damage yet: a signal, not a path - one tier down.
+    _damage = bool(_stages & {"Impact", "Exfiltration"})
+    if len(_stages) < 2 and not _damage and _idx < 3:
+        _idx += 1
+    _base, _ceil = _tiers[_idx]
     _scale = 15 if _n >= 1000 else 10 if _n >= 100 else 5 if _n >= 10 else 0
     score = (_base + 3 * max(0, len(_stages) - 1)
              + 2 * max(0, len(_techs) - 1) + _scale)

@@ -155,14 +155,41 @@ def _record_evaluation(db_path, evaluation, basis):
     _save_run_stats(db_path)
 
 
+# LIVE ELAPSED FIX (2026-11-01, user: progress freezes at ~492k
+# lines then suddenly completes): elapsed_seconds used to be updated
+# ONLY when on_progress ran, so during a slow chunk / aggregate pass
+# the /progress poll returned the same elapsed, lines/sec and ETA
+# every second - it looked dead, not slow, even though the poll
+# itself was working. Now the clock is live: it is (re)started when
+# a run begins (stage uploading/generating with 0 bytes received),
+# and the snapshot recomputes elapsed, lines/sec and ETA from the
+# wall clock on every poll while a run is active. After done/error
+# the stored totals are kept, so the done line does not keep ticking.
+_PROGRESS_STARTED = None
+
+
 def _set_progress(**kw):
+    global _PROGRESS_STARTED
     with PROGRESS_LOCK:
+        if (kw.get("stage") in ("uploading", "generating")
+                and kw.get("bytes_received") == 0 and kw.get("done") is False):
+            _PROGRESS_STARTED = time.time()
         PROGRESS.update(kw)
 
 
 def _progress_snapshot():
     with PROGRESS_LOCK:
         snap = dict(PROGRESS)
+        _started = _PROGRESS_STARTED
+    if _started is not None and snap.get("stage") in (
+            "uploading", "generating", "queued", "reading", "linking", "storing"):
+        _elapsed = max(time.time() - _started, 0)
+        snap["elapsed_seconds"] = round(_elapsed, 1)
+        if snap.get("stage") == "reading" and snap.get("events", 0) > 0 and _elapsed > 0:
+            _eps = snap["events"] / _elapsed
+            snap["events_per_second"] = round(_eps, 1)
+            if snap.get("estimated_total_events", 0) > snap["events"]:
+                snap["eta_seconds"] = round((snap["estimated_total_events"] - snap["events"]) / _eps)
     snap["eta_text"] = _fmt_eta(snap["eta_seconds"])
     # CPU/RAM on every poll (never break a poll if stats fail).
     try:

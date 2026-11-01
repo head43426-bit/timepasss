@@ -57,6 +57,8 @@
       <div class="btn-row">
         <button id="uploadBtn" type="button" class="btn ghost">Upload PCAP/Logs</button>
         <button id="sampleBtn" type="button" class="btn ghost">Load Sample</button>
+        <button id="clearBtn" type="button" class="btn danger">Delete Data</button>
+        <span id="clearStatus" class="hint"></span>
       </div>
       <div style="margin: 12px 0 0;">
         <label style="font-size: 14px; cursor: pointer;"><input type="checkbox" id="stopOnUnknown" style="margin-right: 6px;"> Stop if format is unknown</label>
@@ -76,10 +78,6 @@
           <tbody id="flowRows"><tr><td colspan="5" class="hint">Load data to see flow rows.</td></tr></tbody>
         </table>
       </div>
-      <div class="btn-row">
-        <button id="clearBtn" type="button" class="btn danger">Delete Data</button>
-        <span id="clearStatus" class="hint"></span>
-      </div>
     </section>
 
     <div class="modebar" role="group" aria-label="Graph mode and view">
@@ -98,7 +96,6 @@
       <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
     </div>
 
-    <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
     <div class="path-banner" id="pathBanner" hidden></div>
 
     <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
@@ -123,6 +120,9 @@
     <h3>Step detail</h3>
     <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
 
+    <h3>What the attacker could reach next</h3>
+    <div id="lookAhead"><p>Pick an incident on the left to see what the attacker could reach next.</p></div>
+
     <h3>Protect - what to do now</h3>
     <div id="protect"></div>
   </section>
@@ -131,18 +131,12 @@
   <aside class="col col-right">
     <section class="card">
       <h2>Run stats</h2>
-      <p class="hint">Measured from real runs, not estimates. Accuracy stats need planted ground truth, so they only appear after Load Sample - a plain upload has no ground truth to check against, and those four show "not available" until then.</p>
+      <p class="hint">Memory is live from this PC. Investigation speed is measured in milliseconds when you open an incident.</p>
       <div class="stats-grid">
-        <div class="stat-box"><b id="statDetection">—</b><span>Detection %</span><small>planted steps found</small></div>
-        <div class="stat-box"><b id="statLabels">—</b><span>Correct labels %</span><small>right technique, same host</small></div>
-        <div class="stat-box"><b id="statAttackPath">—</b><span>Attack path</span><small id="statAttackPathNote">attacks rebuilt in order</small></div>
-        <div class="stat-box"><b id="statFalse">—</b><span>False alarms %</span><small>incidents matching no attack</small></div>
-        <div class="stat-box"><b id="statTime">—</b><span>Processing time</span><small id="statTimeNote">last run</small></div>
-        <div class="stat-box"><b id="statMemory">—</b><span>Memory</span><small>peak, main process, last run</small><div class="mem-meter" aria-label="Live PC memory usage"><div id="memBar" class="mem-bar"></div></div><small id="memLive">PC RAM: loading…</small><small id="memAsk">ASK (main): —</small></div>
+        <div class="stat-box"><div class="mem-meter" aria-label="Live PC memory usage"><div id="memBar" class="mem-bar"></div></div><span>Memory</span><small id="memLive">PC RAM: loading…</small><small id="memAsk">ASK (main): —</small></div>
         <div class="stat-box"><b id="statInvest">—</b><span>Investigation speed</span><small>time to open an incident</small></div>
-        <div class="stat-box"><b id="statLines">—</b><span>Lines / sec</span><small id="statLinesNote">last run</small></div>
       </div>
-      <p class="hint" id="statBasis">No run yet. Upload a log or run Load Sample to fill these in.</p>
+      <p class="hint" id="statBasis">Memory meter is live from this PC. Investigation speed is measured in milliseconds when you open an incident.</p>
     </section>
 
 
@@ -169,23 +163,9 @@
     <section class="card">
       <h2>Attack Paths - Ranked <span class="row-count" id="pathsCount">No paths yet</span></h2>
       <div id="attackPaths"><p>Load data to see ranked attack paths.</p></div>
-      <p><button id="corridorBtn" type="button" class="btn corridor" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></span><span id="corridorLabel">Execute Containment Isolator</span></button></p>
     </section>
   </aside>
 </main>
-
-<!-- Containment popup (2026-11-01): the single containment button
-     is a dashboard simulation only, so clicking it must say exactly
-     what it did and did not do, instead of just changing its label.
-     The popup closes with Close, the X, or a click on the backdrop. -->
-<div class="modal-backdrop" id="containModal" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="containModalTitle">
-    <button type="button" class="modal-close" id="containModalClose" aria-label="Close">×</button>
-    <h3 id="containModalTitle">Containment simulated - nothing real was isolated</h3>
-    <div id="containModalBody"></div>
-    <p><button type="button" class="btn" id="containModalOk">Close</button></p>
-  </div>
-</div>
 
 <script src="app.js"></script>
 </body>
