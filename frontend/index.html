@@ -31,12 +31,19 @@
   </div>
 </nav>
 
-<main class="workspace">
+<!-- HIDE-QUEUE BAR (2026-11-01, user: "give bar also to hide
+     this whole column"): the slim bar on the left edge, shown
+     only while the queue is hidden - clicking it brings the
+     column back. The Hide button is in the queue head. -->
+<button id="showQueueBtn" type="button" class="show-queue-bar" hidden aria-label="Show incident queue">Incidents ▶</button>
+
+<main class="workspace" id="workspace">
   <!-- LEFT: Incident Triage Queue -->
   <aside class="col col-left">
     <div class="queue-head">
       <h2>Incident Triage Queue</h2>
       <span id="activeCount">0 active</span>
+      <button id="hideQueueBtn" type="button" class="btn ghost" aria-label="Hide incident queue">Hide ◀</button>
     </div>
     <div class="search-wrap">
       <span class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span>

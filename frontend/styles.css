@@ -76,6 +76,17 @@ nav.topnav {
   display: grid; grid-template-columns: 300px minmax(0, 1fr) 340px; gap: 16px; align-items: start;
 }
 .col { min-width: 0; }
+/* HIDE-QUEUE BAR (2026-11-01): hiding the whole left column, not
+   just the list inside it. When hidden, the grid drops to two
+   columns (centre + right) so the graph gets the freed width, and
+   a slim bar on the left edge stays visible to bring it back. */
+.workspace.hide-left { grid-template-columns: minmax(0, 1fr) 340px; }
+.workspace.hide-left .col-left { display: none; }
+.show-queue-bar[hidden] { display: none; }
+.show-queue-bar { position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 90; writing-mode: vertical-rl; background: var(--accent); color: #fff; border: none; border-radius: 0 8px 8px 0; padding: 14px 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.queue-head { display: flex; align-items: center; gap: 8px; }
+.queue-head h2 { flex: 1; margin: 0; }
+.queue-head .btn { flex: none; padding: 4px 8px; font-size: 12px; }
 .col-left, .col-right { display: flex; flex-direction: column; gap: 16px; }
 .col-center { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
 /* Centre upload (2026-11-01, user: move Flow Log Data from the

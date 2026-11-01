@@ -19,6 +19,27 @@ function applyTheme(theme) {
 
 function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
+// HIDE-QUEUE BAR (2026-11-01, user: hide the whole incidents
+// column): Hide in the queue head hides the whole left column
+// and shows the slim left-edge bar; clicking that bar brings it
+// back. Choice is saved, so a reload keeps it as you left it.
+(function initQueueToggle() {
+  var ws = document.getElementById("workspace");
+  var hideBtn = document.getElementById("hideQueueBtn");
+  var showBtn = document.getElementById("showQueueBtn");
+  if (!ws || !hideBtn || !showBtn) return;
+  var setHidden = function(hidden) {
+    ws.classList.toggle("hide-left", hidden);
+    showBtn.hidden = !hidden;
+    try { localStorage.setItem("ask_hide_queue", hidden ? "1" : "0"); } catch (e) {}
+  };
+  hideBtn.addEventListener("click", function() { setHidden(true); });
+  showBtn.addEventListener("click", function() { setHidden(false); });
+  var saved = null;
+  try { saved = localStorage.getItem("ask_hide_queue"); } catch (e) {}
+  if (saved === "1") setHidden(true);
+})();
+
 async function loadIncidents() {
   var res = await fetch("/incidents");
   var list = await res.json();
