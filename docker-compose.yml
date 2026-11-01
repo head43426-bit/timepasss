@@ -1,7 +1,66 @@
+# ASK — Analyse Secure Kill (Kill Chain Attack Path Reconstruction)
+#
+# Run the whole app (frontend + Python/DuckDB/NetworkX backend) with:
+#   docker compose up --build
+# Then open http://localhost:8001  (showcase)  and  http://localhost:8001/app  (workspace)
+#
+# No .env file is required. If you want real Sarvam translations, create a
+# file named exactly `.env` next to this file containing ONLY this line:
+#   SARVAM_API_KEY=<your-real-key>
+# Do NOT copy .env.example into .env — it contains fake placeholder keys.
+# Without a key, Hindi/Tamil/Telugu/Malayalam reports are clearly labelled
+# mock templates, never claimed Sarvam translations.
+#
+# Notes:
+# - The database lives in the named volume `ask_data` (/app/db in the
+#   container), so incidents survive `docker compose down` and restarts.
+#   Delete it with:  docker compose down -v   (this also clears all data)
+# - The MITRE index, assets, showcase page, rules and frontend are baked
+#   into the image by the Dockerfile, so they are NOT volumed over.
+#   Editing a rule therefore needs a rebuild:  docker compose up --build
+# - Web uploads come from your browser's file picker, not from a folder
+#   in the container. The ./logs mount below is only for running the CLI
+#   inside the container, e.g.:
+#     docker compose exec ask python main.py run --log /logs/your.log --db /app/db/cli.duckdb
+# - Large logs: the engine streams and writes temp files next to the DB
+#   (inside the ask_data volume, not /tmp), so a small container /tmp
+#   cannot fill up mid-upload the way it once did on the VM.
+
 services:
-  kill-chain:
-    build: .
+  ask:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ask:latest
+    container_name: ask
+    restart: unless-stopped
     ports:
-      - "8001:8001"
+      # Host port comes from ASK_PORT if set, otherwise 8001.
+      - "${ASK_PORT:-8001}:8001"
+    environment:
+      # Passed through only if set in the shell / .env; empty is fine.
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+    env_file:
+      # Optional: ignored if the file does not exist.
+      - path: .env
+        required: false
     volumes:
-      - ./out.duckdb:/app/out.duckdb
+      # Persistent database + the temp files the parallel engine writes
+      # next to the DB. Kept separate from /app/data (MITRE index),
+      # so mounting this volume cannot hide the MITRE data.
+      - ask_data:/app/db
+      # Optional host folder for CLI runs inside the container (read-only).
+      # Create ./logs if it does not exist, or remove this mount.
+      - ./logs:/logs:ro
+    command: ["python", "main.py", "serve", "--db", "/app/db/out.duckdb", "--port", "8001", "--host", "0.0.0.0"]
+    healthcheck:
+      # python:3.12-slim has no curl, so check /health with stdlib urllib.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ask_data:
+    name: ask_data

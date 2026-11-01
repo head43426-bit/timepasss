@@ -1,0 +1,12 @@
+# Keep the build context (and the image) free of local state, the
+# deleted web-app/ copy, and any database/temp files.
+.git
+__pycache__
+*.pyc
+*.duckdb
+*.duckdb.wal
+out.duckdb
+web-app/
+.env
+logs/
+ask_data/
