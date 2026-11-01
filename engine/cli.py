@@ -62,6 +62,15 @@ def peak_rss_mb() -> float:
 
         counters = PROCESS_MEMORY_COUNTERS()
         counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+        # Same 64-bit handle truncation bug as sysstats: without
+        # HANDLE restype, GetCurrentProcess() is truncated to
+        # c_int and GetProcessMemoryInfo fails, giving peak 0 MB
+        # on Windows. Explicit restype/argtypes fix it.
+        ctypes.windll.kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        ctypes.windll.psapi.GetProcessMemoryInfo.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS),
+            wintypes.DWORD]
+        ctypes.windll.psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
         handle = ctypes.windll.kernel32.GetCurrentProcess()
         if ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
             return round(counters.PeakWorkingSetSize / (1024.0 * 1024.0), 1)

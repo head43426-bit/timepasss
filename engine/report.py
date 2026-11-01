@@ -331,6 +331,78 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def minimal_report(incident: Dict, next_list: List[Dict]) -> str:
+    """Minimal brief for the WEBPAGE (2026-11-01, user option 1:
+    webpage minimal as before, generated report detailed).
+
+    This is the old 6-line brief from before the 8-section rewrite,
+    restored verbatim except for one line: the old first line was
+    "Attack on <hosts>", but the hosts list can hold the logging
+    device (e.g. a firewall name like FGT...), which is not the
+    victim - that flaw was the reason the detailed rewrite dropped
+    the line. So the first line here uses the incident title
+    instead, and everything else is the old shape: users, techniques
+    in order (with full GROUP BY counts for large incidents, not
+    the dashboard sample), scale, watch-next, and only the FIRST
+    protection action plus a pointer to the full Protect list in
+    the centre column (which is already shown in full there).
+    The detailed brief stays in english_report() and is what Copy
+    and Generate PDF now use - see main.py / frontend/app.js.
+    """
+    incident = incident or {}
+    timeline = incident.get("timeline", []) or []
+    users = [u for u in incident.get("users", []) if u]
+
+    def _sl(items, limit=5):
+        items = [str(x) for x in items if x]
+        if not items:
+            return None
+        if len(items) <= limit:
+            return ", ".join(items)
+        return ", ".join(items[:limit]) + f" and {len(items) - limit} more"
+
+    user_text = _sl(users) or "no user account recorded in the logs"
+    _times = [d.get("time", "") for d in timeline if d.get("time", "")]
+    _start = incident.get("start_time") or (_times[0] if _times else "an unknown time")
+    _end = incident.get("end_time") or (_times[-1] if _times else "an unknown time")
+    _techs = []
+    if incident.get("timeline_summary"):
+        for s in incident["timeline_summary"]:
+            _techs.append(f"{s['technique_name']} ({s['technique_id']}) x{s['count']:,}")
+    elif timeline:
+        _seen = {}
+        for d in timeline:
+            key = (d.get("technique_id", ""), d.get("technique_name", ""))
+            _seen[key] = _seen.get(key, 0) + 1
+        for (tid, name), count in _seen.items():
+            _techs.append(f"{name or tid} ({tid}) x{count:,}")
+    tech_text = _sl(_techs, limit=8) or "no techniques recorded"
+    if next_list:
+        _nxt_hosts = [n["host"] for n in next_list]
+        _total = incident.get("next_frontier_total", len(next_list))
+        _extra = f" (and {_total - len(next_list)} more like this)" if _total > len(next_list) else ""
+        next_text = f"Watch next: {_sl(_nxt_hosts, limit=5)}{_extra}."
+    else:
+        next_text = "No frontier host to watch: no new target is guessed."
+    _prot = incident.get("protections", []) or []
+    if _prot:
+        first_action = _prot[0].get("action", "") or _prot[0].get("technique_name", "")
+        do_text = (f"Do this first: {first_action} "
+                   f"Full list: see Protect - what to do now, in the centre column.")
+    else:
+        do_text = "This report describes the attack only; it does not block or stop it."
+    _title = incident.get("title", "") or f"Incident #{incident.get('id', '')}"
+    lines = [
+        f"ASK Incident #{incident.get('id', '')} - {_title}, {_start} to {_end}. Risk {incident.get('risk_score', 0)}/100.",
+        f"Users involved: {user_text}.",
+        f"Techniques, in order: {tech_text}.",
+        f"Scale: {incident.get('detection_count', 0):,} detections from {incident.get('merged_alerts', 0):,} raw alerts.",
+        next_text,
+        do_text,
+    ]
+    return "\n".join(lines)
+
+
 def _hindi_template(incident: Dict, next_list: List[Dict]) -> str:
     hosts = incident.get("title", "") or ", ".join(incident.get("hosts", [])) or "अज्ञात सिस्टम"
     nxt = ("; ".join(n["host"] for n in next_list)
@@ -347,20 +419,20 @@ LANG_CODES = {"en": "en-IN", "hi": "hi-IN", "ta": "ta-IN", "te": "te-IN", "ml": 
 LANG_NAMES = {"en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu", "ml": "Malayalam"}
 
 
-def translate_report(incident: Dict, next_list: List[Dict], lang: str) -> Dict:
-    """Return {text, source, warning} for the requested language.
+def translate_text(text: str, lang: str) -> Dict:
+    """Translate an already-generated report text via Sarvam.
 
-    English is generated locally, never translated. Other languages go
-    through Sarvam Translate only when SARVAM_API_KEY is set. Without
-    a key, or if Sarvam fails, the English report is returned with an
-    explicit warning that it was NOT translated -- a fake Tamil /
-    Telugu / Malayalam template is never invented, because this
-    codebase only ever had a real Hindi template.
+    Split out of translate_report so main.py can translate BOTH
+    versions separately: the minimal webpage text and the detailed
+    generated text. English is returned as-is, never translated.
+    Without a key, or if Sarvam fails, the English text is returned
+    with an explicit warning that it was NOT translated -- a fake
+    Tamil / Telugu / Malayalam template is never invented.
     """
     lang = (lang or "en").lower()
     if lang not in LANG_CODES:
         lang = "en"
-    english = english_report(incident, next_list)
+    english = text or ""
     if lang == "en":
         return {"text": english, "source": "local", "warning": ""}
     key = os.environ.get("SARVAM_API_KEY", "").strip()
@@ -392,6 +464,14 @@ def translate_report(incident: Dict, next_list: List[Dict], lang: str) -> Dict:
                 "warning": (f"Sarvam translation failed ({exc}); showing the "
                             f"English report instead, NOT a {LANG_NAMES[lang]} "
                             f"translation.")}
+
+
+def translate_report(incident: Dict, next_list: List[Dict], lang: str) -> Dict:
+    """Return {text, source, warning} for the requested language,
+    for the DETAILED report (english_report). Kept for backward
+    compatibility; new code that needs both versions uses
+    translate_text() on minimal_report() and english_report()."""
+    return translate_text(english_report(incident, next_list), lang)
 
 
 def hindi_report(incident: Dict, next_list: List[Dict]) -> Dict:

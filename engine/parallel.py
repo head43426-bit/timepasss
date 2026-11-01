@@ -94,7 +94,22 @@ def _process_range(args) -> dict:
     disk on many machines and a large run filled it completely."""
     import json as _json
     import tempfile
-    path, start, end, tmpdir = args
+    # LIVE PROGRESS (2026-11-01, user: jammed again at 492,627 lines):
+    # chunk-completion progress was the only progress, so while a
+    # chunk was being worked on - up to ~40k lines, minutes on an
+    # HDD at ~1k lines/sec/worker - the UI sat on one number and
+    # looked dead, even though workers were working. The as_completed
+    # fix only helps when OTHER chunks finish; when every worker is
+    # inside a slow region, nothing finishes and nothing moves.
+    # So each worker now also writes its live event count to its
+    # own progress file every 5,000 lines (fail-soft: a failed write
+    # must never break detection), and the parent polls those files
+    # every second - the bar moves continuously inside a chunk.
+    # args: (path, start, end, tmpdir, chunk_idx) - idx is new, so
+    # the progress file name is unique per chunk and per run dir.
+    path, start, end, tmpdir = args[0], args[1], args[2], args[3]
+    _idx = args[4] if len(args) > 4 else 0
+    _prog_path = os.path.join(tmpdir, f".ask-chunk-{_idx}.progress")
     events = 0
     det_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl",
                                            delete=False, encoding="utf-8", dir=tmpdir)
@@ -115,6 +130,12 @@ def _process_range(args) -> dict:
             if event is None:
                 continue
             events += 1
+            if events % 5000 == 0:
+                try:
+                    with open(_prog_path, "w", encoding="utf-8") as _pf:
+                        _pf.write(str(events))
+                except Exception:
+                    pass
             for det in _SIMPLE_DETECTOR.process(event):
                 det_file.write(_json.dumps(det) + "\n")
                 det_count += 1
@@ -125,8 +146,14 @@ def _process_range(args) -> dict:
                     break
     det_file.close()
     agg_file.close()
+    try:
+        with open(_prog_path, "w", encoding="utf-8") as _pf:
+            _pf.write(str(events))
+    except Exception:
+        pass
     return {"det_path": det_file.name, "agg_path": agg_file.name,
-            "events": events, "detections": det_count, "agg_events": agg_count}
+            "events": events, "detections": det_count, "agg_events": agg_count,
+            "prog_path": _prog_path}
 
 
 def _total_ram_gb() -> float:
@@ -189,6 +216,26 @@ def cpu_friendly_workers(requested: int = 0) -> int:
 def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
                  topology_path: str = None, ground_truth_path: str = None,
                  on_progress=None, rule_files=None) -> dict:
+    # MONOTONIC PROGRESS (2026-11-01, found in testing the live
+    # poll): a live poll can report 20,000 lines (4 workers x 5,000
+    # partial) before the first chunk completes with only 7,768,
+    # so chunk-completion progress would move the bar BACKWARDS.
+    # Total lines processed never decreases, so clamp every report
+    # to the highest value seen so far (thread-safe: poll thread
+    # and main thread both report).
+    if on_progress is not None:
+        import threading as _mt
+        _orig_progress = on_progress
+        _prog_lock = _mt.Lock()
+        _prog_max = [0]
+
+        def on_progress(events, detections, stage, top=None):
+            with _prog_lock:
+                if events is not None and events > _prog_max[0]:
+                    _prog_max[0] = events
+                else:
+                    events = _prog_max[0]
+            _orig_progress(events, detections, stage, top)
     started = time.time()
     workers = cpu_friendly_workers(workers)
     con = store.connect(db_path, fresh=True)
@@ -227,10 +274,53 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
         # aggregate replay and linking are unchanged.
         from concurrent.futures import as_completed as _as_completed
         _tmpdir = os.path.dirname(os.path.abspath(db_path)) or "."
+        _prog_files = [os.path.join(_tmpdir, f".ask-chunk-{i}.progress")
+                       for i in range(len(ranges))]
+        _by_idx = {}
+        # LIVE POLL THREAD (2026-11-01, jammed again): as_completed
+        # alone still leaves the bar still while every worker is
+        # inside a slow chunk. This thread reads the workers' live
+        # progress files every second and reports the sum, so the
+        # count moves continuously inside a chunk, not only when a
+        # chunk finishes. A completed chunk's progress file holds
+        # its final count, a not-yet-started chunk has no file (0),
+        # so the sum is always the true live total, never double
+        # counted. It only runs when the caller wants progress
+        # (server upload); CLI runs with on_progress=None skip it.
+        # _by_idx is read here and written in the main thread -
+        # the copy + try/except makes a concurrent-dict race a
+        # skipped poll, never a crash.
+        _poll_stop = None
+        _poll_thread = None
+        if on_progress:
+            import threading as _threading
+            _poll_stop = _threading.Event()
+
+            def _poll_live():
+                while not _poll_stop.is_set():
+                    try:
+                        _live = 0
+                        for _pf in _prog_files:
+                            try:
+                                with open(_pf, encoding="utf-8") as _fh:
+                                    _live += int(_fh.read().strip() or 0)
+                            except Exception:
+                                pass
+                        if _live > 0:
+                            try:
+                                _det = sum(r["detections"] for r in list(_by_idx.values()))
+                            except Exception:
+                                _det = 0
+                            on_progress(_live, _det, "reading")
+                    except Exception:
+                        pass
+                    _poll_stop.wait(1.0)
+
+            _poll_thread = _threading.Thread(target=_poll_live, daemon=True)
+            _poll_thread.start()
         _futures = {}
         for _idx, (_s, _e) in enumerate(ranges):
-            _futures[pool.submit(_process_range, (log_path, _s, _e, _tmpdir))] = _idx
-        _by_idx = {}
+            _futures[pool.submit(_process_range, (log_path, _s, _e, _tmpdir, _idx))] = _idx
         completed_workers = 0
         for _fut in _as_completed(_futures):
             result = _fut.result()
@@ -241,6 +331,14 @@ def parallel_run(log_path: str, db_path: str, rules_dir: str, workers: int = 0,
                 on_progress(total_events, sum(r["detections"] for r in _by_idx.values()), "reading")
             print(f"  ... Worker chunk {completed_workers}/{len(ranges)} complete ({result['events']:,} events, {result['detections']} detections)", flush=True)
         chunk_results = [_by_idx[i] for i in range(len(ranges))]
+        if _poll_stop is not None:
+            _poll_stop.set()
+            _poll_thread.join(timeout=2.0)
+        for _pf in _prog_files:
+            try:
+                os.unlink(_pf)
+            except OSError:
+                pass
     # Global aggregate pass, in original file order (chunk order, then
     # byte position inside the chunk). Aggregate detections are few by
     # definition (only emitted after threshold + success), so holding

@@ -1,5 +1,5 @@
 "use strict";
-var state = { incidents: [], selected: null, report: "", hindi: null };
+var state = { incidents: [], selected: null, report: "", fullReport: "", fullTranslated: null, hindi: null };
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
@@ -165,7 +165,9 @@ async function loadStats() {
     } else {
       set("memLive", "PC RAM: processing");
     }
-    if (sys.ask_rss_mb !== undefined && sys.ask_rss_mb !== null) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
+    // 0 MB is a failed read, not a real measurement (see sysstats
+    // handle fix) - show "processing", never a lying 0 MB.
+    if (sys.ask_rss_mb) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
     else set("memAsk", "ASK (main): processing");
     var basis = document.getElementById("statBasis");
     if (basis) basis.textContent = "Memory meter is live from this PC. Investigation speed is measured in milliseconds when you open an incident.";
@@ -186,7 +188,10 @@ async function selectIncident(id) {
   var path = await (await fetch("/incidents/" + id + "/path")).json();
   var rep = await (await fetch("/incidents/" + id + "/report")).json();
   var next = await (await fetch("/incidents/" + id + "/next")).json();
-  state.selected = path; state.report = rep.report; state.hindi = rep.hindi || null;
+  // REPORT SPLIT (2026-11-01, user option 1): rep.report is the
+  // minimal 6-line brief for the webpage; rep.full_report is the
+  // detailed 8-section brief, used only by Copy and Generate PDF.
+  state.selected = path; state.report = rep.report; state.fullReport = rep.full_report || rep.report; state.fullTranslated = null; state.hindi = rep.hindi || null;
   path.next_reach = next.next_reach || [];
   var banner = document.getElementById("pathBanner");
   if (banner) {
@@ -773,6 +778,7 @@ async function showReport() {
   if (!state.selected) return;
   if (lang === "en") {
     box.textContent = state.report;
+    state.fullTranslated = null;
     if (warn) warn.hidden = true;
     return;
   }
@@ -780,6 +786,10 @@ async function showReport() {
     var rep = await (await fetch("/incidents/" + state.selected.id + "/report?lang=" + lang)).json();
     var tr = rep.translated || {};
     box.textContent = tr.text || state.report;
+    // Generated-file text in this language, if the backend
+    // translated the detailed brief too; otherwise Copy/PDF fall
+    // back to the English detailed brief below.
+    state.fullTranslated = (rep.translated_full && rep.translated_full.text) ? rep.translated_full.text : null;
     if (warn) {
       if (tr.warning) { warn.hidden = false; warn.textContent = tr.warning; }
       else if (tr.source === "sarvam") { warn.hidden = false; warn.textContent = "Report - by Sarvam AI (" + lang + ")."; }
@@ -787,21 +797,32 @@ async function showReport() {
     }
   } catch (e) {
     box.textContent = state.report;
+    state.fullTranslated = null;
     if (warn) { warn.hidden = false; warn.textContent = "Translation could not be loaded - showing the English report."; }
   }
 }
 var reportLangSel = document.getElementById("reportLang");
 if (reportLangSel) reportLangSel.addEventListener("change", showReport);
+// REPORT SPLIT: Copy and Generate PDF use the DETAILED brief,
+// not the minimal text shown on the webpage. In a non-English
+// language they use the translated detailed brief when one was
+// fetched, otherwise the English detailed brief.
+function fullReportText() {
+  var langSel = document.getElementById("reportLang");
+  var lang = langSel ? langSel.value : "en";
+  if (lang && lang !== "en" && state.fullTranslated) return state.fullTranslated;
+  return state.fullReport || document.getElementById("report").textContent;
+}
 document.getElementById("copyBtn").addEventListener("click", function() {
-  var txt = document.getElementById("report").textContent;
-  if (txt) navigator.clipboard.writeText(txt).then(function() { alert("Report copied."); });
+  var txt = fullReportText();
+  if (txt) navigator.clipboard.writeText(txt).then(function() { alert("Full report copied."); });
 });
 var pdfBtn = document.getElementById("pdfBtn");
 if (pdfBtn) pdfBtn.addEventListener("click", function() {
   if (!state.selected) return;
   var langSel = document.getElementById("reportLang");
   var lang = langSel ? langSel.options[langSel.selectedIndex].text : "English";
-  var txt = document.getElementById("report").textContent;
+  var txt = fullReportText();
   var w = window.open("", "_blank");
   if (!w) { alert("Allow pop-ups for this page, then try Generate PDF again."); return; }
   w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>ASK Incident Report</title>" +

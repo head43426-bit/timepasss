@@ -374,8 +374,18 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None
                     if not inc:
                         return self._send_json({"error": "incident not found"}, 404)
+                    # REPORT SPLIT (2026-11-01, user option 1):
+                    # "report" is the minimal 6-line brief for the
+                    # webpage; "full_report" is the detailed 8-section
+                    # brief, and Copy / Generate PDF use that one.
+                    # Both are translated separately when a language
+                    # is requested, so the webpage stays minimal in
+                    # every language and the generated file stays full.
+                    _minimal = report_mod.minimal_report(inc, inc["next_reach"])
+                    _full = report_mod.english_report(inc, inc["next_reach"])
                     out = {"incident_id": inc["id"], "title": inc["title"],
-                           "report": report_mod.english_report(inc, inc["next_reach"]),
+                           "report": _minimal,
+                           "full_report": _full,
                            "next_reach": inc["next_reach"],
                            "next_stages": inc["next_stages"],
                            "blast_radius": inc["blast_radius"],
@@ -385,9 +395,9 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                         out["hindi"] = report_mod.hindi_report(inc, inc["next_reach"])
                     _lang = (query.get("lang") or [""])[0].lower()
                     if _lang in ("en", "hi", "ta", "te", "ml"):
-                        _tr = report_mod.translate_report(inc, inc["next_reach"], _lang)
                         out["lang"] = _lang
-                        out["translated"] = _tr
+                        out["translated"] = report_mod.translate_text(_minimal, _lang)
+                        out["translated_full"] = report_mod.translate_text(_full, _lang)
                     return self._send_json(out)
                 if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "next":
                     inc = _incident_with_extras(holder.con, int(parts[1])) if parts[1].isdigit() else None

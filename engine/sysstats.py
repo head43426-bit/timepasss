@@ -122,12 +122,26 @@ def process_rss_mb() -> float:
                             ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
                             ("PagefileUsage", ctypes.c_size_t),
                             ("PeakPagefileUsage", ctypes.c_size_t)]
+            # ASK 0 MB FIX (2026-11-01, user screenshot: ASK (main):
+            # 0 MB while PC RAM/CPU worked): without restype/argtypes,
+            # ctypes treats GetCurrentProcess() as returning c_int,
+            # truncating the 64-bit pseudo-handle (-1) to 32 bits, so
+            # GetProcessMemoryInfo got an invalid handle, failed, and
+            # this returned 0.0 - a lie the UI then displayed as
+            # "0 MB". With HANDLE restype + explicit argtypes the
+            # handle survives intact. If it still fails, fall through
+            # to the fallbacks below instead of returning 0 here.
             _c = _PMC()
             _c.cb = ctypes.sizeof(_PMC)
-            _h = ctypes.windll.kernel32.GetCurrentProcess()
-            if ctypes.windll.psapi.GetProcessMemoryInfo(_h, ctypes.byref(_c), _c.cb):
+            _k32 = ctypes.windll.kernel32
+            _k32.GetCurrentProcess.restype = wintypes.HANDLE
+            _psapi = ctypes.windll.psapi
+            _psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE, ctypes.POINTER(_PMC), wintypes.DWORD]
+            _psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            _h = _k32.GetCurrentProcess()
+            if _psapi.GetProcessMemoryInfo(_h, ctypes.byref(_c), _c.cb):
                 return round(_c.WorkingSetSize / (1024.0 * 1024.0), 1)
-            return 0.0
         with open("/proc/self/status", "r", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("VmRSS:"):
@@ -194,10 +208,13 @@ def snapshot() -> dict:
     _total = total_ram_mb()
     _avail = avail_ram_mb()
     _used = max(0.0, _total - _avail) if _total else 0.0
+    _rss = process_rss_mb()
+    # A failed RSS read is unknown, not 0 MB - the UI shows
+    # "processing" for None, and a lying 0 for 0.0.
     return {
         "cpu_percent": system_cpu_percent(),
         "ram_used_mb": round(_used, 1),
         "ram_total_mb": _total,
         "ram_percent": round(100.0 * _used / _total, 1) if _total else None,
-        "ask_rss_mb": process_rss_mb(),
+        "ask_rss_mb": _rss if _rss else None,
     }
