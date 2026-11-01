@@ -71,13 +71,16 @@
         <p class="hint">This slab changes as the file is read. Each card is an attack found so far, what gave it away, why it matters, and how it helps you.</p>
         <div id="liveTellsList"></div>
       </div>
-      <input id="flowFilter" type="search" placeholder="Filter logs by IP, technique, stage, flag..." aria-label="Filter flow log rows">
-      <div class="table-wrap">
-        <table class="flow-table">
-          <thead><tr><th>Time</th><th>Src IP / Host</th><th>Technique</th><th>Stage</th><th>Flag</th></tr></thead>
-          <tbody id="flowRows"><tr><td colspan="5" class="hint">Load data to see flow rows.</td></tr></tbody>
-        </table>
-      </div>
+      <details id="flowDetails">
+        <summary>Flow rows - first 20 steps for this incident (click to expand)</summary>
+        <input id="flowFilter" type="search" placeholder="Filter logs by IP, technique, stage, flag..." aria-label="Filter flow log rows">
+        <div class="table-wrap">
+          <table class="flow-table">
+            <thead><tr><th>Time</th><th>Src IP / Host</th><th>Technique</th><th>Stage</th><th>Flag</th></tr></thead>
+            <tbody id="flowRows"><tr><td colspan="5" class="hint">Load data to see flow rows.</td></tr></tbody>
+          </table>
+        </div>
+      </details>
     </section>
 
     <div class="modebar" role="group" aria-label="Graph mode and view">
@@ -95,8 +98,6 @@
       <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
       <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
     </div>
-
-    <div class="path-banner" id="pathBanner" hidden></div>
 
     <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
 
@@ -136,7 +137,6 @@
         <div class="stat-box"><div class="mem-meter" aria-label="Live PC memory usage"><div id="memBar" class="mem-bar"></div></div><span>Memory</span><small id="memLive">PC RAM: loading…</small><small id="memAsk">ASK (main): —</small></div>
         <div class="stat-box"><b id="statInvest">—</b><span>Investigation speed</span><small>time to open an incident</small></div>
       </div>
-      <p class="hint" id="statBasis">Memory meter is live from this PC. Investigation speed is measured in milliseconds when you open an incident.</p>
     </section>
 
 
@@ -158,11 +158,6 @@
         <button class="btn" id="copyBtn" disabled>Copy report</button>
         <button class="btn ghost" id="pdfBtn" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span id="pdfLabel">Generate Threat Report (PDF) - English (US)</span></button>
       </div>
-    </section>
-
-    <section class="card">
-      <h2>Attack Paths - Ranked <span class="row-count" id="pathsCount">No paths yet</span></h2>
-      <div id="attackPaths"><p>Load data to see ranked attack paths.</p></div>
     </section>
   </aside>
 </main>

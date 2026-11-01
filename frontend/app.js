@@ -169,8 +169,10 @@ async function loadStats() {
     // handle fix) - show "processing", never a lying 0 MB.
     if (sys.ask_rss_mb) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
     else set("memAsk", "ASK (main): processing");
-    var basis = document.getElementById("statBasis");
-    if (basis) basis.textContent = "Memory meter is live from this PC. Investigation speed is measured in milliseconds when you open an incident.";
+    // The duplicate hint below the boxes was removed 2026-11-01
+    // (user: text is there twice) - the top hint under the
+    // "Run stats" heading is the only copy now, so there is no
+    // statBasis element left for loadStats to set.
   } catch (e) { /* server down: leave the dashes */ }
 }
 
@@ -193,20 +195,12 @@ async function selectIncident(id) {
   // detailed 8-section brief, used only by Copy and Generate PDF.
   state.selected = path; state.report = rep.report; state.fullReport = rep.full_report || rep.report; state.fullTranslated = null; state.hindi = rep.hindi || null;
   path.next_reach = next.next_reach || [];
-  var banner = document.getElementById("pathBanner");
-  if (banner) {
-    banner.hidden = false;
-    banner.textContent = "Showing incident #" + path.id + " - risk " + path.risk_score + "/100 - " + (path.hosts || []).join(", ");
-  }
-  var ap = document.getElementById("attackPaths");
-  var pc = document.getElementById("pathsCount");
-  if (pc) pc.textContent = (next.next_reach && next.next_reach.length) ? next.next_reach.length + " paths" : "No paths yet";
-  if (ap) {
-    var ranked = (next.next_reach || []).slice().sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
-    ap.innerHTML = ranked.length
-      ? "<ol>" + ranked.map(function(n, i) { return "<li><b>" + esc(n.host) + "</b> - watch score " + n.confidence + "/100 - " + esc(n.reason) + "</li>"; }).join("") + "</ol>"
-      : "<p>No frontier paths yet for this incident.</p>";
-  }
+  // REPEATED INFO REMOVED (2026-11-01, user: remove any repeated
+  // info): the pathBanner strip (incident # / risk / hosts) and the
+  // right "Attack Paths - Ranked" card (same frontier hosts, scores
+  // and reasons as the centre look-ahead) are gone - both were
+  // already shown in the incident detail paragraph and in the
+  // centre "What the attacker could reach next" section.
   var bs = document.getElementById("briefStatus");
   if (bs) bs.textContent = "Incident #" + path.id + " - " + esc(path.title);
   var br = document.getElementById("briefRisk");
@@ -274,11 +268,10 @@ async function selectIncident(id) {
       }).join("") + "</ol>";
     }
     if (next.blast_radius !== undefined && next.blast_radius !== null) {
-      laHtml += "<p><b>Blast radius: " + next.blast_radius + "/100</b>";
+      laHtml += "<p><b>Blast radius: " + next.blast_radius + "/100</b>. This is a score from what the logs show, not a count of compromised hosts.</p>";
       var br = next.blast_breakdown;
-      if (br) laHtml += " (observed graph - Reach " + br.reach + "/25 from " + br.dst_count + " destinations, Spread " + br.spread + "/25 from " + br.src_count + " sources, Depth " + br.depth + "/25 from " + br.stage_count + " stages, Severity " + br.severity + "/25, worst " + esc(br.worst_severity) + ")";
-      else if (next.blast_basis) laHtml += " (" + esc(next.blast_basis) + ")";
-      laHtml += ". This is a score from what the logs show, not a count of compromised hosts.</p>";
+      if (br) laHtml += "<details><summary>How this blast score is made up</summary><p>Observed graph - Reach " + br.reach + "/25 from " + br.dst_count + " destinations, Spread " + br.spread + "/25 from " + br.src_count + " sources, Depth " + br.depth + "/25 from " + br.stage_count + " stages, Severity " + br.severity + "/25, worst " + esc(br.worst_severity) + ".</p></details>";
+      else if (next.blast_basis) laHtml += "<details><summary>How this blast score is made up</summary><p>" + esc(next.blast_basis) + "</p></details>";
     }
     la.innerHTML = laHtml;
   }
