@@ -269,7 +269,20 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
             if parts == ["run-stats"]:
                 if RUN_STATS["last_run"] is None and RUN_STATS["evaluation"] is None:
                     _load_run_stats(db_path)
-                return self._send_json(dict(RUN_STATS))
+                # LIVE PC STATS (2026-11-01, user: stats not loaded
+                # from the PC): Run stats are last-run measurements
+                # and cannot exist before a run, but the PC's live
+                # RAM/CPU/ASK memory can. Attach a fresh snapshot on
+                # every call so the memory meter in /app is live even
+                # with no run yet. Fail-soft: a stats failure must
+                # never break the run-stats card.
+                _out = dict(RUN_STATS)
+                try:
+                    from engine import sysstats as _ss_run
+                    _out["system"] = _ss_run.snapshot()
+                except Exception:
+                    _out["system"] = {}
+                return self._send_json(_out)
             with LOCK:
                 if parts == ["db", "stats"]:
                     tables = [t[0] for t in holder.con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'").fetchall()]
@@ -762,6 +775,13 @@ def make_handler(holder, rules_dir, db_path, live_watch=None):
                                   events=summary.get("events", 0),
                                   detections=summary.get("detections", 0),
                                   elapsed_seconds=_total_s, eta_seconds=0, done=True)
+                    # FIX (2026-11-01): Demo never recorded a run, so
+                    # the Run stats card never filled after a Demo -
+                    # upload and sample both recorded, demo did not.
+                    # Same shape as upload: processing time, memory,
+                    # lines/sec now appear, evaluation cleared (a demo
+                    # has no planted ground truth to check against).
+                    _record_run(db_path, summary, "demo")
                     return self._send_json(summary)
                 except Exception as exc:
                     _set_progress(stage="error", stage_text=f"Failed: {exc}", done=True, error=str(exc))

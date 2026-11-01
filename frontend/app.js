@@ -164,11 +164,32 @@ async function loadStats() {
       set("statLines", run.events_per_second ? fmtNum(Math.round(run.events_per_second)) + " / sec" : "—");
       set("statLinesNote", "last run: " + fmtNum(run.events || 0) + " lines, " + fmtNum(run.detections || 0) + " detections");
     }
+    // LIVE PC MEMORY METER (2026-11-01, user: stats not loaded from
+    // the PC, add a meter for memory): /run-stats now carries a
+    // fresh system snapshot on every call, so this meter is live
+    // from the machine running the server (your PC, when you run
+    // it locally), even with no run yet. It is system RAM, not
+    // ASK-only memory: ASK (main) is shown separately below it.
+    // Run stats above (time, lines/sec, investigation) stay
+    // last-run measurements - they cannot exist before a run, and
+    // this meter does not invent them.
+    var sys = s.system || {};
+    var bar = document.getElementById("memBar");
+    if (bar && sys.ram_percent !== undefined && sys.ram_percent !== null) {
+      bar.style.width = Math.min(100, Math.max(0, sys.ram_percent)) + "%";
+      bar.style.background = sys.ram_percent >= 90 ? "#dc2626" : (sys.ram_percent >= 70 ? "#d97706" : "#16a34a");
+    }
+    if (sys.ram_total_mb) {
+      set("memLive", "PC RAM: " + (sys.ram_used_mb / 1024).toFixed(1) + " / " + (sys.ram_total_mb / 1024).toFixed(1) + " GB (" + sys.ram_percent + "%)" + (sys.cpu_percent !== undefined && sys.cpu_percent !== null ? " · CPU " + sys.cpu_percent + "%" : ""));
+    } else {
+      set("memLive", "PC RAM: not available");
+    }
+    if (sys.ask_rss_mb) set("memAsk", "ASK (main): " + sys.ask_rss_mb + " MB");
     var basis = document.getElementById("statBasis");
     if (basis) {
       if (ev && s.evaluation_basis) basis.textContent = "Accuracy basis: " + s.evaluation_basis + ".";
-      else if (run) basis.textContent = "Accuracy stats need Load Sample ground truth. Processing time, memory and lines/sec are from the last " + (run.kind || "run") + ".";
-      else basis.textContent = "No run yet. Upload a log or run Load Sample to fill these in.";
+      else if (run) basis.textContent = "Accuracy stats need Load Sample ground truth. Processing time, memory and lines/sec are from the last " + (run.kind || "run") + ". The memory meter is live from this PC.";
+      else basis.textContent = "No run yet. Upload a log or run Load Sample to fill processing time, lines/sec and investigation speed. The memory meter is live from this PC.";
     }
   } catch (e) { /* server down: leave the dashes */ }
 }
@@ -788,19 +809,20 @@ function showBackendStatus(p, file) {
   var el = document.getElementById("backendStatus");
   el.hidden = false;
   var bar = document.getElementById("bar");
-  // SYSTEM LINE (2026-11-01): elapsed/total time + CPU + RAM + ASK
-  // memory, on every progress poll. Elapsed was tracked by the
-  // backend all along but never shown; CPU/RAM were never shown at
-  // all (only a CLI peak-RSS print at the end). RAM is system RAM
-  // (the Task Manager number); ASK is the main server process only -
+  // SYSTEM LINE (2026-11-01, CPU/RAM removed 2026-11-01 at user
+  // request): elapsed/total time + ASK memory, on every progress
+  // poll. CPU % and system RAM used to be appended here too, but
+  // the user asked to remove just those two from this status line.
+  // Live PC RAM/CPU now live in the memory meter in the Run stats
+  // card (loadStats, /run-stats), not in this line. /progress JSON
+  // still carries cpu_percent/ram_* for any other consumer; only
+  // this display is changed. ASK is the main server process only -
   // parallel workers are separate processes, so it is a lower bound.
   var sys = "";
   if (p.detected_format) sys += " · Format " + p.detected_format;
   if (p.rule_pack) sys += " · Rules: " + p.rule_pack + " pack";
   if (p.detected_format_warning) sys += " · Warning: " + p.detected_format_warning;
   if (p.elapsed_text) sys += " · Elapsed " + p.elapsed_text;
-  if (p.cpu_percent !== undefined && p.cpu_percent !== null) sys += " · CPU " + p.cpu_percent + "%";
-  if (p.ram_total_mb) sys += " · RAM " + (p.ram_used_mb / 1024).toFixed(1) + "/" + (p.ram_total_mb / 1024).toFixed(1) + " GB (" + p.ram_percent + "%)";
   if (p.ask_rss_mb) sys += " · ASK (main) " + p.ask_rss_mb + " MB";
   if (p.stage === "generating" && p.bytes_total > 0) {
     var pct = Math.min(100, Math.round(100 * p.bytes_received / p.bytes_total));
@@ -979,6 +1001,11 @@ if (sampleBtn) sampleBtn.addEventListener("click", function() { runServerJob("/s
 
 loadIncidents();
 loadStats();
+// Live PC refresh: re-read /run-stats every 5 seconds so the memory
+// meter (and CPU) move while the page is open, not just on page
+// load or after a run. This does not touch investigation speed,
+// which is only set when an incident is opened.
+setInterval(loadStats, 5000);
 
 // Left-panel search: hide incident buttons that do not match, without
 // re-rendering the list (re-rendering on every keystroke used to

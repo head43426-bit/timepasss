@@ -48,70 +48,7 @@
 
   <!-- CENTER: Attack graph canvas + detail -->
   <section class="col col-center" id="detailSection">
-    <div class="modebar" role="group" aria-label="Graph mode and view">
-      <span class="mode-label">MODE:</span>
-      <span class="mode-track">
-        <button type="button" class="mode-btn active" disabled title="Kill Chain is the only graph mode">Kill Chain</button>
-      </span>
-      <span class="mode-spacer"></span>
-      <span class="view-track" role="group" aria-label="Pan and zoom">
-        <button type="button" class="view-btn" id="panBtn" aria-label="Toggle drag to pan" aria-pressed="false">&lt; Pan &gt;</button>
-        <button type="button" class="view-btn view-icon" id="zoomOut" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
-        <span class="zoom-label" id="zoomLabel">100%</span>
-        <button type="button" class="view-btn view-icon" id="zoomIn" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
-      </span>
-      <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
-      <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
-    </div>
-
-    <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
-    <div class="path-banner" id="pathBanner" hidden></div>
-
-    <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
-
-    <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"><p class="hint">Topology canvas empty - Awaiting flow telemetry. Upload a log or load the sample on the right.</p></div>
-
-    <div class="legend-bar">
-      <span class="legend-title">Legend:</span>
-      <span class="legend-item"><i class="dot dot-critical"></i>Critical</span>
-      <span class="legend-item"><i class="dot dot-high"></i>High</span>
-      <span class="legend-item"><i class="dot dot-medium"></i>Medium</span>
-      <span class="legend-item"><i class="dot dot-low"></i>Low</span>
-      <span class="legend-item"><i class="dot dot-user"></i>User</span>
-      <span class="legend-item"><i class="dot dot-technique"></i>Technique</span>
-      <span class="legend-spacer"></span>
-      <span>Selected Node: <b id="selectedNodeLabel">None</b></span>
-    </div>
-
-    <h3>Attack path</h3>
-    <div id="path" class="path"></div>
-
-    <h3>Step detail</h3>
-    <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
-
-    <h3>Protect - what to do now</h3>
-    <div id="protect"></div>
-  </section>
-
-  <!-- RIGHT: Data, Sarvam brief, look-ahead, paths -->
-  <aside class="col col-right">
-    <section class="card">
-      <h2>Run stats</h2>
-      <p class="hint">Measured from real runs, not estimates. Accuracy stats need planted ground truth, so they only appear after Load Sample - a plain upload has no ground truth to check against, and those four show "not available" until then.</p>
-      <div class="stats-grid">
-        <div class="stat-box"><b id="statDetection">—</b><span>Detection %</span><small>planted steps found</small></div>
-        <div class="stat-box"><b id="statLabels">—</b><span>Correct labels %</span><small>right technique, same host</small></div>
-        <div class="stat-box"><b id="statAttackPath">—</b><span>Attack path</span><small id="statAttackPathNote">attacks rebuilt in order</small></div>
-        <div class="stat-box"><b id="statFalse">—</b><span>False alarms %</span><small>incidents matching no attack</small></div>
-        <div class="stat-box"><b id="statTime">—</b><span>Processing time</span><small id="statTimeNote">last run</small></div>
-        <div class="stat-box"><b id="statMemory">—</b><span>Memory</span><small>peak, main process</small></div>
-        <div class="stat-box"><b id="statInvest">—</b><span>Investigation speed</span><small>time to open an incident</small></div>
-        <div class="stat-box"><b id="statLines">—</b><span>Lines / sec</span><small id="statLinesNote">last run</small></div>
-      </div>
-      <p class="hint" id="statBasis">No run yet. Upload a log or run Load Sample to fill these in.</p>
-    </section>
-
-    <section class="card">
+    <section class="upload-center">
       <h2>Flow Log Data <span class="row-count" id="flowRowCount">0 rows</span></h2>
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a log file">
         <strong>Drop your .log file here</strong><br>or click to choose a file
@@ -144,6 +81,70 @@
         <span id="clearStatus" class="hint"></span>
       </div>
     </section>
+
+    <div class="modebar" role="group" aria-label="Graph mode and view">
+      <span class="mode-label">MODE:</span>
+      <span class="mode-track">
+        <button type="button" class="mode-btn active" disabled title="Kill Chain is the only graph mode">Kill Chain</button>
+      </span>
+      <span class="mode-spacer"></span>
+      <span class="view-track" role="group" aria-label="Pan and zoom">
+        <button type="button" class="view-btn" id="panBtn" aria-label="Toggle drag to pan" aria-pressed="false">&lt; Pan &gt;</button>
+        <button type="button" class="view-btn view-icon" id="zoomOut" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button type="button" class="view-btn view-icon" id="zoomIn" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+      </span>
+      <button type="button" class="zoom-btn" id="zoomReset">Reset</button>
+      <button type="button" class="zoom-btn" id="refreshBtn" aria-label="Refresh incidents">Refresh</button>
+    </div>
+
+    <div class="canvas-banner" id="modeBanner">KILL CHAIN ANALYSIS: Tracking MITRE ATT&amp;CK progression &amp; lateral traversal</div>
+    <div class="path-banner" id="pathBanner" hidden></div>
+
+    <div id="detail"><p>Pick an incident on the left, then click a node on the attack graph map to inspect the steps on that host or user.</p></div>
+
+    <div id="graphMap" role="group" aria-label="Attack graph map with connected host and user nodes"><p class="hint">Topology canvas empty - Awaiting flow telemetry. Upload a log or load the sample above.</p></div>
+
+    <div class="legend-bar">
+      <span class="legend-title">Legend:</span>
+      <span class="legend-item"><i class="dot dot-critical"></i>Critical</span>
+      <span class="legend-item"><i class="dot dot-high"></i>High</span>
+      <span class="legend-item"><i class="dot dot-medium"></i>Medium</span>
+      <span class="legend-item"><i class="dot dot-low"></i>Low</span>
+      <span class="legend-item"><i class="dot dot-user"></i>User</span>
+      <span class="legend-item"><i class="dot dot-technique"></i>Technique</span>
+      <span class="legend-spacer"></span>
+      <span>Selected Node: <b id="selectedNodeLabel">None</b></span>
+    </div>
+
+    <h3>Attack path</h3>
+    <div id="path" class="path"></div>
+
+    <h3>Step detail</h3>
+    <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
+
+    <h3>Protect - what to do now</h3>
+    <div id="protect"></div>
+  </section>
+
+  <!-- RIGHT: Stats, Sarvam brief, look-ahead, paths -->
+  <aside class="col col-right">
+    <section class="card">
+      <h2>Run stats</h2>
+      <p class="hint">Measured from real runs, not estimates. Accuracy stats need planted ground truth, so they only appear after Load Sample - a plain upload has no ground truth to check against, and those four show "not available" until then.</p>
+      <div class="stats-grid">
+        <div class="stat-box"><b id="statDetection">—</b><span>Detection %</span><small>planted steps found</small></div>
+        <div class="stat-box"><b id="statLabels">—</b><span>Correct labels %</span><small>right technique, same host</small></div>
+        <div class="stat-box"><b id="statAttackPath">—</b><span>Attack path</span><small id="statAttackPathNote">attacks rebuilt in order</small></div>
+        <div class="stat-box"><b id="statFalse">—</b><span>False alarms %</span><small>incidents matching no attack</small></div>
+        <div class="stat-box"><b id="statTime">—</b><span>Processing time</span><small id="statTimeNote">last run</small></div>
+        <div class="stat-box"><b id="statMemory">—</b><span>Memory</span><small>peak, main process, last run</small><div class="mem-meter" aria-label="Live PC memory usage"><div id="memBar" class="mem-bar"></div></div><small id="memLive">PC RAM: loading…</small><small id="memAsk">ASK (main): —</small></div>
+        <div class="stat-box"><b id="statInvest">—</b><span>Investigation speed</span><small>time to open an incident</small></div>
+        <div class="stat-box"><b id="statLines">—</b><span>Lines / sec</span><small id="statLinesNote">last run</small></div>
+      </div>
+      <p class="hint" id="statBasis">No run yet. Upload a log or run Load Sample to fill these in.</p>
+    </section>
+
 
     <section class="card">
       <h2>Sarvam AI Forensic Brief <span class="row-count" id="briefRisk"></span></h2>
