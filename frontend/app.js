@@ -489,13 +489,25 @@ function renderGraph(path) {
   box.scrollLeft = keepSl;
   box.scrollTop = keepSt;
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
-    // HOVER POPUP (2026-11-01, user: "hover*"): hovering a graph
-    // node opens the popup - click is kept as a fallback for touch
-    // and keyboard. The popup is NOT closed on mouseleave, or the
-    // user could never move the mouse into it to click a step.
-    el.addEventListener("mouseenter", function() { showNodeSteps(path, el.getAttribute("data-node")); });
-    el.addEventListener("click", function() { showNodeSteps(path, el.getAttribute("data-node")); });
-    el.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showNodeSteps(path, el.getAttribute("data-node")); } });
+    // HOVER = ATTACK PATH, CLICK = STEPS (2026-11-01, user:
+    // "if i hover give me the attack path with all the boxes as
+    // popup but if i click give me the second option"). The old
+    // hover = steps wiring is gone - that was the "random
+    // notification" bug: moving the mouse across the graph opened
+    // a steps popup for every box passed over, and destination
+    // domains like update-paypal.net have no steps to show, so it
+    // could only say "No steps". Hover now waits 350 ms, so just
+    // passing over a box while scrolling or panning opens nothing;
+    // mouseleave cancels the wait, but never closes an open popup,
+    // or the user could never move into it to click a box.
+    var _hoverTimer = null;
+    el.addEventListener("mouseenter", function() {
+      if (_hoverTimer) clearTimeout(_hoverTimer);
+      _hoverTimer = setTimeout(function() { showAttackPath(path, el.getAttribute("data-node")); }, 350);
+    });
+    el.addEventListener("mouseleave", function() { if (_hoverTimer) { clearTimeout(_hoverTimer); _hoverTimer = null; } });
+    el.addEventListener("click", function() { if (_hoverTimer) { clearTimeout(_hoverTimer); _hoverTimer = null; } closePathModal(); showNodeSteps(path, el.getAttribute("data-node")); });
+    el.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); closePathModal(); showNodeSteps(path, el.getAttribute("data-node")); } });
   });
 }
 
@@ -512,7 +524,111 @@ function closeNodeModal() {
   });
 })();
 
+function closePathModal() {
+  var m = document.getElementById("pathModal");
+  if (m) m.hidden = true;
+}
+(function initPathModal() {
+  document.addEventListener("click", function(e) {
+    if (e.target && (e.target.id === "pathModalClose" || e.target.id === "pathModalBackdrop" || (e.target.closest && e.target.closest("#pathModalClose")))) closePathModal();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closePathModal();
+  });
+})();
+function showAttackPath(path, nodeId) {
+  // HOVER POPUP (2026-11-01): the full attack path with all boxes,
+  // traced from REAL log edges only - never an invented hop. The
+  // chain through the hovered node is built from path edges
+  // (source -> destination), with event edges (user -> source) as
+  // a fallback for user nodes. Backwards: first predecessor, up to
+  // 20 hops, loop-guarded. Forwards: one successor at a time until
+  // a branching point, where every successor is shown stacked as
+  // destinations, like the reference preview. An "Internet" entry
+  // box is added before a source, exactly as in the preview - it is
+  // a label only, not a logged host. Clicking a box in this popup
+  // closes it and opens the steps popup for that box (click =
+  // second option, everywhere). Destinations do have a chain here,
+  // unlike the steps popup, which matches no destination steps.
+  closeNodeModal();
+  var modal = document.getElementById("pathModal");
+  var title = document.getElementById("pathModalTitle");
+  var body = document.getElementById("pathModalBody");
+  if (!modal || !title || !body) return;
+  var graph = path.graph || { nodes: [], edges: [] };
+  var nodeById = {};
+  (graph.nodes || []).forEach(function(n) { nodeById[n.id] = n; });
+  var pathEdges = (graph.edges || []).filter(function(e) { return e.kind === "path"; });
+  var allEdges = graph.edges || [];
+  var pred = {}, succ = {};
+  pathEdges.forEach(function(e) { (pred[e.to] = pred[e.to] || []).push(e.from); (succ[e.from] = succ[e.from] || []).push(e.to); });
+  var predAll = {}, succAll = {};
+  allEdges.forEach(function(e) { (predAll[e.to] = predAll[e.to] || []).push(e.from); (succAll[e.from] = succAll[e.from] || []).push(e.to); });
+  var P = function(id) { return pred[id] && pred[id].length ? pred[id] : (predAll[id] || []); };
+  var S = function(id) { return succ[id] && succ[id].length ? succ[id] : (succAll[id] || []); };
+  var srcSet = {}, dstSet = {};
+  pathEdges.forEach(function(e) { srcSet[e.from] = true; dstSet[e.to] = true; });
+  var roleOf = function(id) {
+    var n = nodeById[id];
+    if (n && n.type === "user") return "User";
+    if (n && n.type === "technique") return "Technique";
+    if (srcSet[id] && dstSet[id]) return "Pivot";
+    if (srcSet[id]) return "Source";
+    return "Destination";
+  };
+  var sevOfNode = function(id) { var n = nodeById[id]; return (n && n.severity) || "Low"; };
+  var seen = {}; seen[nodeId] = true;
+  var back = [], cur = nodeId, guard = 0;
+  while (P(cur).length && guard++ < 20) {
+    var prev = P(cur)[0];
+    if (seen[prev]) break;
+    seen[prev] = true; back.unshift(prev); cur = prev;
+  }
+  var fwd = [], dests = [], fcur = nodeId, fguard = 0;
+  while (S(fcur).length && fguard++ < 20) {
+    var nxt = S(fcur);
+    if (nxt.length > 1) { dests = nxt; break; }
+    if (seen[nxt[0]]) break;
+    seen[nxt[0]] = true; fwd.push(nxt[0]); fcur = nxt[0];
+  }
+  var chain = back.concat([nodeId], fwd);
+  var boxHtml = function(id, isSel) {
+    var n = nodeById[id];
+    var sev = sevOfNode(id);
+    var sevCls = "ap-sev-" + sev.toLowerCase();
+    var sub = (n && n.type === "technique" && n.name) ? n.name : (n && (n.stage || n.type)) || roleOf(id);
+    return "<button class='ap-node" + (isSel ? " sel" : "") + "' data-node='" + esc(id) + "'><span class='role'>" + esc(roleOf(id)) + "</span><div class='ip'>" + esc(id) + "</div><div class='host'>" + esc(sub.length > 24 ? sub.slice(0, 23) + "…" : sub) + "</div><span class='sev " + sevCls + "'>" + esc(sev.toUpperCase()) + "</span></button>";
+  };
+  var html = "<div class='ap-row'>";
+  if (chain.length && roleOf(chain[0]) === "Source") {
+    html += "<button class='ap-node' data-node=''><span class='role'>Entry</span><div class='ip'>Internet</div><div class='host'>Outside the network</div></button><span class='ap-arrow'>→</span>";
+  }
+  chain.forEach(function(id, i) {
+    html += boxHtml(id, id === nodeId);
+    if (i < chain.length - 1) html += "<span class='ap-arrow'>→</span>";
+  });
+  if (dests.length) {
+    html += "<span class='ap-arrow'>→</span><div class='ap-dests'>" + dests.map(function(id) { return boxHtml(id, false); }).join("") + "</div>";
+  }
+  html += "</div>";
+  var extraPred = P(nodeId).length > 1 ? "<p class='hint'>Also reached from: " + esc(P(nodeId).slice(1).join(", ")) + " - the chain above shows the first hop only.</p>" : "";
+  if (!back.length && !fwd.length && !dests.length) {
+    html += "<p class='hint'>No host-to-host move in the logs for this node - all its steps happened on this host. Click it for its step list.</p>";
+  } else {
+    html += "<p class='hint'>Traced from real log edges only, through " + esc(nodeId) + ". Click a box for its step list, or close with X, outside, or Escape.</p>";
+  }
+  html += extraPred;
+  title.textContent = "Attack path — " + nodeId;
+  body.innerHTML = html;
+  body.querySelectorAll(".ap-node[data-node]").forEach(function(el) {
+    var nid = el.getAttribute("data-node");
+    if (!nid) return;
+    el.addEventListener("click", function() { closePathModal(); showNodeSteps(path, nid); });
+  });
+  modal.hidden = false;
+}
 function showNodeSteps(path, nodeId) {
+  closePathModal();
   // NODE POPUP ONLY (2026-11-01): clicking a graph node opens a
   // real modal over the graph - not a side panel, not a scroll to
   // Step detail. Clicking a step inside the popup closes it and

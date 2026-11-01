@@ -229,6 +229,20 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .modal-box { position: relative; max-width: 640px; max-height: 80vh; overflow: auto; margin: 10vh auto 0; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 12px; padding: 18px 20px; }
 .modal-close { position: absolute; top: 8px; right: 12px; background: none; border: none; color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
 .modal-box h3 { margin: 0 28px 12px 0; }
+.pathmodal-box { max-width: 920px; }
+.ap-row { display: flex; align-items: center; gap: 0; margin: 12px 0; overflow-x: auto; padding-bottom: 6px; }
+.ap-node { background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 118px; max-width: 150px; cursor: pointer; text-align: left; color: var(--text); font: inherit; flex: none; }
+.ap-node:hover { border-color: var(--accent); }
+.ap-node.sel { border-color: #ff5c7a; box-shadow: 0 0 0 2px rgba(255,92,122,.35); }
+.ap-node .role { font-size: 10px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.ap-node .ip { font-size: 13px; font-weight: 700; margin: 3px 0 1px; word-break: break-all; }
+.ap-node .host { font-size: 11px; color: var(--muted); }
+.ap-node .sev { display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+.ap-sev-critical { background: #ff5c7a; color: #fff; }
+.ap-sev-high { background: #ffb020; color: #1a1200; }
+.ap-sev-medium, .ap-sev-low, .ap-sev-user, .ap-sev-technique { background: var(--border); color: var(--text); }
+.ap-arrow { color: #ff5c7a; font-size: 18px; padding: 0 6px; flex: none; }
+.ap-dests { display: flex; flex-direction: column; gap: 10px; flex: none; }
 @media (max-width: 1100px) {
   .workspace { grid-template-columns: 1fr; }
   .nav-links { display: none; }

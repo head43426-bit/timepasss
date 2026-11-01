@@ -173,6 +173,18 @@
   </div>
 </div>
 
+<!-- ATTACK PATH POPUP (2026-11-01, user: hover = attack path
+     with all boxes, click = step list): filled by showAttackPath
+     in app.js. Same close rules as the step popup. -->
+<div id="pathModal" class="modal" hidden>
+  <div class="modal-backdrop" id="pathModalBackdrop"></div>
+  <div class="modal-box pathmodal-box" role="dialog" aria-modal="true" aria-labelledby="pathModalTitle">
+    <button type="button" class="modal-close" id="pathModalClose" aria-label="Close">×</button>
+    <h3 id="pathModalTitle"></h3>
+    <div id="pathModalBody"></div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
