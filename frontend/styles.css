@@ -220,33 +220,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2
 .pkg .press { display: inline-block; margin-top: 12px; background: var(--accent); color: #fff; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 13px; }
 details { margin-top: 16px; }
 details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
-/* REFERENCE-STYLE ATTACK PATH (2026-11-01): small boxes only, no
-   explanatory text in the section. Boxes use theme variables so
-   they work in light and dark mode; severity badges stay readable. */
-.ap-wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
-.ap-chain { flex: 1 1 380px; display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
-.ap-chain.ap-stages { align-items: center; }
-.ap-col { display: flex; flex-direction: column; gap: 10px; }
-.ap-arrow { color: var(--accent); font-size: 18px; padding-top: 22px; flex: none; }
-.ap-node { background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 118px; max-width: 150px; cursor: pointer; text-align: left; color: var(--text); font: inherit; }
-.ap-node:hover { border-color: var(--accent); }
-.ap-node.sel { border-color: #ff5c7a; box-shadow: 0 0 0 2px rgba(255,92,122,.35); }
-.ap-role { display: block; font-size: 10px; letter-spacing: .08em; color: var(--muted, #888); text-transform: uppercase; }
-.ap-label { display: block; font-size: 13px; font-weight: 700; margin: 3px 0 1px; word-break: break-all; }
-.ap-sub { display: block; font-size: 11px; color: var(--muted, #888); }
-.ap-sev { display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
-.ap-sev-critical { background: #ff5c7a; color: #fff; }
-.ap-sev-high { background: #ffb020; color: #1a1200; }
-.ap-sev-medium { background: #a8a29e; color: #1a1200; }
-.ap-sev-low { background: #e7e5e4; color: #444; }
-.ap-side { flex: 0 0 260px; border: 1.5px dashed #ff5c7a; border-radius: 12px; padding: 14px 16px; background: var(--surface); }
-.ap-side h4 { font-size: 11px; letter-spacing: .1em; color: #ff5c7a; margin: 14px 0 6px; text-transform: uppercase; }
-.ap-side h4:first-child { margin-top: 0; }
-.ap-side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
-.ap-side li { margin-bottom: 5px; }
-/* NODE POPUP (2026-11-01): graph node click opens this, instead of
-   scrolling down to Step detail. Theme variables, so it works in
-   light and dark mode. */
+/* NODE POPUP ONLY (2026-11-01): a real modal, centred over the
+   page with a dark backdrop - not a side panel and not a dashed
+   box on the page. Theme variables, so it works light and dark. */
 .modal[hidden] { display: none; }
 .modal { position: fixed; inset: 0; z-index: 100; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); }

@@ -287,7 +287,7 @@ def english_report(incident: Dict, next_list: List[Dict]) -> str:
     if _nxt:
         lines.append(f"Frontier hosts to watch: {_total} in total" + (f" (first {len(_nxt)} shown below)" if _total > len(_nxt) else "") + ". These are destinations the attacker has already contacted but has not yet used as a stepping stone - they are not guessed hosts.")
         for n in _nxt:
-            part = f"- {n.get('host', '')} - watch score {n.get('confidence', 0)}/100"
+            part = f"- {n.get('host', '')} ({n.get('confidence', 0)})"
             if n.get("reason"):
                 part += f" - {n['reason']}"
             if n.get("block"):
