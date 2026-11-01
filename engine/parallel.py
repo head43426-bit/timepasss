@@ -47,9 +47,15 @@ _SIMPLE_DETECTOR = None
 _AGG_RULES = []
 
 
-def _init_worker(rules_dir: str):
+def _init_worker(rules_dir: str, rule_files=None):
+    # FIX (2026-11-01, found by full check): parallel_run passes
+    # initargs=(rules_dir, rule_files), but this took only 1 arg,
+    # so every parallel worker crashed with "takes 1 positional
+    # argument but 2 were given" — breaking all >50k-line uploads
+    # and POST /demo (small uploads use cli_run, so they hid it).
+    # Workers must also respect the fixed rule pack, not load all.
     global _SIMPLE_DETECTOR, _AGG_RULES
-    rules = load_rules(rules_dir)
+    rules = load_rules(rules_dir, only_files=rule_files)
     _SIMPLE_DETECTOR = Detector([r for r in rules if r.rule_type == "simple"])
     _AGG_RULES = [r for r in rules if r.rule_type == "aggregate"]
 
