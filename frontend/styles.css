@@ -82,6 +82,22 @@ nav.topnav {
    a slim bar on the left edge stays visible to bring it back. */
 .workspace.hide-left { grid-template-columns: minmax(0, 1fr) 340px; }
 .workspace.hide-left .col-left { display: none; }
+.workspace.hide-right { grid-template-columns: 300px minmax(0, 1fr); }
+.workspace.hide-right .col-right { display: none; }
+.workspace.hide-left.hide-right { grid-template-columns: minmax(0, 1fr); }
+/* Separate bars, one per card, stacked separately on the right
+   edge - not one shared bar. Each bar brings back only its card. */
+.show-card-bar[hidden] { display: none; }
+.show-card-bar { position: fixed; right: 0; z-index: 90; writing-mode: vertical-rl; background: var(--accent); color: #fff; border: none; border-radius: 8px 0 0 8px; padding: 12px 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
+#showCardStats { top: 36%; }
+#showCardBrief { top: 50%; transform: translateY(-50%); }
+#showCardNext { top: 64%; }
+.card.hidden-card { display: none; }
+.card-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.card-head h2 { flex: 1; margin: 0; }
+.card-head .hide-card-btn { flex: none; padding: 4px 8px; font-size: 12px; }
+.right-head { display: flex; justify-content: flex-end; }
+.right-head .btn { padding: 4px 8px; font-size: 12px; }
 .show-queue-bar[hidden] { display: none; }
 .show-queue-bar { position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 90; writing-mode: vertical-rl; background: var(--accent); color: #fff; border: none; border-radius: 0 8px 8px 0; padding: 14px 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .queue-head { display: flex; align-items: center; gap: 8px; }

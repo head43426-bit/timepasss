@@ -40,6 +40,60 @@ function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").repla
   if (saved === "1") setHidden(true);
 })();
 
+// SEPARATE HIDE BARS, RIGHT (2026-11-01, user: "separate
+// separate but hide all"): each right card has its own Hide
+// button and its own separate bar on the right edge, bringing back
+// only that card. Hide All hides all three cards at once (showing
+// all three bars). A card bar also unhides the whole column if
+// Hide All hid it, so a single card can come back on its own.
+// Saved per card + for the whole column, so a reload keeps it.
+(function initRightCards() {
+  var ws = document.getElementById("workspace");
+  var hideAllBtn = document.getElementById("hideRightBtn");
+  if (!ws || !hideAllBtn) return;
+  var cards = ["cardStats", "cardBrief", "cardNext"];
+  var save = function() {
+    try {
+      localStorage.setItem("ask_hide_right", ws.classList.contains("hide-right") ? "1" : "0");
+      localStorage.setItem("ask_hide_cards", cards.filter(function(id) { var el = document.getElementById(id); return el && el.classList.contains("hidden-card"); }).join(","));
+    } catch (e) {}
+  };
+  var hideCard = function(id, showBar) {
+    var el = document.getElementById(id);
+    var bar = document.getElementById("show" + id.charAt(0).toUpperCase() + id.slice(1));
+    if (el) el.classList.add("hidden-card");
+    if (bar) bar.hidden = false;
+    if (showBar !== false) save();
+  };
+  var showCard = function(id) {
+    var el = document.getElementById(id);
+    var bar = document.getElementById("show" + id.charAt(0).toUpperCase() + id.slice(1));
+    ws.classList.remove("hide-right");
+    if (el) el.classList.remove("hidden-card");
+    if (bar) bar.hidden = true;
+    save();
+    if (el) setTimeout(function() { el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0);
+  };
+  document.querySelectorAll(".hide-card-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() { hideCard(btn.getAttribute("data-card")); });
+  });
+  cards.forEach(function(id) {
+    var bar = document.getElementById("show" + id.charAt(0).toUpperCase() + id.slice(1));
+    if (bar) bar.addEventListener("click", function() { showCard(id); });
+  });
+  hideAllBtn.addEventListener("click", function() {
+    ws.classList.add("hide-right");
+    cards.forEach(function(id) { hideCard(id, false); });
+    save();
+  });
+  try {
+    var savedCards = (localStorage.getItem("ask_hide_cards") || "").split(",").filter(function(s) { return s; });
+    savedCards.forEach(function(id) { if (cards.indexOf(id) >= 0) hideCard(id, false); });
+    if (localStorage.getItem("ask_hide_right") === "1") ws.classList.add("hide-right");
+    if (savedCards.length || localStorage.getItem("ask_hide_right") === "1") save();
+  } catch (e) {}
+})();
+
 async function loadIncidents() {
   var res = await fetch("/incidents");
   var list = await res.json();

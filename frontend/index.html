@@ -37,6 +37,14 @@
      column back. The Hide button is in the queue head. -->
 <button id="showQueueBtn" type="button" class="show-queue-bar" hidden aria-label="Show incident queue">Incidents ▶</button>
 
+<!-- SEPARATE HIDE BARS, RIGHT (2026-11-01, user: "separate
+     separate but hide all"): one separate slim bar per right-side
+     card on the right edge, each bringing back only its own card.
+     Hide All at the top of the column hides all three at once. -->
+<button id="showCardStats" type="button" class="show-card-bar" hidden aria-label="Show run stats">Stats</button>
+<button id="showCardBrief" type="button" class="show-card-bar" hidden aria-label="Show Sarvam brief">Brief</button>
+<button id="showCardNext" type="button" class="show-card-bar" hidden aria-label="Show what the attacker could reach next">Next</button>
+
 <main class="workspace" id="workspace">
   <!-- LEFT: Incident Triage Queue -->
   <aside class="col col-left">
@@ -131,8 +139,11 @@
 
   <!-- RIGHT: Stats, Sarvam brief, look-ahead, paths -->
   <aside class="col col-right">
-    <section class="card">
-      <h2>Run stats</h2>
+    <div class="right-head">
+      <button id="hideRightBtn" type="button" class="btn ghost" aria-label="Hide all right-side cards">Hide all ▶</button>
+    </div>
+    <section class="card" id="cardStats">
+      <div class="card-head"><h2>Run stats</h2><button type="button" class="btn ghost hide-card-btn" data-card="cardStats" aria-label="Hide run stats">Hide</button></div>
       <p class="hint">Memory is live from this PC. Investigation speed is measured in milliseconds when you open an incident.</p>
       <div class="stats-grid">
         <div class="stat-box"><div class="mem-meter" aria-label="Live PC memory usage"><div id="memBar" class="mem-bar"></div></div><span>Memory</span><small id="memLive">PC RAM: loading…</small><small id="memAsk">ASK (main): —</small></div>
@@ -141,8 +152,8 @@
     </section>
 
 
-    <section class="card">
-      <h2>Sarvam AI Forensic Brief <span class="row-count" id="briefRisk"></span></h2>
+    <section class="card" id="cardBrief">
+      <div class="card-head"><h2>Sarvam AI Forensic Brief <span class="row-count" id="briefRisk"></span></h2><button type="button" class="btn ghost hide-card-btn" data-card="cardBrief" aria-label="Hide Sarvam brief">Hide</button></div>
       <p class="hint" id="briefStatus">No incident selected yet. Pick an incident, then choose a report language.</p>
       <label class="lang-label">Select Report Language:
         <select id="reportLang" aria-label="Report language">
@@ -161,8 +172,8 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>What the attacker could reach next</h2>
+    <section class="card" id="cardNext">
+      <div class="card-head"><h2>What the attacker could reach next</h2><button type="button" class="btn ghost hide-card-btn" data-card="cardNext" aria-label="Hide what the attacker could reach next">Hide</button></div>
       <div id="lookAhead"><p>Pick an incident on the left to see what the attacker could reach next.</p></div>
     </section>
   </aside>
