@@ -115,14 +115,8 @@
       <span>Selected Node: <b id="selectedNodeLabel">None</b></span>
     </div>
 
-    <h3>Attack path</h3>
-    <div id="path" class="path"></div>
-
     <h3>Step detail</h3>
     <div id="stepDetail" class="step-detail"><p>No step selected yet.</p></div>
-
-    <h3>What the attacker could reach next</h3>
-    <div id="lookAhead"><p>Pick an incident on the left to see what the attacker could reach next.</p></div>
 
     <h3>Protect - what to do now</h3>
     <div id="protect"></div>
@@ -158,6 +152,11 @@
         <button class="btn" id="copyBtn" disabled>Copy report</button>
         <button class="btn ghost" id="pdfBtn" disabled><span class="btn-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span id="pdfLabel">Generate Threat Report (PDF) - English (US)</span></button>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>What the attacker could reach next</h2>
+      <div id="lookAhead"><p>Pick an incident on the left to see what the attacker could reach next.</p></div>
     </section>
   </aside>
 </main>
