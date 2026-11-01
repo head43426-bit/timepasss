@@ -489,6 +489,11 @@ function renderGraph(path) {
   box.scrollLeft = keepSl;
   box.scrollTop = keepSt;
   box.querySelectorAll(".gnode-wrap").forEach(function(el) {
+    // HOVER POPUP (2026-11-01, user: "hover*"): hovering a graph
+    // node opens the popup - click is kept as a fallback for touch
+    // and keyboard. The popup is NOT closed on mouseleave, or the
+    // user could never move the mouse into it to click a step.
+    el.addEventListener("mouseenter", function() { showNodeSteps(path, el.getAttribute("data-node")); });
     el.addEventListener("click", function() { showNodeSteps(path, el.getAttribute("data-node")); });
     el.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showNodeSteps(path, el.getAttribute("data-node")); } });
   });
